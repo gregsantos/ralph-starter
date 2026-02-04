@@ -176,16 +176,16 @@ US-016 (Documentation) ◄──────────────────
 #### Task 2.1: US-006 Environment Variable Support
 **Priority:** 6 | **Effort:** Small | **Depends on:** None
 
-- [ ] 2.1.1 Add env var reading after defaults, before config file loading
-- [ ] 2.1.2 Support `RALPH_MODEL` (opus|sonnet|haiku)
-- [ ] 2.1.3 Support `RALPH_MAX_ITERATIONS` (number)
-- [ ] 2.1.4 Support `RALPH_PUSH_ENABLED` (true|false)
-- [ ] 2.1.5 Support `RALPH_SPEC_FILE`, `RALPH_PLAN_FILE`, `RALPH_PROGRESS_FILE`
-- [ ] 2.1.6 Support `RALPH_LOG_DIR`, `RALPH_LOG_FORMAT`
-- [ ] 2.1.7 Support `RALPH_NOTIFY_WEBHOOK`
-- [ ] 2.1.8 Ensure precedence: CLI > env var > config file > defaults
-- [ ] 2.1.9 Document all env vars in show_help() output
-- [ ] 2.1.10 Run `shellcheck ralph.sh` and fix any issues
+- [x] 2.1.1 Add env var reading after defaults, before config file loading
+- [x] 2.1.2 Support `RALPH_MODEL` (opus|sonnet|haiku)
+- [x] 2.1.3 Support `RALPH_MAX_ITERATIONS` (number)
+- [x] 2.1.4 Support `RALPH_PUSH_ENABLED` (true|false)
+- [x] 2.1.5 Support `RALPH_SPEC_FILE`, `RALPH_PLAN_FILE`, `RALPH_PROGRESS_FILE`
+- [x] 2.1.6 Support `RALPH_LOG_DIR`, `RALPH_LOG_FORMAT`
+- [x] 2.1.7 Support `RALPH_NOTIFY_WEBHOOK`
+- [x] 2.1.8 Ensure precedence: CLI > env var > config file > defaults
+- [x] 2.1.9 Document all env vars in show_help() output
+- [x] 2.1.10 Run `shellcheck ralph.sh` and fix any issues
 
 **Pattern:** `VARIABLE=${RALPH_X:-$VARIABLE}`
 

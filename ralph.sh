@@ -769,6 +769,20 @@ show_help() {
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
     echo "  ./ralph.sh -s ./specs/feature.md -l ./plans/feature_PLAN.md  # Custom spec+plan"
     echo ""
+    echo -e "${BOLD}Environment Variables:${RESET}"
+    echo "  All environment variables can be used instead of CLI flags."
+    echo "  Precedence: CLI flags > env vars > config file > defaults"
+    echo ""
+    echo "  RALPH_MODEL            Model to use (opus, sonnet, haiku)"
+    echo "  RALPH_MAX_ITERATIONS   Maximum iterations (number)"
+    echo "  RALPH_PUSH_ENABLED     Enable git push (true/false)"
+    echo "  RALPH_SPEC_FILE        Spec file path"
+    echo "  RALPH_PLAN_FILE        Plan file path"
+    echo "  RALPH_PROGRESS_FILE    Progress file path"
+    echo "  RALPH_LOG_DIR          Log directory path"
+    echo "  RALPH_LOG_FORMAT       Log format: text (default) or json"
+    echo "  RALPH_NOTIFY_WEBHOOK   Webhook URL for notifications"
+    echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
     echo "  Model:      opus (plan/build/product), sonnet (inline)"
@@ -809,6 +823,14 @@ ARTIFACT_SPEC_FILE=""
 CLI_SPEC_SET=false
 CLI_PLAN_SET=false
 
+# Track which values were set via CLI (for precedence tracking)
+CLI_MODEL_SET=false
+CLI_MAX_SET=false
+CLI_PUSH_SET=false
+CLI_LOG_DIR_SET=false
+CLI_LOG_FILE_SET=false
+CLI_PROGRESS_SET=false
+
 # Parse arguments
 POSITIONAL_ARGS=()
 
@@ -830,18 +852,22 @@ while [[ $# -gt 0 ]]; do
             ;;
         -m|--model)
             MODEL_OVERRIDE="$2"
+            CLI_MODEL_SET=true
             shift 2
             ;;
         --push)
             PUSH_ENABLED=true
+            CLI_PUSH_SET=true
             shift
             ;;
         --no-push)
             PUSH_ENABLED=false
+            CLI_PUSH_SET=true
             shift
             ;;
         -n|--max)
             MAX_ITERATIONS="$2"
+            CLI_MAX_SET=true
             shift 2
             ;;
         --unlimited)
@@ -874,10 +900,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --log-dir)
             LOG_DIR="$2"
+            CLI_LOG_DIR_SET=true
             shift 2
             ;;
         --log-file)
             LOG_FILE_OVERRIDE="$2"
+            CLI_LOG_FILE_SET=true
             shift 2
             ;;
         -s|--spec)
@@ -892,6 +920,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --progress)
             PROGRESS_FILE="$2"
+            CLI_PROGRESS_SET=true
             shift 2
             ;;
         --source)
@@ -930,17 +959,85 @@ if [ "$LIST_SESSIONS" = true ]; then
 fi
 
 # Process positional args - last numeric arg is max_iterations
-ITERATIONS_SET=false
 for arg in "${POSITIONAL_ARGS[@]}"; do
     if [[ "$arg" =~ ^[0-9]+$ ]]; then
         MAX_ITERATIONS=$arg
-        ITERATIONS_SET=true
+        CLI_MAX_SET=true
     fi
 done
 
 # Handle unlimited flag (overrides everything)
 if [ "$UNLIMITED" = true ]; then
     MAX_ITERATIONS=0
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ENVIRONMENT VARIABLES
+# Precedence: CLI > env var > config file > defaults
+# Read env vars before config file so config can override defaults but not env vars
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# RALPH_MODEL: Model to use (opus, sonnet, haiku)
+if [ -n "${RALPH_MODEL:-}" ] && [ "$CLI_MODEL_SET" != "true" ]; then
+    MODEL_OVERRIDE="$RALPH_MODEL"
+fi
+
+# RALPH_MAX_ITERATIONS: Maximum iterations
+if [ -n "${RALPH_MAX_ITERATIONS:-}" ] && [ "$CLI_MAX_SET" != "true" ]; then
+    if [[ "$RALPH_MAX_ITERATIONS" =~ ^[0-9]+$ ]]; then
+        MAX_ITERATIONS="$RALPH_MAX_ITERATIONS"
+    else
+        echo -e "${YELLOW}Warning: RALPH_MAX_ITERATIONS must be a number, ignoring: $RALPH_MAX_ITERATIONS${RESET}"
+    fi
+fi
+
+# RALPH_PUSH_ENABLED: Enable/disable git push (true/false)
+if [ -n "${RALPH_PUSH_ENABLED:-}" ] && [ "$CLI_PUSH_SET" != "true" ]; then
+    case "$RALPH_PUSH_ENABLED" in
+        true|TRUE|1|yes|YES)
+            PUSH_ENABLED=true
+            ;;
+        false|FALSE|0|no|NO)
+            PUSH_ENABLED=false
+            ;;
+        *)
+            echo -e "${YELLOW}Warning: RALPH_PUSH_ENABLED must be true/false, ignoring: $RALPH_PUSH_ENABLED${RESET}"
+            ;;
+    esac
+fi
+
+# RALPH_SPEC_FILE: Spec file path
+if [ -n "${RALPH_SPEC_FILE:-}" ] && [ "$CLI_SPEC_SET" != "true" ]; then
+    SPEC_FILE="$RALPH_SPEC_FILE"
+fi
+
+# RALPH_PLAN_FILE: Plan file path
+if [ -n "${RALPH_PLAN_FILE:-}" ] && [ "$CLI_PLAN_SET" != "true" ]; then
+    PLAN_FILE="$RALPH_PLAN_FILE"
+fi
+
+# RALPH_PROGRESS_FILE: Progress file path
+if [ -n "${RALPH_PROGRESS_FILE:-}" ] && [ "$CLI_PROGRESS_SET" != "true" ]; then
+    PROGRESS_FILE="$RALPH_PROGRESS_FILE"
+fi
+
+# RALPH_LOG_DIR: Log directory (already partially supported, formalize here)
+if [ -n "${RALPH_LOG_DIR:-}" ] && [ "$CLI_LOG_DIR_SET" != "true" ]; then
+    LOG_DIR="$RALPH_LOG_DIR"
+fi
+
+# RALPH_LOG_FORMAT: Log format (text or json) - placeholder for US-009
+if [ -n "${RALPH_LOG_FORMAT:-}" ]; then
+    LOG_FORMAT="${RALPH_LOG_FORMAT}"
+else
+    LOG_FORMAT="text"
+fi
+
+# RALPH_NOTIFY_WEBHOOK: Webhook URL for notifications - placeholder for US-010
+if [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ]; then
+    NOTIFY_WEBHOOK="${RALPH_NOTIFY_WEBHOOK}"
+else
+    NOTIFY_WEBHOOK=""
 fi
 
 # Resolve prompt file based on source
@@ -1063,36 +1160,45 @@ trap cleanup_temp EXIT
 load_ralph_config() {
     local config_file="${SCRIPT_DIR}/ralph.conf"
     if [ -f "$config_file" ]; then
-        # Temporarily save CLI values before sourcing config
-        local cli_spec="$SPEC_FILE"
-        local cli_plan="$PLAN_FILE"
-        local cli_progress="$PROGRESS_FILE"
-        local cli_source="$SOURCE_DIR"
-        local cli_model="$MODEL_OVERRIDE"
-        local cli_max="$MAX_ITERATIONS"
-        local cli_push="$PUSH_ENABLED"
-        local cli_unlimited="$UNLIMITED"
-        # Product mode CLI values
-        local cli_product_context="$PRODUCT_CONTEXT_DIR"
-        local cli_product_output="$PRODUCT_OUTPUT_DIR"
-        local cli_artifact_spec="$ARTIFACT_SPEC_FILE"
+        # Temporarily save CLI/env values before sourcing config
+        # Precedence: CLI > env var > config file > defaults
+        local saved_spec="$SPEC_FILE"
+        local saved_plan="$PLAN_FILE"
+        local saved_progress="$PROGRESS_FILE"
+        local saved_source="$SOURCE_DIR"
+        local saved_model="$MODEL_OVERRIDE"
+        local saved_max="$MAX_ITERATIONS"
+        local saved_push="$PUSH_ENABLED"
+        local saved_unlimited="$UNLIMITED"
+        local saved_log_dir="$LOG_DIR"
+        local saved_log_format="$LOG_FORMAT"
+        local saved_notify_webhook="$NOTIFY_WEBHOOK"
+        # Product mode values
+        local saved_product_context="$PRODUCT_CONTEXT_DIR"
+        local saved_product_output="$PRODUCT_OUTPUT_DIR"
+        local saved_artifact_spec="$ARTIFACT_SPEC_FILE"
 
-        # Source config file
+        # Source config file (may set variables)
         source "$config_file"
 
-        # CLI args take precedence over config file
-        [ -n "$cli_spec" ] && SPEC_FILE="$cli_spec"
-        [ -n "$cli_plan" ] && PLAN_FILE="$cli_plan"
-        [ -n "$cli_progress" ] && PROGRESS_FILE="$cli_progress"
-        [ -n "$cli_source" ] && SOURCE_DIR="$cli_source"
-        [ -n "$cli_model" ] && MODEL_OVERRIDE="$cli_model"
-        # Only restore CLI max if it was explicitly set (not the default)
-        [ "$cli_unlimited" = true ] && UNLIMITED=true
-        [ -n "$cli_push" ] && PUSH_ENABLED="$cli_push"
-        # Product mode CLI precedence
-        [ -n "$cli_product_context" ] && PRODUCT_CONTEXT_DIR="$cli_product_context"
-        [ -n "$cli_product_output" ] && PRODUCT_OUTPUT_DIR="$cli_product_output"
-        [ -n "$cli_artifact_spec" ] && ARTIFACT_SPEC_FILE="$cli_artifact_spec"
+        # Restore values that were set via CLI or env var (they take precedence)
+        # Using CLI_*_SET flags ensures CLI always wins
+        # Non-empty saved values from env vars also take precedence
+        [ "$CLI_SPEC_SET" = "true" ] || [ -n "$saved_spec" ] && SPEC_FILE="$saved_spec"
+        [ "$CLI_PLAN_SET" = "true" ] || [ -n "$saved_plan" ] && PLAN_FILE="$saved_plan"
+        [ "$CLI_PROGRESS_SET" = "true" ] || [ -n "$saved_progress" ] && PROGRESS_FILE="$saved_progress"
+        [ -n "$saved_source" ] && SOURCE_DIR="$saved_source"
+        [ "$CLI_MODEL_SET" = "true" ] || [ -n "$saved_model" ] && MODEL_OVERRIDE="$saved_model"
+        [ "$CLI_MAX_SET" = "true" ] && MAX_ITERATIONS="$saved_max"
+        [ "$saved_unlimited" = "true" ] && UNLIMITED=true  # CLI --unlimited always wins
+        [ "$CLI_PUSH_SET" = "true" ] && PUSH_ENABLED="$saved_push"
+        [ "$CLI_LOG_DIR_SET" = "true" ] || [ -n "$saved_log_dir" ] && LOG_DIR="$saved_log_dir"
+        [ -n "$saved_log_format" ] && LOG_FORMAT="$saved_log_format"
+        [ -n "$saved_notify_webhook" ] && NOTIFY_WEBHOOK="$saved_notify_webhook"
+        # Product mode CLI/env precedence
+        [ -n "$saved_product_context" ] && PRODUCT_CONTEXT_DIR="$saved_product_context"
+        [ -n "$saved_product_output" ] && PRODUCT_OUTPUT_DIR="$saved_product_output"
+        [ -n "$saved_artifact_spec" ] && ARTIFACT_SPEC_FILE="$saved_artifact_spec"
     fi
 }
 

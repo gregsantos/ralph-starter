@@ -167,3 +167,41 @@
 - `RALPH_LOG_DIR=/tmp/env-logs ./ralph.sh --dry-run` - Uses env var directory
 - `~/.ralph/logs/latest.log` symlink created correctly
 
+## Iteration 6 - 2026-02-03
+
+### Task Completed: US-006 Environment Variable Support (Task 2.1)
+
+**What was done:**
+- Added ENVIRONMENT VARIABLES section after argument parsing (before config file loading)
+- Supported environment variables with correct precedence (CLI > env var > config > defaults):
+  - `RALPH_MODEL` - Model selection (opus, sonnet, haiku)
+  - `RALPH_MAX_ITERATIONS` - Maximum iterations (with numeric validation)
+  - `RALPH_PUSH_ENABLED` - Git push toggle (true/false/yes/no/1/0)
+  - `RALPH_SPEC_FILE` - Spec file path
+  - `RALPH_PLAN_FILE` - Plan file path
+  - `RALPH_PROGRESS_FILE` - Progress file path
+  - `RALPH_LOG_DIR` - Log directory (already partially supported, formalized)
+  - `RALPH_LOG_FORMAT` - Log format placeholder for US-009 (text/json)
+  - `RALPH_NOTIFY_WEBHOOK` - Webhook URL placeholder for US-010
+- Added CLI_*_SET tracking flags to ensure CLI always overrides env vars
+- Updated `load_ralph_config()` to preserve env var values when config file loads
+- Added comprehensive "Environment Variables" section to `show_help()` output
+
+**Why:**
+- CI/CD pipelines commonly use environment variables for configuration
+- Allows users to set defaults without modifying config files or CLI args
+- Enables containerized deployments with runtime configuration
+- Matches common Unix tool patterns (e.g., EDITOR, PAGER, HOME)
+- Precedence order (CLI > env > config > defaults) follows principle of least surprise
+
+**Files changed:**
+- `ralph.sh` - Added env var section, CLI_*_SET tracking flags, updated load_ralph_config(), updated show_help()
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from env var code)
+- `./ralph.sh --help` - Shows new "Environment Variables" section with all 9 variables documented
+- `./ralph.sh --dry-run` - Shows default config
+- `RALPH_MODEL=sonnet RALPH_MAX_ITERATIONS=5 RALPH_PUSH_ENABLED=false ./ralph.sh --dry-run` - All env vars respected
+- `RALPH_MODEL=sonnet ./ralph.sh --model haiku --dry-run` - CLI flag correctly overrides env var
+- `RALPH_LOG_DIR=/tmp/test-logs ./ralph.sh --dry-run` - Custom log directory from env var
+
