@@ -10,6 +10,8 @@ Ralph Loop breaks complex software development into small, context-independent t
 - **Quality gates**: Every iteration must pass tests and type checks before proceeding
 - **Knowledge preservation**: Learnings persist in files, not AI memory
 - **Hands-off execution**: Start a session, walk away, return to completed work
+- **Resilient sessions**: Automatic retry on transient failures, resume interrupted sessions
+- **Flexible configuration**: Environment variables, global config, and project config
 
 ## Quick Start
 
@@ -131,26 +133,55 @@ This tells the loop to exit successfully.
 ./ralph.sh --unlimited           # Remove iteration limit (careful!)
 ./ralph.sh --dry-run             # Preview config without running
 ./ralph.sh -s ./specs/feature.md # Custom spec (plan auto-derived)
+
+# Session management
+./ralph.sh --resume              # Resume interrupted session
+./ralph.sh --list-sessions       # List resumable sessions
+
+# Resilience
+./ralph.sh --no-retry            # Disable automatic retry on errors
+./ralph.sh --max-retries 5       # Custom retry limit (default: 3)
 ```
 
-## Spec → Plan → Build Workflow
+See [docs/RALPH_LOOP_REF.md](docs/RALPH_LOOP_REF.md) for the full CLI reference including environment variables, global config, and all options.
 
-The recommended workflow for implementing features:
+## Complete Workflow
+
+The full workflow for implementing features with Ralph:
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    SPEC → PLAN → BUILD                          │
-│                                                                 │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐                  │
-│  │  Create  │ -> │   Plan   │ -> │  Build   │                  │
-│  │   Spec   │    │   Mode   │    │   Mode   │                  │
-│  │  (JSON)  │    │ (analyze)│    │ (execute)│                  │
-│  └──────────┘    └──────────┘    └──────────┘                  │
-│       │               │               │                         │
-│   specs/*.json   plans/*_PLAN.md   Code changes                │
-│   "what & why"    "how"           Implementation               │
-└─────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────────────┐
+│           PRODUCT (optional) → SPEC → PLAN → BUILD                          │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
+│  │ Product  │ -> │  Create  │ -> │   Plan   │ -> │  Build   │              │
+│  │   Mode   │    │   Spec   │    │   Mode   │    │   Mode   │              │
+│  │(discover)│    │  (JSON)  │    │ (analyze)│    │ (execute)│              │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
+│       │               │               │               │                     │
+│  product-output/  specs/*.json   plans/*_PLAN.md   Code changes            │
+│  12 artifacts     "what & why"    "how"           Implementation           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### Step 0: Product Discovery (Optional)
+
+For new projects, start with product mode to generate foundational artifacts:
+
+```bash
+# 1. Add context files to product-input/
+#    - vision.md, research.md, requirements.md, etc.
+
+# 2. Run product mode to generate 12 artifacts
+./ralph.sh product
+#    → product-output/1_executive_summary.md
+#    → product-output/7_prd.md
+#    → ... (12 total artifacts)
+
+# 3. Use the PRD (7_prd.md) to inform your spec
+```
+
+See `docs/PRODUCT_ARTIFACT_SPEC.md` for the full artifact specification.
 
 ### Step 1: Create a Spec
 

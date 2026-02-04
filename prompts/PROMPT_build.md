@@ -62,6 +62,11 @@ Tests and types are your rejection mechanism. They push back on bad changes:
   - Any blockers or notes for next iteration
 - Keep entries concise
 - **Update CLAUDE.md** with discovered patterns, gotchas, or codebase conventions
+- **Update user-facing docs** if this task adds or changes:
+  - CLI flags/options → update `--help` text and `docs/RALPH_LOOP_REF.md`
+  - Workflow or behavior → update `README.md`
+  - Configuration options → update `ralph.conf` comments and reference docs
+  - Project structure → update directory trees in docs
 
 ### 5. Commit
 
@@ -84,6 +89,7 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 - **Keep plans current**—update `{{PLAN_FILE}}` with learnings after each task
 - **Update spec status**—set `"passes": true` in `{{SPEC_FILE}}` when user stories are complete
 - **Reference specs for context**—consult `{{SPEC_FILE}}` for the "why" behind requirements
+- **Keep docs aligned**—update README.md, RALPH_LOOP_REF.md when adding user-facing features
 - **Capture the why**—tests and implementation reasoning matter
 - **Resolve or document bugs**—even if unrelated to current work
 - **Tag on clean builds**—create git tag when no build/test errors (start at 0.0.0, increment patch)
@@ -107,10 +113,11 @@ Before outputting the completion marker, verify ALL of the following:
 
 1. **All checklist items** in `{{PLAN_FILE}}` are marked `[x]` (not just one - ALL of them)
 2. **All user stories** in `{{SPEC_FILE}}` have `"passes": true` (if using JSON spec)
-3. `pnpm test` passes
-4. `pnpm typecheck` passes
-5. All changes are committed and pushed
-6. `{{PROGRESS_FILE}}` documents all completed tasks
+3. **Documentation aligned**—new flags/features documented in `--help`, README.md, RALPH_LOOP_REF.md
+4. `pnpm test` passes
+5. `pnpm typecheck` passes
+6. All changes are committed and pushed
+7. `{{PROGRESS_FILE}}` documents all completed tasks
 
 ### When to Signal Completion
 

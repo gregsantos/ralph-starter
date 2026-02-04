@@ -52,9 +52,17 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
   "Retry on HTTP 429, 500, 502, 503, 504",
   "Exponential backoff: 1s, 2s, 4s",
   "Add --max-retries flag (default: 3)",
+  "Update --help text with new flag",
+  "Update docs/RALPH_LOOP_REF.md with retry section",
   "pnpm test passes"
 ]
 ```
+
+**Include documentation** for user-facing features:
+
+- CLI flags → `--help` text + `docs/RALPH_LOOP_REF.md`
+- Workflow changes → `README.md`
+- Config options → `ralph.conf` comments + reference docs
 
 ## Example Spec
 
@@ -117,6 +125,7 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
 
 - **Atomic stories**: Completable in 1-2 iterations
 - **Testable criteria**: Include verification commands
+- **Include doc updates**: Add documentation criteria for user-facing features (--help, README, reference docs)
 - **Map dependencies**: `{ "US-002": ["US-001"] }` means US-002 depends on US-001
 - **Update INDEX.md**: Add entry to `specs/INDEX.md`
 - **passes field**: Initialize as `false`; build mode sets to `true` when acceptance criteria are met

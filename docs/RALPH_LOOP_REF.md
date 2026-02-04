@@ -13,7 +13,12 @@ Ralph Loop (`ralph.sh`) is a bash script that runs Claude Code in headless mode,
 - **Iteration limits**: Default 10 iterations to prevent runaway sessions (override with `--unlimited`)
 - **Push control**: Enable or disable automatic git push after iterations
 - **Clean logging**: Parses Claude's JSON output to show only relevant tool calls
-- **Session management**: Tracks iterations, duration, and saves full logs to `/tmp`
+- **Session management**: Tracks iterations, duration, and saves logs to `~/.ralph/logs/`
+- **Session resume**: Resume interrupted sessions with `--resume`
+- **Retry logic**: Automatic retry with exponential backoff for transient failures
+- **Environment variables**: Configure via `RALPH_*` env vars for CI/CD
+- **Global config**: User-wide defaults at `~/.ralph/config`
+- **Safe config parsing**: Config files are parsed safely (no shell execution)
 
 ## Installation
 
@@ -79,6 +84,53 @@ Ralph automatically runs pre-flight checks to verify these dependencies. Use `--
 # Skip dependency checks (advanced users)
 ./ralph.sh --skip-checks build
 ```
+
+### Session Resume
+
+```bash
+# Resume an interrupted session
+./ralph.sh --resume
+
+# List all resumable sessions
+./ralph.sh --list-sessions
+```
+
+Session state is saved to `.ralph-session.json` during execution. On successful completion, it's archived to `~/.ralph/logs/`. On interrupt or failure, it's preserved for resume.
+
+### Retry Logic
+
+```bash
+# Disable automatic retry (fail immediately on errors)
+./ralph.sh --no-retry build
+
+# Set custom max retries (default: 3)
+./ralph.sh --max-retries 5 build
+```
+
+Retry uses exponential backoff (5s → 15s → 45s) for transient errors like rate limits (429), server errors (500, 502, 503, 504), and network issues. Fatal errors (auth failures, 401, 403) are not retried.
+
+### Log Directory
+
+```bash
+# Use custom log directory
+./ralph.sh --log-dir /path/to/logs build
+
+# Use explicit log file path
+./ralph.sh --log-file /path/to/session.log build
+```
+
+Default log location: `~/.ralph/logs/{mode}_{branch}_{timestamp}.log`
+
+A symlink `~/.ralph/logs/latest.log` always points to the current session log.
+
+### Global Config
+
+```bash
+# Use custom global config file
+./ralph.sh --global-config ~/.config/ralph.conf build
+```
+
+Default global config: `~/.ralph/config` (loaded before project `ralph.conf`)
 
 ### Dry Run
 
@@ -230,7 +282,9 @@ Example:
 
 ### Log Files
 
-Full session logs are saved to `/tmp/ralph_<mode>_<timestamp>.log`. These contain the raw JSON stream from Claude for debugging.
+Full session logs are saved to `~/.ralph/logs/{mode}_{branch}_{timestamp}.log` by default. These contain the raw JSON stream from Claude for debugging.
+
+A `latest.log` symlink in the log directory always points to the current/most recent session log for quick access.
 
 ## Architecture
 
@@ -255,31 +309,25 @@ ralph.sh
 3. **Git Integration**: Automatic status checks, push with branch creation fallback
 4. **Signal Handling**: Clean shutdown on Ctrl+C with session summary
 
-## Suggested Improvements
+## Future Improvements
 
 ### Near-term
 
-1. **Session Resume**: Add ability to resume interrupted sessions
-
-   ```bash
-   ./ralph.sh --resume <session-id>
-   ```
-
-2. **Progress Persistence**: Save iteration state to allow recovery after crashes
-
-3. **Parallel Execution**: Run multiple independent tasks in parallel
+1. **Parallel Execution**: Run multiple independent tasks in parallel
 
 ```bash
 ./ralph.sh -f task1.md -f task2.md --parallel
 ```
 
+2. **Structured JSON Logging**: Machine-readable log format (LOG_FORMAT=json)
+
+3. **Webhook Notifications**: Send alerts on completion, errors, or specific events
+
 ### Medium-term
 
 4. **Web Dashboard**: Real-time monitoring UI for long-running sessions
 
-5. **Notification Hooks**: Send alerts on completion, errors, or specific events
-
-6. **Template System**: Parameterized prompts with variable substitution
+5. **Template System**: Parameterized prompts with variable substitution
 
 ```bash
 ./ralph.sh -f templates/fix-issue.md --var issue=123
@@ -287,11 +335,9 @@ ralph.sh
 
 ### Long-term
 
-7. **Multi-Agent Orchestration**: Coordinate multiple Claude instances
+6. **Multi-Agent Orchestration**: Coordinate multiple Claude instances
 
-8. **Learning Mode**: Capture successful patterns for future reference
-
-9. **Integration with CI/CD**: Trigger ralph loops from GitHub Actions, etc.
+7. **Learning Mode**: Capture successful patterns for future reference
 
 ## Troubleshooting
 
@@ -322,18 +368,32 @@ Check that:
 
 ### Viewing full logs
 
-Full session output is saved to `/tmp/ralph_<mode>_<timestamp>.log`:
+Full session output is saved to `~/.ralph/logs/`:
 
 ```bash
 # View recent logs
-ls -la /tmp/ralph_*.log
+ls -la ~/.ralph/logs/
 
-# Tail a running session
-tail -f /tmp/ralph_build_*.log
+# View the latest session log
+tail -f ~/.ralph/logs/latest.log
 
-# Search for errors
-grep -i error /tmp/ralph_build_*.log
+# Search for errors in recent logs
+grep -i error ~/.ralph/logs/*.log
 ```
+
+### Session was interrupted
+
+If your session was interrupted (Ctrl+C, network drop, laptop sleep), you can resume:
+
+```bash
+# Check if a session can be resumed
+./ralph.sh --list-sessions
+
+# Resume the interrupted session
+./ralph.sh --resume
+```
+
+Note: The session file `.ralph-session.json` is preserved on interrupt. It's only archived after successful completion.
 
 ## Command Line Examples
 
@@ -372,6 +432,23 @@ grep -i error /tmp/ralph_build_*.log
 ./ralph.sh --no-push                         # Don't push changes
 ./ralph.sh build --no-push 5                 # Local only, 5 iterations
 ./ralph.sh --push                            # Explicit push (default)
+
+# Session management
+./ralph.sh --resume                          # Resume interrupted session
+./ralph.sh --list-sessions                   # List resumable sessions
+
+# Retry control
+./ralph.sh --no-retry                        # Disable automatic retry
+./ralph.sh --max-retries 5                   # Custom retry limit (default: 3)
+
+# Logging
+./ralph.sh --log-dir /custom/logs            # Custom log directory
+./ralph.sh --log-file /path/to/session.log   # Explicit log file
+
+# Configuration
+./ralph.sh --global-config ~/.config/ralph   # Custom global config
+./ralph.sh --skip-checks                     # Skip pre-flight checks
+./ralph.sh --dry-run                         # Preview config, don't run
 
 # Combined examples
 ./ralph.sh build --model sonnet --no-push 3
@@ -429,7 +506,29 @@ screen -S ralph
 
 ## Environment Variables
 
-Currently none. All configuration is via CLI arguments.
+Ralph supports environment variables for CI/CD integration and user defaults. Precedence: CLI > env var > config file > defaults.
+
+| Variable               | Description                             | Example                       |
+| ---------------------- | --------------------------------------- | ----------------------------- |
+| `RALPH_MODEL`          | Default model (opus, sonnet, haiku)     | `RALPH_MODEL=sonnet`          |
+| `RALPH_MAX_ITERATIONS` | Maximum iterations limit                | `RALPH_MAX_ITERATIONS=20`     |
+| `RALPH_PUSH_ENABLED`   | Git push toggle (true/false/yes/no/1/0) | `RALPH_PUSH_ENABLED=false`    |
+| `RALPH_SPEC_FILE`      | Path to spec file                       | `RALPH_SPEC_FILE=./spec.json` |
+| `RALPH_PLAN_FILE`      | Path to plan file                       | `RALPH_PLAN_FILE=./plan.md`   |
+| `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
+| `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
+| `RALPH_LOG_FORMAT`     | Log format (text/json) - future use     | `RALPH_LOG_FORMAT=json`       |
+| `RALPH_NOTIFY_WEBHOOK` | Webhook URL for notifications - future  | `RALPH_NOTIFY_WEBHOOK=...`    |
+
+### Example: CI/CD Usage
+
+```bash
+# GitHub Actions example
+RALPH_MODEL=sonnet \
+RALPH_MAX_ITERATIONS=5 \
+RALPH_PUSH_ENABLED=false \
+./ralph.sh build
+```
 
 ## Exit Codes
 
@@ -463,15 +562,22 @@ Prompts support these placeholders (automatically substituted):
 
 ## Configuration File
 
-Ralph supports a `ralph.conf` configuration file for default settings. CLI arguments always override config values.
+Ralph supports configuration files for default settings. Configuration precedence: CLI > environment variables > project config > global config > defaults.
+
+### Config File Locations
+
+1. **Global config**: `~/.ralph/config` (user-wide defaults)
+2. **Project config**: `./ralph.conf` (project-specific overrides)
+
+Use `--global-config PATH` to specify an alternate global config location.
 
 ### Example `ralph.conf`
 
 ```bash
 # Ralph Loop Configuration
-# This file is sourced by ralph.sh - use standard bash KEY=VALUE syntax
+# Use standard KEY=VALUE syntax (no shell execution for security)
 
-# Path Configuration (supports template variables)
+# Path Configuration
 SPEC_FILE=./specs/IMPLEMENTATION_PLAN.md
 PLAN_FILE=./plans/IMPLEMENTATION_PLAN.md
 ARTIFACT_SPEC_FILE=./docs/PRODUCT_ARTIFACT_SPEC.md
@@ -482,6 +588,9 @@ SOURCE_DIR=src/*
 MODEL=opus
 MAX_ITERATIONS=10
 PUSH_ENABLED=true
+
+# Logging
+LOG_DIR=~/.ralph/logs
 ```
 
 ### Supported Settings
@@ -496,6 +605,18 @@ PUSH_ENABLED=true
 | `MODEL`              | Default model (opus, sonnet, haiku)          | varies by mode                    |
 | `MAX_ITERATIONS`     | Maximum iterations limit                     | `10`                              |
 | `PUSH_ENABLED`       | Auto-push after iterations                   | `true`                            |
+| `LOG_DIR`            | Log file directory                           | `~/.ralph/logs`                   |
+| `LOG_FORMAT`         | Log format (text/json) - future              | `text`                            |
+| `NOTIFY_WEBHOOK`     | Notification webhook URL - future            | (none)                            |
+
+### Security
+
+Config files are parsed safely using a whitelist approach:
+
+- Only allowed keys are accepted (unknown keys trigger warnings)
+- Values are type-validated (e.g., MODEL must be opus/sonnet/haiku)
+- Shell command patterns (`$()`, backticks, `&&`, `||`, `;`) are rejected
+- No arbitrary code execution from config files
 
 ## Branch-Change Archiving
 
@@ -509,55 +630,193 @@ This prevents confusion when working on multiple features and ensures iteration 
 
 ## File Structure
 
+### Project Files
+
 ```
 project-root/
-├── specs/
+├── product-input/                  # Product context files (Step 0)
+│   ├── vision.md                   # Product vision and goals
+│   ├── research.md                 # User research, market data
+│   └── requirements.md             # High-level requirements
+├── product-output/                 # Generated product artifacts (Step 0)
+│   ├── 1_executive_summary.md
+│   ├── 7_prd.md                    # Use to inform specs
+│   └── ... (12 total)
+├── specs/                          # Feature specifications (Step 1)
 │   ├── INDEX.md                    # Feature catalog
 │   ├── {feature}.json              # JSON specs (recommended)
 │   └── {feature}.md                # Markdown specs (alternative)
-├── plans/
-│   ├── IMPLEMENTATION_PLAN.md      # Default active plan (the "how")
+├── plans/                          # Implementation checklists (Step 2)
+│   ├── IMPLEMENTATION_PLAN.md      # Default active plan
 │   └── {feature}_PLAN.md           # Feature-specific plans
 ├── prompts/
 │   ├── PROMPT_plan.md              # Planning mode instructions
 │   ├── PROMPT_build.md             # Build mode instructions
 │   └── PROMPT_product.md           # Product artifact generation
+├── docs/
+│   └── PRODUCT_ARTIFACT_SPEC.md    # Product artifact specifications
 ├── .claude/
 │   └── skills/
 │       └── writing-ralph-specs/    # Skill for creating JSON specs
 ├── archive/                        # Auto-archived branch state on branch change
 ├── ralph.sh                        # The loop script
-├── ralph.conf                      # Optional configuration file
+├── ralph.conf                      # Project configuration file
+├── .ralph-session.json             # Active session state (gitignored)
 └── progress.txt                    # Iteration history
 ```
 
-## Spec → Plan → Build Workflow
+### User Files
 
-The recommended workflow for implementing features:
+```
+~/.ralph/
+├── config                          # Global configuration file
+└── logs/
+    ├── latest.log                  # Symlink to current session
+    ├── {session_id}_session.json   # Archived session states
+    └── {mode}_{branch}_{ts}.log    # Session logs
+```
+
+## Complete Workflow: Product → Spec → Plan → Build
+
+The full workflow for implementing features with Ralph:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│           PRODUCT (optional) → SPEC → PLAN → BUILD                          │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
+│  │ Product  │ -> │  Create  │ -> │   Plan   │ -> │  Build   │              │
+│  │   Mode   │    │   Spec   │    │   Mode   │    │   Mode   │              │
+│  │(discover)│    │  (JSON)  │    │ (analyze)│    │ (execute)│              │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
+│       │               │               │               │                     │
+│  product-output/  specs/*.json   plans/*_PLAN.md   Code changes            │
+│  12 artifacts     "what & why"    "how"           Implementation           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Step 0: Product Discovery (Optional)
+
+For new projects or major features, start with product mode:
 
 ```bash
-# 1. Create a JSON spec with user stories and acceptance criteria
-#    (use the writing-ralph-specs skill or create manually)
+# 1. Add context files to product-input/
+mkdir -p product-input
+# Add: vision.md, research.md, requirements.md, competitive-analysis.md, etc.
+
+# 2. Run product mode to generate 12 structured artifacts
+./ralph.sh product
+#    → product-output/1_executive_summary.md
+#    → product-output/2_charter.md
+#    → product-output/3_market_analysis.md
+#    → product-output/4_personas.md
+#    → product-output/5_journey_map.md
+#    → product-output/6_positioning.md
+#    → product-output/7_prd.md              ← Use this to inform your spec
+#    → product-output/8_product_roadmap.md
+#    → product-output/9_solution_architecture.md
+#    → product-output/10_metrics_framework.md
+#    → product-output/11_risk_assessment.md
+#    → product-output/12_go_to_market.md
+
+# 3. Review artifacts, especially 7_prd.md, to inform spec creation
+```
+
+See `docs/PRODUCT_ARTIFACT_SPEC.md` for full artifact specifications.
+
+### Step 1: Create a Spec
+
+Use insights from product artifacts (or create directly for smaller features):
+
+```bash
+# Create a JSON spec with user stories and acceptance criteria
+# (use the writing-ralph-specs skill or create manually)
 #    → specs/my-feature.json
 
-# 2. Run plan mode to create implementation checklist
-./ralph.sh plan -s ./specs/my-feature.json
-#    → plans/my-feature_PLAN.md
+# Example minimal spec:
+cat > specs/my-feature.json << 'EOF'
+{
+  "project": "My Feature",
+  "branchName": "feature/my-feature",
+  "description": "Feature description from PRD",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "First task",
+      "acceptanceCriteria": ["Criterion 1", "Criterion 2"],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+EOF
+```
 
-# 3. Run build mode to execute the plan
+### Step 2: Run Plan Mode
+
+Plan mode analyzes the spec and codebase, then creates a task checklist:
+
+```bash
+./ralph.sh plan -s ./specs/my-feature.json
+#    → plans/my-feature_PLAN.md (auto-derived from spec name)
+```
+
+### Step 3: Run Build Mode
+
+Build mode executes the plan one task at a time:
+
+```bash
 ./ralph.sh build -s ./specs/my-feature.json
-#    → Implementation complete, spec.passes updated
+#    → Implementation complete
+#    → spec.passes updated to true for completed stories
+```
+
+### Quick Reference Commands
+
+```bash
+# Full workflow from product discovery to implementation
+./ralph.sh product                           # Step 0: Generate product artifacts
+# (manually create spec from product output)  # Step 1: Create spec
+./ralph.sh plan -s ./specs/my-feature.json   # Step 2: Create plan
+./ralph.sh build -s ./specs/my-feature.json  # Step 3: Execute plan
+
+# Skip product mode for smaller features
+./ralph.sh plan -s ./specs/my-feature.json   # Create plan from existing spec
+./ralph.sh build -s ./specs/my-feature.json  # Execute plan
 ```
 
 JSON specs provide structured user stories with acceptance criteria that plan mode uses to create detailed checklists. Build mode updates the `passes` field in each user story when all acceptance criteria are met, providing story-level completion tracking.
 
-See `specs/ralph-improvements.json` for a comprehensive example.
+See `specs/ralph-improvements.json` for a comprehensive spec example.
 
 ## Related Files
+
+### Prompts
 
 - `prompts/PROMPT_plan.md` - Planning mode prompt
 - `prompts/PROMPT_build.md` - Build mode prompt
 - `prompts/PROMPT_product.md` - Product artifact generation prompt
-- `ralph.conf` - Optional configuration file
+
+### Product Mode
+
+- `product-input/` - Context files for product discovery (vision, research, requirements)
+- `product-output/` - Generated product artifacts (12 documents)
+- `docs/PRODUCT_ARTIFACT_SPEC.md` - Artifact specifications
+
+### Specs & Plans
+
 - `specs/INDEX.md` - Feature catalog
-- `/tmp/ralph_*.log` - Session logs
+- `specs/*.json` - JSON specs (recommended)
+- `plans/*_PLAN.md` - Implementation checklists
+- `.claude/skills/writing-ralph-specs/` - Skill for creating JSON specs
+
+### Configuration
+
+- `ralph.conf` - Project configuration file
+- `~/.ralph/config` - Global configuration file
+
+### Session & Logs
+
+- `~/.ralph/logs/` - Session logs directory
+- `~/.ralph/logs/latest.log` - Symlink to current session log
+- `.ralph-session.json` - Active session state (preserved on interrupt)
