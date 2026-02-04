@@ -241,9 +241,14 @@ update_session_state() {
         --argjson iter "$iteration" \
         --argjson entry "$iteration_entry" \
         '.current_iteration = $iter | .iteration_history += [$entry]' \
-        "$SESSION_FILE")
+        "$SESSION_FILE" 2>/dev/null)
 
-    echo "$updated" > "$SESSION_FILE"
+    # Only write if jq succeeded and output is non-empty (prevents data loss)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        echo "$updated" > "$SESSION_FILE"
+    else
+        echo -e "${YELLOW}Warning: Failed to update session state${RESET}" >&2
+    fi
 }
 
 # Finalize session state - set final status and optionally archive
@@ -266,9 +271,14 @@ finalize_session_state() {
         --arg end_time "$end_time" \
         --argjson total_duration "$total_duration" \
         '.status = $status | .end_time = $end_time | .total_duration = $total_duration' \
-        "$SESSION_FILE")
+        "$SESSION_FILE" 2>/dev/null)
 
-    echo "$updated" > "$SESSION_FILE"
+    # Only write if jq succeeded and output is non-empty (prevents data loss)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        echo "$updated" > "$SESSION_FILE"
+    else
+        echo -e "${YELLOW}Warning: Failed to finalize session state${RESET}" >&2
+    fi
 
     # Archive on successful completion, preserve on failure/interrupt for debugging
     if [ "$final_status" = "complete" ]; then
@@ -512,8 +522,14 @@ restore_session() {
 
     # Update session status to in_progress (was interrupted/failed)
     local updated
-    updated=$(jq '.status = "in_progress"' "$session_file")
-    echo "$updated" > "$session_file"
+    updated=$(jq '.status = "in_progress"' "$session_file" 2>/dev/null)
+    
+    # Only write if jq succeeded and output is non-empty (prevents data loss)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        echo "$updated" > "$session_file"
+    else
+        echo -e "${YELLOW}Warning: Failed to update session status${RESET}" >&2
+    fi
 
     echo -e "${GREEN}${SYM_CHECK} Session restored. Continuing...${RESET}\n"
 }
@@ -1136,7 +1152,10 @@ esac
 ITERATION=0
 FAILED_ITERATIONS=0
 ITERATION_START_HEAD=""
-CURRENT_BRANCH=$(git branch --show-current)
+# Get current branch with fallback for non-git environments or errors
+# This runs before pre-flight checks, so handle gracefully
+CURRENT_BRANCH=$(git branch --show-current 2>/dev/null) || CURRENT_BRANCH=""
+[ -z "$CURRENT_BRANCH" ] && CURRENT_BRANCH="unknown"
 START_TIME=$(date +%s)
 
 # ═══════════════════════════════════════════════════════════════════════════════
