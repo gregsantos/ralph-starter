@@ -1,5 +1,7 @@
 #!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════════
 # Ralph Loop - Autonomous Claude Code runner
+# ═══════════════════════════════════════════════════════════════════════════════
 #
 # Usage: ./ralph.sh [preset|options] [max_iterations]
 #
@@ -9,36 +11,55 @@
 #   product           Use PROMPT_product.md for product artifact generation
 #
 # Options:
-#   -f, --file PATH   Use custom prompt file
-#   -p, --prompt STR  Use inline prompt string
-#   -m, --model MODEL Model: opus, sonnet, haiku (default varies by mode)
-#   -n, --max N       Max iterations (default: 10)
-#   --unlimited       Remove iteration limit (use with caution)
-#   --dry-run         Show config and exit without running Claude
-#   --test, -1        Test mode: single iteration, no push, ignore completion marker
-#   --interactive, -i Prompt for confirmation between iterations
+#   -f, --file PATH       Use custom prompt file
+#   -p, --prompt STR      Use inline prompt string
+#   -m, --model MODEL     Model: opus, sonnet, haiku (default varies by mode)
+#   -n, --max N           Max iterations (default: 10)
+#   --unlimited           Remove iteration limit (use with caution)
+#   --dry-run             Show config and exit without running Claude
+#   --test, -1            Test mode: single iteration, no push, ignore completion marker
+#   --interactive, -i     Prompt for confirmation between iterations
 #   --interactive-timeout N  Timeout for interactive prompt (default: 300s)
-#   --verbose, -v     Verbose mode: show prompt content, config precedence, session updates
-#   --push            Enable git push after iterations (default)
-#   --no-push         Disable git push
-#   -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
-#   -l, --plan PATH   Plan file (derived from spec, or ./plans/IMPLEMENTATION_PLAN.md)
-#   --progress PATH   Progress file (default: progress.txt)
-#   --source PATH     Source directory (default: src/*)
-#   --context PATH    Product context directory (product mode, default: ./product-input/)
-#   --output PATH     Product output directory (product mode, default: ./product-output/)
-#   --artifact-spec PATH  Artifact spec file (product mode, default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
-#   -h, --help        Show this help
+#   --verbose, -v         Verbose mode: show prompt, config sources, session updates
+#   --push                Enable git push after iterations (default)
+#   --no-push             Disable git push
+#   --skip-checks         Skip pre-flight dependency checks
+#   --no-retry            Disable automatic retry on transient failures
+#   --max-retries N       Maximum retry attempts (default: 3)
+#   --resume              Resume interrupted session from .ralph-session.json
+#   --list-sessions       List all resumable sessions
+#   --log-dir PATH        Log directory (default: ~/.ralph/logs/)
+#   --log-file PATH       Explicit log file path (overrides --log-dir)
+#   --log-format FMT      Log format: text (default) or json for structured logging
+#   --notify-webhook URL  Webhook URL for session notifications
+#   --no-summary          Disable session summary report generation
+#   --global-config PATH  Global config file (default: ~/.ralph/config)
+#   -s, --spec PATH       Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
+#   -l, --plan PATH       Plan file (derived from spec, or ./plans/IMPLEMENTATION_PLAN.md)
+#   --progress PATH       Progress file (default: progress.txt)
+#   --source PATH         Source directory (default: src/*)
+#   --context PATH        Product context directory (default: ./product-input/)
+#   --output PATH         Product output directory (default: ./product-output/)
+#   --artifact-spec PATH  Artifact spec file (default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
+#   -h, --help            Show this help
+#
+# Environment Variables:
+#   RALPH_MODEL, RALPH_MAX_ITERATIONS, RALPH_PUSH_ENABLED, RALPH_SPEC_FILE,
+#   RALPH_PLAN_FILE, RALPH_PROGRESS_FILE, RALPH_LOG_DIR, RALPH_LOG_FORMAT,
+#   RALPH_NOTIFY_WEBHOOK
+#   Precedence: CLI > env vars > config file > defaults
 #
 # Examples:
 #   ./ralph.sh                           # Build mode, 10 iterations
 #   ./ralph.sh plan 5                    # Plan mode, 5 iterations
 #   ./ralph.sh build --model sonnet      # Build with sonnet
 #   ./ralph.sh product                   # Product artifact generation
-#   ./ralph.sh product --context ./my-context/ --output ./my-output/
 #   ./ralph.sh -f ./prompts/review.md    # Custom prompt file
 #   ./ralph.sh -p "Fix lint errors" 3    # Inline prompt, 3 iterations
-#   ./ralph.sh --unlimited               # Unlimited (careful!)
+#   ./ralph.sh --test                    # Test mode: 1 iteration, no push
+#   ./ralph.sh --resume                  # Resume interrupted session
+#   ./ralph.sh --log-format json         # Structured JSON logging
+#   ./ralph.sh --unlimited               # Unlimited iterations (careful!)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION

@@ -602,3 +602,48 @@
 - `ls completions/` - Both ralph.bash and ralph.zsh present
 - Bash completion tested: presets, flags, --model values, --log-format values, file paths all complete correctly
 
+## Iteration 16 - 2026-02-04
+
+### Task Completed: US-016 Update Documentation (Task 4.5)
+
+**What was done:**
+- Verified docs/RALPH_LOOP_REF.md already has comprehensive documentation for all features (added during previous iterations)
+- Verified show_help() already includes all new flags (added during previous iterations)
+- Updated ralph.conf with comprehensive commented examples:
+  - Added configuration precedence documentation header
+  - Added section headers for organization (Path, Execution, Logging, Notifications)
+  - Added detailed comments for each setting with examples
+  - Added product mode path configuration
+  - Added webhook examples (Slack, Discord, custom with auth)
+- Updated ralph.sh header comments with all new flags:
+  - Added --skip-checks, --no-retry, --max-retries N
+  - Added --resume, --list-sessions
+  - Added --log-dir, --log-file, --log-format
+  - Added --notify-webhook, --no-summary, --global-config
+  - Added Environment Variables summary section
+  - Added more example commands
+- Verified all code examples in docs work:
+  - --help, --dry-run, --test, -1, --interactive, -i
+  - --interactive-timeout, --verbose, -v, --list-sessions
+  - --no-retry, --max-retries, --log-format json
+  - --skip-checks, --no-summary, --notify-webhook, --log-dir
+  - plan, build presets, -s spec flag, environment variables
+
+**Why:**
+- Documentation is critical for user adoption and maintainability
+- Comprehensive ralph.conf comments enable self-discovery of configuration options
+- Header comments serve as quick reference for developers reading the script
+- Verified examples prevent documentation drift from implementation
+
+**Files changed:**
+- `ralph.sh` - Updated header comments with all new flags and environment variables section
+- `ralph.conf` - Comprehensive rewrite with sections, detailed comments, and examples
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.5 complete
+- `specs/ralph-improvements.json` - Updated US-016 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `shellcheck completions/ralph.bash` - Passes with no issues
+- All code examples tested and verified working
+- `./ralph.sh --help` shows all new flags documented
+

@@ -414,18 +414,18 @@ NOTIFY_WEBHOOK
 #### Task 4.5: US-016 Update Documentation
 **Priority:** 16 | **Effort:** Medium | **Depends on:** All above
 
-- [ ] 4.5.1 Update docs/RALPH_LOOP_REF.md with all new flags
-- [ ] 4.5.2 Add "Environment Variables" section to docs
-- [ ] 4.5.3 Add "Session Resume" section to docs
-- [ ] 4.5.4 Add "Retry Logic" section to docs
-- [ ] 4.5.5 Add "Webhooks" section to docs
-- [ ] 4.5.6 Add "Structured Logging" section to docs
-- [ ] 4.5.7 Add "Troubleshooting" section for common issues
-- [ ] 4.5.8 Update show_help() output with new options
-- [ ] 4.5.9 Update ralph.conf with commented examples of new options
-- [ ] 4.5.10 Add examples for CI/CD usage
-- [ ] 4.5.11 Verify all code examples in docs still work
-- [ ] 4.5.12 Update header comments in ralph.sh
+- [x] 4.5.1 Update docs/RALPH_LOOP_REF.md with all new flags
+- [x] 4.5.2 Add "Environment Variables" section to docs
+- [x] 4.5.3 Add "Session Resume" section to docs
+- [x] 4.5.4 Add "Retry Logic" section to docs
+- [x] 4.5.5 Add "Webhooks" section to docs
+- [x] 4.5.6 Add "Structured Logging" section to docs
+- [x] 4.5.7 Add "Troubleshooting" section for common issues
+- [x] 4.5.8 Update show_help() output with new options
+- [x] 4.5.9 Update ralph.conf with commented examples of new options
+- [x] 4.5.10 Add examples for CI/CD usage
+- [x] 4.5.11 Verify all code examples in docs still work
+- [x] 4.5.12 Update header comments in ralph.sh
 
 **Acceptance criteria:**
 - All new features documented

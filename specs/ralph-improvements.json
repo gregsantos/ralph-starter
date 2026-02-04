@@ -435,7 +435,7 @@
       },
       "priority": 16,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Should be done last after all features are implemented"
     }
   ],
