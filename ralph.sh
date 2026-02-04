@@ -664,9 +664,12 @@ log_retry_attempt() {
     updated=$(jq \
         --argjson entry "$retry_entry" \
         'if .current_retry_attempts == null then .current_retry_attempts = [] else . end | .current_retry_attempts += [$entry]' \
-        "$SESSION_FILE")
+        "$SESSION_FILE" 2>/dev/null)
 
-    echo "$updated" > "$SESSION_FILE"
+    # Only write if jq succeeded and output is non-empty (prevents data loss)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        echo "$updated" > "$SESSION_FILE"
+    fi
 }
 
 # Clear retry attempts from session (called after iteration completes)
@@ -674,8 +677,12 @@ clear_retry_attempts() {
     [ ! -f "$SESSION_FILE" ] && return 0
 
     local updated
-    updated=$(jq 'del(.current_retry_attempts)' "$SESSION_FILE")
-    echo "$updated" > "$SESSION_FILE"
+    updated=$(jq 'del(.current_retry_attempts)' "$SESSION_FILE" 2>/dev/null)
+    
+    # Only write if jq succeeded and output is non-empty (prevents data loss)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        echo "$updated" > "$SESSION_FILE"
+    fi
 }
 
 # Run claude with retry logic
