@@ -1190,7 +1190,10 @@ setup_log_file() {
         local latest_link="${DEFAULT_LOG_DIR}/latest.log"
         # Remove old symlink if exists, then create new one
         rm -f "$latest_link"
-        ln -s "$LOG_FILE" "$latest_link"
+        # Convert to absolute path to ensure symlink works from any location
+        local abs_log_file
+        abs_log_file=$(cd "$(dirname "$LOG_FILE")" && pwd)/$(basename "$LOG_FILE")
+        ln -s "$abs_log_file" "$latest_link"
     fi
 }
 
@@ -2161,6 +2164,14 @@ parse_claude_output() {
     else
         echo -e "\n  ${DIM}Session ended - more work remains${RESET}"
     fi
+
+    # Return non-zero if errors occurred to trigger retry logic
+    # This is critical: with pipefail, $? captures the first non-zero exit
+    # If we always return 0, retry logic is bypassed entirely
+    if [ "$(cat "$ITERATION_STATUS_FILE" 2>/dev/null)" = "failed" ]; then
+        return 1
+    fi
+    return 0
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
