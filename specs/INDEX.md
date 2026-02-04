@@ -5,13 +5,13 @@ Source of truth for all system capabilities and planned features.
 ## Active Development
 
 | Feature | Spec | Status | Plan | Description |
-|---------|------|--------|------|-------------|
+| ------- | ---- | ------ | ---- | ----------- |
 |         |      |        |      |             |
 
 ## Planned
 
 | Feature | Spec | Priority | Description |
-|---------|------|----------|-------------|
+| ------- | ---- | -------- | ----------- |
 |         |      |          |             |
 
 ## Conventions
@@ -32,21 +32,21 @@ Source of truth for all system capabilities and planned features.
 
 ### When to Create Separate Files
 
-| Scenario | Spec | Plan | Notes |
-|----------|------|------|-------|
-| Major feature | Yes | Yes | Full separation: spec for reference, plan for checklist |
-| Small enhancement | Optional | Yes | Plan may be sufficient |
-| Bug fix | No | No | Use inline prompt (`-p "Fix X"`) |
-| Refactoring | Optional | Yes | Depends on scope |
+| Scenario          | Spec     | Plan | Notes                                                   |
+| ----------------- | -------- | ---- | ------------------------------------------------------- |
+| Major feature     | Yes      | Yes  | Full separation: spec for reference, plan for checklist |
+| Small enhancement | Optional | Yes  | Plan may be sufficient                                  |
+| Bug fix           | No       | No   | Use inline prompt (`-p "Fix X"`)                        |
+| Refactoring       | Optional | Yes  | Depends on scope                                        |
 
 ### Template Variables
 
-| Variable | Default | Purpose |
-|----------|---------|---------|
-| `{{SPEC_FILE}}` | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification |
-| `{{PLAN_FILE}}` | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist |
-| `{{PROGRESS_FILE}}` | `progress.txt` | Iteration history |
-| `{{SOURCE_DIR}}` | `src/*` | Source code location |
+| Variable            | Default                          | Purpose                  |
+| ------------------- | -------------------------------- | ------------------------ |
+| `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification    |
+| `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist |
+| `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration history        |
+| `{{SOURCE_DIR}}`    | `src/*`                          | Source code location     |
 
 ## File Organization
 

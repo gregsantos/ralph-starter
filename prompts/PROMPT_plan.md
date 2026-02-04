@@ -6,7 +6,6 @@
 - **Plan**: `{{PLAN_FILE}}` (implementation checklist - the "how", output)
 - **Progress**: `{{PROGRESS_FILE}}` (if present)
 - **Source**: `{{SOURCE_DIR}}`
-- **Shared Utilities**: `src/lib/*` (project's standard library)
 - **CLAUDE.md**: Consult for project context and codebase patterns
 
 ## Philosophy
@@ -16,6 +15,7 @@
 ## Iteration Model
 
 You are running in a loop. Each iteration should make **incremental progress** on planning:
+
 1. Research and analyze a portion of the codebase
 2. Update the plan with findings
 3. Document in `{{PROGRESS_FILE}}`
@@ -64,12 +64,14 @@ Perform rigorous comparison of specs vs actual implementation:
 ### 5. Check Plan Health
 
 **Regenerate the plan if:**
+
 - Current approach isn't working (off-track after multiple iterations)
 - Discovered fundamentally different codebase structure
 - Accumulated too many amendments/patches
 - Better approach became apparent
 
 **Proceed if:**
+
 - Plan is complete, unambiguous, and actionable
 - All research questions answered
 - Each checklist item is atomic and verifiable
@@ -82,35 +84,55 @@ If complete: Proceed to Completion Protocol below.
 - **Plan only**—do NOT implement anything
 - **Search first**—confirm functionality is missing before planning to add it
 - **Don't assume not implemented**—the codebase is more complete than you think
-- **Use standard library**—prefer consolidated, idiomatic implementations in `src/lib` over ad-hoc copies
 - **Keep CLAUDE.md operational only**—status/progress notes belong in specs
 - **Update CLAUDE.md with patterns**—add discovered conventions, gotchas, insights
 - **Plans are disposable**—regenerate rather than patch a bad plan
+- **Never signal completion early**—only output `<ralph>COMPLETE</ralph>` when plan is fully ready for build
 
 ## Completion Protocol
 
-**ONLY signal completion when planning is fully complete.**
+**CRITICAL: The completion marker means planning is FULLY complete—not just this iteration.**
+
+⚠️ **NEVER output `<ralph>COMPLETE</ralph>` after a single research iteration.**
+
+- "End this iteration" = normal, loop continues with more research
+- "Signal completion" = plan is COMPLETE and ready for build phase
+
+**If you just finished researching one component and more areas remain → DO NOT output the marker. End the iteration normally and let the loop continue.**
 
 ### Pre-Completion Checklist
 
 Before outputting the completion marker, verify ALL of the following:
 
-1. `{{PLAN_FILE}}` has a **complete** prioritized checklist
-2. All research questions are answered
+1. `{{PLAN_FILE}}` has a **complete** prioritized checklist covering ALL requirements
+2. All research questions are answered (no open questions remain)
 3. No ambiguities remain about implementation approach
 4. `{{PROGRESS_FILE}}` documents all planning decisions
+5. Plan is ready for build phase (another agent can execute it without questions)
 
 ### When to Signal Completion
 
-- If there are unresolved questions or incomplete analysis → **DO NOT** output the marker. End the iteration and let the loop continue.
-- If planning is complete and ready for build phase → Output the marker below.
+**DO NOT output the marker if:**
+
+- You just finished one research iteration (more areas to explore)
+- Open questions remain about implementation approach
+- Plan checklist is incomplete or has gaps
+- More codebase exploration is needed
+
+**ONLY output the marker if:**
+
+- Plan is complete, unambiguous, and actionable
+- All research is done
+- Ready to hand off to build phase
 
 ### Signaling Completion
 
 **When ALL criteria above are met**, output exactly:
 
-```
+```text
 <ralph>COMPLETE</ralph>
 ```
 
-This tells the ralph loop to exit with success status. The loop will otherwise continue calling you to refine the plan.
+This tells the ralph loop to exit with success status.
+
+**If planning is NOT complete:** Simply end your response after documenting progress. Do NOT output the completion marker. The loop will automatically call you again to continue planning.

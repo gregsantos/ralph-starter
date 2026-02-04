@@ -51,27 +51,32 @@ ralph-starter/
 ├── CLAUDE.md                     # Project context for Claude
 ├── prompts/
 │   ├── PROMPT_plan.md            # Planning mode instructions
-│   └── PROMPT_build.md           # Build mode instructions
+│   ├── PROMPT_build.md           # Build mode instructions
+│   └── PROMPT_product.md         # Product artifact generation
 ├── specs/
 │   ├── INDEX.md                  # Feature catalog
 │   └── {feature}.md              # Feature specs (the "what & why")
 ├── plans/
 │   └── IMPLEMENTATION_PLAN.md    # Task checklist (the "how")
+├── product-input/                # Product context files (product mode)
+├── product-output/               # Generated artifacts (product mode)
 ├── progress.txt                  # Iteration history (auto-created)
 ├── archive/                      # Auto-archived branch state
 └── docs/
     ├── RALPH_LOOP_REF.md         # Full CLI reference
-    └── RALPH_WORKSHOP.md         # Comprehensive workshop guide
+    ├── RALPH_WORKSHOP.md         # Comprehensive workshop guide
+    └── PRODUCT_ARTIFACT_SPEC.md  # Product artifact specifications
 ```
 
 ## Core Concepts
 
-### Two Modes
+### Three Modes
 
-| Mode      | Purpose                                 | Command            |
-| --------- | --------------------------------------- | ------------------ |
-| **Plan**  | Analyze codebase, create task checklist | `./ralph.sh plan`  |
-| **Build** | Execute tasks one at a time             | `./ralph.sh build` |
+| Mode        | Purpose                                   | Command              |
+| ----------- | ----------------------------------------- | -------------------- |
+| **Plan**    | Analyze codebase, create task checklist   | `./ralph.sh plan`    |
+| **Build**   | Execute tasks one at a time               | `./ralph.sh build`   |
+| **Product** | Generate product documentation artifacts  | `./ralph.sh product` |
 
 ### Specs vs Plans
 
@@ -104,6 +109,10 @@ This tells the loop to exit successfully.
 # Building
 ./ralph.sh                       # Build mode (default)
 ./ralph.sh build 20              # Build with max 20 iterations
+
+# Product artifacts
+./ralph.sh product               # Generate product docs (12 artifacts)
+./ralph.sh product --context ./input/ --output ./output/  # Custom paths
 
 # Custom prompts
 ./ralph.sh -f prompts/review.md  # Use custom prompt file
@@ -155,6 +164,7 @@ This tells the loop to exit successfully.
 # Path defaults (supports template variables)
 SPEC_FILE=./specs/IMPLEMENTATION_PLAN.md
 PLAN_FILE=./plans/IMPLEMENTATION_PLAN.md
+ARTIFACT_SPEC_FILE=./docs/PRODUCT_ARTIFACT_SPEC.md
 PROGRESS_FILE=progress.txt
 SOURCE_DIR=src/*
 
@@ -168,12 +178,23 @@ SOURCE_DIR=src/*
 
 Prompts support these placeholders:
 
+**Build/Plan Mode:**
+
 | Variable            | Default                          | Description              |
 | ------------------- | -------------------------------- | ------------------------ |
 | `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification    |
 | `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist |
 | `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration history        |
 | `{{SOURCE_DIR}}`    | `src/*`                          | Source code location     |
+
+**Product Mode:**
+
+| Variable                  | Default                           | Description               |
+| ------------------------- | --------------------------------- | ------------------------- |
+| `{{PRODUCT_CONTEXT_DIR}}` | `./product-input/`                | Product context files     |
+| `{{PRODUCT_OUTPUT_DIR}}`  | `./product-output/`               | Generated artifacts       |
+| `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specifications   |
+| `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history         |
 
 ## Customizing for Your Project
 
@@ -254,12 +275,13 @@ If a plan becomes wrong or stale—regenerate it. Don't patch bad plans.
 
 ## Documentation
 
-| Document                                           | Purpose                                |
-| -------------------------------------------------- | -------------------------------------- |
-| [CLAUDE.md](./CLAUDE.md)                           | Project context and coding conventions |
-| [docs/RALPH_LOOP_REF.md](./docs/RALPH_LOOP_REF.md) | Full CLI reference                     |
-| [docs/RALPH_WORKSHOP.md](./docs/RALPH_WORKSHOP.md) | Comprehensive workshop guide           |
-| [specs/INDEX.md](./specs/INDEX.md)                 | Feature catalog and conventions        |
+| Document                                                         | Purpose                                |
+| ---------------------------------------------------------------- | -------------------------------------- |
+| [CLAUDE.md](./CLAUDE.md)                                         | Project context and coding conventions |
+| [docs/RALPH_LOOP_REF.md](./docs/RALPH_LOOP_REF.md)               | Full CLI reference                     |
+| [docs/RALPH_WORKSHOP.md](./docs/RALPH_WORKSHOP.md)               | Comprehensive workshop guide           |
+| [docs/PRODUCT_ARTIFACT_SPEC.md](./docs/PRODUCT_ARTIFACT_SPEC.md) | Product artifact specifications        |
+| [specs/INDEX.md](./specs/INDEX.md)                               | Feature catalog and conventions        |
 
 ## Exit Codes
 
@@ -276,7 +298,7 @@ If a plan becomes wrong or stale—regenerate it. Don't patch bad plans.
 Ensure prompt files exist:
 
 ```bash
-ls prompts/PROMPT_plan.md prompts/PROMPT_build.md
+ls prompts/PROMPT_plan.md prompts/PROMPT_build.md prompts/PROMPT_product.md
 ```
 
 ### Loop runs but no progress

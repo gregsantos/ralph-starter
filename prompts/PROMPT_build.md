@@ -11,6 +11,7 @@
 ## Iteration Model
 
 You are running in a loop. Each iteration should:
+
 1. Complete **ONE** checklist item from `{{PLAN_FILE}}`
 2. Mark that item `[x]` and document in `{{PROGRESS_FILE}}`
 3. Commit and push changes
@@ -42,8 +43,8 @@ You are running in a loop. Each iteration should:
 
 Tests and types are your rejection mechanism. They push back on bad changes:
 
-- Run tests: `npm run test`
-- Run typecheck: `npm run typecheck`
+- Run tests: `pnpm test`
+- Run typecheck: `pnpm typecheck`
 - **Fix ALL failures before proceeding**—never leave broken builds
 - If tests fail, the change is wrong. Fix it or reconsider approach.
 
@@ -82,32 +83,51 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 - **Resolve or document bugs**—even if unrelated to current work
 - **Tag on clean builds**—create git tag when no build/test errors (start at 0.0.0, increment patch)
 - **Don't assume not implemented**—search before adding new code
+- **Never signal completion early**—only output `<ralph>COMPLETE</ralph>` when ALL tasks are done
 
 ## Completion Protocol
 
-**ONLY signal completion when ALL tasks in the plan are done.**
+**CRITICAL: The completion marker means ALL tasks are done—not just this iteration.**
+
+⚠️ **NEVER output `<ralph>COMPLETE</ralph>` after completing a single task.**
+
+- "End this iteration" = normal, loop continues with next task
+- "Signal completion" = ALL checklist items are marked `[x]`
+
+**If you just finished task 3 of 10 → DO NOT output the marker. End the iteration normally and let the loop continue.**
 
 ### Pre-Completion Checklist
 
 Before outputting the completion marker, verify ALL of the following:
 
 1. **All checklist items** in `{{PLAN_FILE}}` are marked `[x]` (not just one - ALL of them)
-2. `npm run test` passes
-3. `npm run typecheck` passes
+2. `pnpm test` passes
+3. `pnpm typecheck` passes
 4. All changes are committed and pushed
 5. `{{PROGRESS_FILE}}` documents all completed tasks
 
 ### When to Signal Completion
 
-- If there are remaining `[ ]` items in the checklist → **DO NOT** output the marker. End the iteration and let the loop continue.
-- If ALL `[x]` items are checked AND tests pass → Output the marker below.
+**DO NOT output the marker if:**
+
+- You just finished one task (more remain in the checklist)
+- Any `[ ]` items remain in `{{PLAN_FILE}}`
+- Tests or typecheck fail
+
+**ONLY output the marker if:**
+
+- ALL checklist items are marked `[x]`
+- Tests and typecheck pass
+- All changes committed and pushed
 
 ### Signaling Completion
 
 **When ALL criteria above are met**, output exactly:
 
-```
+```text
 <ralph>COMPLETE</ralph>
 ```
 
-This tells the ralph loop to exit with success status. The loop will otherwise continue calling you for the next task.
+This tells the ralph loop to exit with success status.
+
+**If tasks remain:** Simply end your response after committing. Do NOT output the completion marker. The loop will automatically call you again for the next task.

@@ -74,6 +74,22 @@ The script is self-contained. Ensure you have:
 ./ralph.sh -s ./specs/my-feature.md --dry-run
 ```
 
+### Product Mode
+
+```bash
+# Generate product artifacts (default paths)
+./ralph.sh product
+
+# Custom product paths
+./ralph.sh product --context ./my-context/ --output ./my-output/
+
+# Custom artifact spec
+./ralph.sh product --artifact-spec ./docs/MY_SPEC.md
+
+# Combined options
+./ralph.sh product --context ./input/ --output ./output/ --model sonnet 5
+```
+
 ### Model Selection
 
 ```bash
@@ -109,6 +125,7 @@ The script is self-contained. Ensure you have:
 | ------------- | ------------- | -------------------------------------------- |
 | `plan`        | opus          | Complex reasoning for architecture decisions |
 | `build`       | opus          | Quality implementation with full context     |
+| `product`     | opus          | Comprehensive product artifact generation    |
 | `inline` (-p) | sonnet        | Faster for quick, focused tasks              |
 | `custom` (-f) | opus          | Assumes complex task unless specified        |
 
@@ -120,6 +137,7 @@ The script looks for these files in the `prompts/` directory:
 
 - `prompts/PROMPT_plan.md` - Planning and architecture tasks
 - `prompts/PROMPT_build.md` - Implementation and coding tasks
+- `prompts/PROMPT_product.md` - Product artifact generation
 
 ### Creating Custom Prompts
 
@@ -402,22 +420,79 @@ Currently none. All configuration is via CLI arguments.
 
 ## Exit Codes
 
-| Code | Meaning                                       |
-| ---- | --------------------------------------------- |
-| 0    | Success (completed all iterations)            |
-| 1    | Error (invalid arguments, missing file, etc.) |
-| 130  | Interrupted (Ctrl+C)                          |
+| Code | Meaning                                                        |
+| ---- | -------------------------------------------------------------- |
+| 0    | Task complete (`<ralph>COMPLETE</ralph>` marker detected)      |
+| 1    | Max iterations reached (check progress.txt for remaining work) |
+| 130  | Interrupted (Ctrl+C)                                           |
 
 ## Template Variables
 
 Prompts support these placeholders (automatically substituted):
 
-| Variable            | Default                     | Description                              |
-| ------------------- | --------------------------- | ---------------------------------------- |
-| `{{SPEC_FILE}}`     | `./specs/{feature}.md`      | Feature specification (the "what & why") |
-| `{{PLAN_FILE}}`     | `./plans/{feature}_PLAN.md` | Implementation checklist (the "how")     |
-| `{{PROGRESS_FILE}}` | `progress.txt`              | Iteration history log                    |
-| `{{SOURCE_DIR}}`    | `src/*`                     | Source code location                     |
+### Build/Plan Mode
+
+| Variable            | Default                          | Description                              |
+| ------------------- | -------------------------------- | ---------------------------------------- |
+| `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification (the "what & why") |
+| `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist (the "how")     |
+| `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration history log                    |
+| `{{SOURCE_DIR}}`    | `src/*`                          | Source code location                     |
+
+### Product Mode
+
+| Variable                  | Default                           | Description                       |
+| ------------------------- | --------------------------------- | --------------------------------- |
+| `{{PRODUCT_CONTEXT_DIR}}` | `./product-input/`                | Product context/input directory   |
+| `{{PRODUCT_OUTPUT_DIR}}`  | `./product-output/`               | Product artifact output directory |
+| `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specification file       |
+| `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history log             |
+
+## Configuration File
+
+Ralph supports a `ralph.conf` configuration file for default settings. CLI arguments always override config values.
+
+### Example `ralph.conf`
+
+```bash
+# Ralph Loop Configuration
+# This file is sourced by ralph.sh - use standard bash KEY=VALUE syntax
+
+# Path Configuration (supports template variables)
+SPEC_FILE=./specs/IMPLEMENTATION_PLAN.md
+PLAN_FILE=./plans/IMPLEMENTATION_PLAN.md
+ARTIFACT_SPEC_FILE=./docs/PRODUCT_ARTIFACT_SPEC.md
+PROGRESS_FILE=progress.txt
+SOURCE_DIR=src/*
+
+# Execution Settings
+MODEL=opus
+MAX_ITERATIONS=10
+PUSH_ENABLED=true
+```
+
+### Supported Settings
+
+| Setting              | Description                                  | Default                           |
+| -------------------- | -------------------------------------------- | --------------------------------- |
+| `SPEC_FILE`          | Path to feature specification                | `./specs/IMPLEMENTATION_PLAN.md`  |
+| `PLAN_FILE`          | Path to implementation checklist             | `./plans/IMPLEMENTATION_PLAN.md`  |
+| `ARTIFACT_SPEC_FILE` | Path to product artifact spec (product mode) | `./docs/PRODUCT_ARTIFACT_SPEC.md` |
+| `PROGRESS_FILE`      | Path to iteration history log                | `progress.txt`                    |
+| `SOURCE_DIR`         | Source code directory                        | `src/*`                           |
+| `MODEL`              | Default model (opus, sonnet, haiku)          | varies by mode                    |
+| `MAX_ITERATIONS`     | Maximum iterations limit                     | `10`                              |
+| `PUSH_ENABLED`       | Auto-push after iterations                   | `true`                            |
+
+## Branch-Change Archiving
+
+When you switch git branches, Ralph automatically archives the previous branch's state:
+
+- Copies spec, plan, and progress files to `archive/YYYY-MM-DD-branchname/`
+- Resets `progress.txt` for the new branch
+- Preserves work context for when you return to the branch
+
+This prevents confusion when working on multiple features and ensures iteration history is branch-specific.
 
 ## File Structure
 
@@ -431,7 +506,8 @@ project-root/
 │   └── {feature}_PLAN.md           # Feature-specific plans
 ├── prompts/
 │   ├── PROMPT_plan.md              # Planning mode instructions
-│   └── PROMPT_build.md             # Build mode instructions
+│   ├── PROMPT_build.md             # Build mode instructions
+│   └── PROMPT_product.md           # Product artifact generation
 ├── archive/                        # Auto-archived branch state on branch change
 ├── ralph.sh                        # The loop script
 ├── ralph.conf                      # Optional configuration file
@@ -442,5 +518,7 @@ project-root/
 
 - `prompts/PROMPT_plan.md` - Planning mode prompt
 - `prompts/PROMPT_build.md` - Build mode prompt
+- `prompts/PROMPT_product.md` - Product artifact generation prompt
+- `ralph.conf` - Optional configuration file
 - `specs/INDEX.md` - Feature catalog
 - `/tmp/ralph_*.log` - Session logs

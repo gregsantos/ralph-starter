@@ -6,6 +6,7 @@
 # Presets:
 #   plan              Use PROMPT_plan.md (default model: opus)
 #   build             Use PROMPT_build.md (default model: opus)
+#   product           Use PROMPT_product.md for product artifact generation
 #
 # Options:
 #   -f, --file PATH   Use custom prompt file
@@ -20,12 +21,17 @@
 #   -l, --plan PATH   Plan file (derived from spec, or ./plans/IMPLEMENTATION_PLAN.md)
 #   --progress PATH   Progress file (default: progress.txt)
 #   --source PATH     Source directory (default: src/*)
+#   --context PATH    Product context directory (product mode, default: ./product-input/)
+#   --output PATH     Product output directory (product mode, default: ./product-output/)
+#   --artifact-spec PATH  Artifact spec file (product mode, default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
 #   -h, --help        Show this help
 #
 # Examples:
 #   ./ralph.sh                           # Build mode, 10 iterations
 #   ./ralph.sh plan 5                    # Plan mode, 5 iterations
 #   ./ralph.sh build --model sonnet      # Build with sonnet
+#   ./ralph.sh product                   # Product artifact generation
+#   ./ralph.sh product --context ./my-context/ --output ./my-output/
 #   ./ralph.sh -f ./prompts/review.md    # Custom prompt file
 #   ./ralph.sh -p "Fix lint errors" 3    # Inline prompt, 3 iterations
 #   ./ralph.sh --unlimited               # Unlimited (careful!)
@@ -79,6 +85,7 @@ show_help() {
     echo -e "${BOLD}Presets:${RESET}"
     echo "  plan              Use PROMPT_plan.md (default model: opus)"
     echo "  build             Use PROMPT_build.md (default model: opus)"
+    echo "  product           Use PROMPT_product.md for product artifact generation"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
     echo "  -f, --file PATH   Use custom prompt file"
@@ -93,12 +100,20 @@ show_help() {
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
     echo "  --source PATH     Source directory (default: src/*)"
+    echo ""
+    echo -e "${BOLD}Product Mode Options:${RESET}"
+    echo "  --context PATH       Product context directory (default: ./product-input/)"
+    echo "  --output PATH        Product output directory (default: ./product-output/)"
+    echo "  --artifact-spec PATH Artifact spec file (default: ./docs/PRODUCT_ARTIFACT_SPEC.md)"
+    echo ""
     echo "  -h, --help        Show this help"
     echo ""
     echo -e "${BOLD}Examples:${RESET}"
     echo "  ./ralph.sh                           # Build mode, 10 iterations (default)"
     echo "  ./ralph.sh plan 5                    # Plan mode, 5 iterations"
     echo "  ./ralph.sh build --model sonnet      # Build with sonnet, 10 iterations"
+    echo "  ./ralph.sh product                   # Product artifact generation"
+    echo "  ./ralph.sh product --context ./ctx/ --output ./out/  # Custom product paths"
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
@@ -106,7 +121,7 @@ show_help() {
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
-    echo "  Model:      opus (plan/build), sonnet (inline)"
+    echo "  Model:      opus (plan/build/product), sonnet (inline)"
     echo "  Push:       enabled"
 }
 
@@ -134,6 +149,11 @@ SPEC_FILE=""
 PLAN_FILE=""
 PROGRESS_FILE=""
 SOURCE_DIR=""
+
+# Product mode specific variables
+PRODUCT_CONTEXT_DIR=""
+PRODUCT_OUTPUT_DIR=""
+ARTIFACT_SPEC_FILE=""
 
 # Track CLI-explicit flags (set during arg parsing)
 CLI_SPEC_SET=false
@@ -200,7 +220,19 @@ while [[ $# -gt 0 ]]; do
             SOURCE_DIR="$2"
             shift 2
             ;;
-        plan|build)
+        --context)
+            PRODUCT_CONTEXT_DIR="$2"
+            shift 2
+            ;;
+        --output)
+            PRODUCT_OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        --artifact-spec)
+            ARTIFACT_SPEC_FILE="$2"
+            shift 2
+            ;;
+        plan|build|product)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
             shift
@@ -298,6 +330,10 @@ load_ralph_config() {
         local cli_max="$MAX_ITERATIONS"
         local cli_push="$PUSH_ENABLED"
         local cli_unlimited="$UNLIMITED"
+        # Product mode CLI values
+        local cli_product_context="$PRODUCT_CONTEXT_DIR"
+        local cli_product_output="$PRODUCT_OUTPUT_DIR"
+        local cli_artifact_spec="$ARTIFACT_SPEC_FILE"
 
         # Source config file
         source "$config_file"
@@ -311,6 +347,10 @@ load_ralph_config() {
         # Only restore CLI max if it was explicitly set (not the default)
         [ "$cli_unlimited" = true ] && UNLIMITED=true
         [ -n "$cli_push" ] && PUSH_ENABLED="$cli_push"
+        # Product mode CLI precedence
+        [ -n "$cli_product_context" ] && PRODUCT_CONTEXT_DIR="$cli_product_context"
+        [ -n "$cli_product_output" ] && PRODUCT_OUTPUT_DIR="$cli_product_output"
+        [ -n "$cli_artifact_spec" ] && ARTIFACT_SPEC_FILE="$cli_artifact_spec"
     fi
 }
 
@@ -320,6 +360,10 @@ substitute_template() {
     content="${content//\{\{PLAN_FILE\}\}/$PLAN_FILE}"
     content="${content//\{\{PROGRESS_FILE\}\}/$PROGRESS_FILE}"
     content="${content//\{\{SOURCE_DIR\}\}/$SOURCE_DIR}"
+    # Product mode variables
+    content="${content//\{\{PRODUCT_CONTEXT_DIR\}\}/$PRODUCT_CONTEXT_DIR}"
+    content="${content//\{\{PRODUCT_OUTPUT_DIR\}\}/$PRODUCT_OUTPUT_DIR}"
+    content="${content//\{\{ARTIFACT_SPEC_FILE\}\}/$ARTIFACT_SPEC_FILE}"
     echo "$content"
 }
 
@@ -330,6 +374,11 @@ load_ralph_config
 SPEC_FILE="${SPEC_FILE:-./specs/IMPLEMENTATION_PLAN.md}"
 PROGRESS_FILE="${PROGRESS_FILE:-progress.txt}"
 SOURCE_DIR="${SOURCE_DIR:-src/*}"
+
+# Product mode defaults
+PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
+PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
+ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
 
 # Derive plan file from spec file if spec was set via CLI but plan wasn't
 # e.g., ./specs/feature.md → ./plans/feature_PLAN.md
@@ -428,10 +477,18 @@ print_config() {
     echo -e "${DIM}│${RESET} ${BOLD}Mode${RESET}     ${SYM_ARROW} ${GREEN}$MODE${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Model${RESET}    ${SYM_ARROW} ${CYAN}$MODEL${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Prompt${RESET}   ${SYM_ARROW} ${BLUE}$PROMPT_FILE${RESET}"
-    echo -e "${DIM}│${RESET} ${BOLD}Spec${RESET}     ${SYM_ARROW} ${DIM}$SPEC_FILE${RESET}"
-    echo -e "${DIM}│${RESET} ${BOLD}Plan${RESET}     ${SYM_ARROW} ${DIM}$PLAN_FILE${RESET}"
+    if [ "$MODE" = "product" ]; then
+        # Product mode specific config
+        echo -e "${DIM}│${RESET} ${BOLD}Context${RESET}  ${SYM_ARROW} ${DIM}$PRODUCT_CONTEXT_DIR${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Output${RESET}   ${SYM_ARROW} ${DIM}$PRODUCT_OUTPUT_DIR${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}ArtSpec${RESET}  ${SYM_ARROW} ${DIM}$ARTIFACT_SPEC_FILE${RESET}"
+    else
+        # Build/plan mode config
+        echo -e "${DIM}│${RESET} ${BOLD}Spec${RESET}     ${SYM_ARROW} ${DIM}$SPEC_FILE${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Plan${RESET}     ${SYM_ARROW} ${DIM}$PLAN_FILE${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Source${RESET}   ${SYM_ARROW} ${DIM}$SOURCE_DIR${RESET}"
+    fi
     echo -e "${DIM}│${RESET} ${BOLD}Progress${RESET} ${SYM_ARROW} ${DIM}$PROGRESS_FILE${RESET}"
-    echo -e "${DIM}│${RESET} ${BOLD}Source${RESET}   ${SYM_ARROW} ${DIM}$SOURCE_DIR${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Branch${RESET}   ${SYM_ARROW} ${MAGENTA}$CURRENT_BRANCH${RESET}"
     if [ $MAX_ITERATIONS -eq 0 ]; then
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${RED}unlimited${RESET}"
