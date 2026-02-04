@@ -26,7 +26,7 @@ git --version       # Version control
 
 ```bash
 # Clone or copy this template
-git clone https://github.com/your-org/ralph-starter my-project
+git clone https://github.com/gregsantos/ralph-starter my-project
 cd my-project
 
 # Verify setup

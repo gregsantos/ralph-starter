@@ -1,6 +1,7 @@
 # Ralph Loop
 .ralph-last-branch
 archive/
+.claude/
 
 # Dependencies
 node_modules/
