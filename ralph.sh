@@ -691,7 +691,9 @@ run_with_retry() {
             --model "$MODEL" \
             --verbose \
             2>&1 | tee "$RETRY_OUTPUT_FILE" | parse_claude_output
-        exit_code=${PIPESTATUS[1]}
+        # Use $? with pipefail to capture first non-zero exit from pipeline
+        # PIPESTATUS: [0]=echo, [1]=claude, [2]=tee, [3]=parse_claude_output
+        exit_code=$?
         set +o pipefail
 
         # Success - no retry needed
