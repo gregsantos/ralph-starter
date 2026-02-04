@@ -1654,7 +1654,8 @@ safe_load_config() {
                     [ "$CLI_LOG_FORMAT_SET" != "true" ] && [ -z "${RALPH_LOG_FORMAT:-}" ] && LOG_FORMAT="$normalized_format"
                     ;;
                 NOTIFY_WEBHOOK)
-                    [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
+                    # Only override if CLI wasn't used (respects --notify-webhook "" to disable)
+                    [ "$CLI_WEBHOOK_SET" != "true" ] && [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
                     ;;
             esac
         elif [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
