@@ -199,9 +199,19 @@ update_session_state() {
 
     [ ! -f "$SESSION_FILE" ] && return 0
 
-    # Count files modified in this iteration (from git status)
-    local files_modified
-    files_modified=$(git diff --name-only HEAD~1 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    # Count files modified in this iteration
+    # Compare current HEAD to iteration start, or count uncommitted changes if no commit was made
+    local files_modified=0
+    local current_head
+    current_head=$(git rev-parse HEAD 2>/dev/null || echo "")
+    
+    if [ -n "$ITERATION_START_HEAD" ] && [ -n "$current_head" ] && [ "$current_head" != "$ITERATION_START_HEAD" ]; then
+        # Commit was made - count files changed since iteration start
+        files_modified=$(git diff --name-only "$ITERATION_START_HEAD" "$current_head" 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    else
+        # No commit made - count staged + modified files
+        files_modified=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    fi
 
     # Get last commit message if there was a commit
     local last_commit_msg=""
@@ -1116,6 +1126,7 @@ esac
 
 ITERATION=0
 FAILED_ITERATIONS=0
+ITERATION_START_HEAD=""
 CURRENT_BRANCH=$(git branch --show-current)
 START_TIME=$(date +%s)
 
@@ -2116,6 +2127,9 @@ while true; do
 
     iter_start=$(date +%s)
     print_iteration_start $ITERATION $MAX_ITERATIONS
+    
+    # Capture HEAD at iteration start for accurate files_modified count
+    ITERATION_START_HEAD=$(git rev-parse HEAD 2>/dev/null || echo "")
 
     # Run Claude with retry logic for transient failures
     # --verbose is required for stream-json, parser filters the noise
