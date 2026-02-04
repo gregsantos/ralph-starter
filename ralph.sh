@@ -125,6 +125,142 @@ preflight_checks() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# SESSION STATE MANAGEMENT
+# Maintains structured JSON state file for session tracking and resume capability
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SESSION_FILE=".ralph-session.json"
+SESSION_ID=""
+SESSION_START_ISO=""
+
+# Initialize session state file at session start
+# Creates .ralph-session.json with initial metadata
+init_session_state() {
+    SESSION_ID="$(date +%Y%m%d_%H%M%S)_$$"
+    SESSION_START_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Create initial session state
+    jq -n \
+        --arg session_id "$SESSION_ID" \
+        --arg start_time "$SESSION_START_ISO" \
+        --arg mode "$MODE" \
+        --arg model "$MODEL" \
+        --arg prompt_file "$PROMPT_FILE" \
+        --argjson current_iteration 0 \
+        --argjson max_iterations "$MAX_ITERATIONS" \
+        --arg branch "$CURRENT_BRANCH" \
+        --arg status "in_progress" \
+        --arg spec_file "$SPEC_FILE" \
+        --arg plan_file "$PLAN_FILE" \
+        --arg progress_file "$PROGRESS_FILE" \
+        '{
+            session_id: $session_id,
+            start_time: $start_time,
+            mode: $mode,
+            model: $model,
+            prompt_file: $prompt_file,
+            current_iteration: $current_iteration,
+            max_iterations: $max_iterations,
+            branch: $branch,
+            status: $status,
+            spec_file: $spec_file,
+            plan_file: $plan_file,
+            progress_file: $progress_file,
+            iteration_history: []
+        }' > "$SESSION_FILE"
+
+    echo -e "  ${DIM}Session:${RESET} ${SESSION_ID}"
+}
+
+# Update session state after each iteration
+# Arguments: iteration_number, duration_seconds, exit_code
+update_session_state() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    # Count files modified in this iteration (from git status)
+    local files_modified
+    files_modified=$(git diff --name-only HEAD~1 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+
+    # Get last commit message if there was a commit
+    local last_commit_msg=""
+    last_commit_msg=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+
+    # Create iteration entry
+    local iteration_entry
+    iteration_entry=$(jq -n \
+        --argjson iteration "$iteration" \
+        --argjson duration "$duration" \
+        --argjson exit_code "$exit_code" \
+        --argjson files_modified "$files_modified" \
+        --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg commit_msg "$last_commit_msg" \
+        '{
+            iteration: $iteration,
+            duration: $duration,
+            exit_code: $exit_code,
+            files_modified: $files_modified,
+            timestamp: $timestamp,
+            commit_message: $commit_msg
+        }')
+
+    # Update session file with new iteration and current_iteration counter
+    local updated
+    updated=$(jq \
+        --argjson iter "$iteration" \
+        --argjson entry "$iteration_entry" \
+        '.current_iteration = $iter | .iteration_history += [$entry]' \
+        "$SESSION_FILE")
+
+    echo "$updated" > "$SESSION_FILE"
+}
+
+# Finalize session state - set final status and optionally archive
+# Arguments: final_status (complete|failed|interrupted|max_iterations)
+finalize_session_state() {
+    local final_status="$1"
+
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    local end_time
+    end_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Calculate total duration
+    local total_duration=$(($(date +%s) - START_TIME))
+
+    # Update final status
+    local updated
+    updated=$(jq \
+        --arg status "$final_status" \
+        --arg end_time "$end_time" \
+        --argjson total_duration "$total_duration" \
+        '.status = $status | .end_time = $end_time | .total_duration = $total_duration' \
+        "$SESSION_FILE")
+
+    echo "$updated" > "$SESSION_FILE"
+
+    # Archive on successful completion, preserve on failure/interrupt for debugging
+    if [ "$final_status" = "complete" ]; then
+        # Create log directory if needed
+        local log_dir="${HOME}/.ralph/logs"
+        mkdir -p "$log_dir"
+
+        # Archive session file
+        local archive_path="${log_dir}/${SESSION_ID}_session.json"
+        cp "$SESSION_FILE" "$archive_path"
+        rm -f "$SESSION_FILE"
+
+        echo -e "  ${DIM}Session archived:${RESET} ${archive_path}"
+    else
+        # Keep session file for debugging/resume
+        echo -e "  ${DIM}Session preserved:${RESET} ${SESSION_FILE}"
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HELP
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -664,17 +800,18 @@ parse_claude_output() {
         # Save ALL raw output to log file for debugging
         echo "$line" >> "$LOG_FILE"
 
-        # Check for completion marker in any line (text or JSON)
-        if [[ "$line" == *"$COMPLETION_MARKER"* ]]; then
+        # Skip empty lines or non-JSON for marker detection
+        [ -z "$line" ] && continue
+        [[ "$line" != "{"* ]] && continue
+
+        # Check for completion marker ONLY in assistant text output (not tool results/file contents)
+        # Assistant text has: {"type":"assistant","message":{"content":[{"type":"text","text":"..."}]}}
+        if [[ "$line" == *"$COMPLETION_MARKER"* ]] && [[ "$line" == *'"type":"assistant"'* ]] && [[ "$line" == *'"type":"text"'* ]]; then
             completion_detected=true
             echo -e "\n  ${GREEN}${BOLD}${SYM_CHECK} Completion marker detected!${RESET}"
             # Write to completion file to signal main loop
             echo "COMPLETE" > "$COMPLETION_FILE"
         fi
-
-        # Skip empty lines or non-JSON
-        [ -z "$line" ] && continue
-        [[ "$line" != "{"* ]] && continue
 
         # Check for tool_use in assistant messages
         # Format: {"type":"assistant","message":{"content":[{"type":"tool_use","name":"..."}]}}
@@ -873,6 +1010,9 @@ cleanup() {
     # Clean up temp prompt file if exists
     [ -n "$TEMP_PROMPT_FILE" ] && [ -f "$TEMP_PROMPT_FILE" ] && rm -f "$TEMP_PROMPT_FILE"
 
+    # Finalize session state (preserves for debugging)
+    finalize_session_state "interrupted"
+
     local end_time=$(date +%s)
     local total_duration=$((end_time - START_TIME))
 
@@ -910,6 +1050,9 @@ if [ "$DRY_RUN" = true ]; then
     echo -e "${GREEN}${SYM_CHECK} Dry run complete. Config shown above.${RESET}\n"
     exit 0
 fi
+
+# Initialize session state (after config, before main loop)
+init_session_state
 
 # Track exit status
 EXIT_STATUS=1  # Default: max iterations reached
@@ -976,9 +1119,14 @@ while true; do
 
     # Track failed iterations
     iter_status=$(cat "$ITERATION_STATUS_FILE" 2>/dev/null || echo "unknown")
+    iter_exit_code=0
     if [ "$iter_status" = "failed" ]; then
         FAILED_ITERATIONS=$((FAILED_ITERATIONS + 1))
+        iter_exit_code=1
     fi
+
+    # Update session state with iteration metrics
+    update_session_state "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code"
 
     print_iteration_end $ITERATION $iter_duration
 
@@ -1009,6 +1157,9 @@ while true; do
     fi
     echo -e "${CYAN}${BOLD}  ↻ Starting next iteration...${RESET}\n"
 done
+
+# Finalize session state based on exit reason
+finalize_session_state "$EXIT_REASON"
 
 # Final summary
 end_time=$(date +%s)

@@ -27,3 +27,33 @@
 - `./ralph.sh --help` - Shows new --skip-checks flag
 - `./ralph.sh --dry-run` - Pre-flight checks run successfully
 
+## Iteration 2 - 2026-02-03
+
+### Task Completed: US-002 Structured Session State File (Task 1.2)
+
+**What was done:**
+- Created SESSION STATE MANAGEMENT section after PRE-FLIGHT CHECKS with three functions:
+  - `init_session_state()` - Creates `.ralph-session.json` with full session metadata
+  - `update_session_state()` - Updates iteration history array after each iteration
+  - `finalize_session_state()` - Sets final status, archives on success, preserves on failure
+- Session state includes: session_id, start_time, mode, model, prompt_file, current_iteration, max_iterations, branch, status, spec_file, plan_file, progress_file, iteration_history[]
+- Each iteration entry includes: iteration, duration, exit_code, files_modified, timestamp, commit_message
+- Session ID format: `YYYYMMDD_HHMMSS_PID` for uniqueness
+- On completion: archives to `~/.ralph/logs/{session_id}_session.json`
+- On interrupt/failure: preserves `.ralph-session.json` for debugging/resume capability
+
+**Why:**
+- Session state is foundational for US-003 (retry logic) and US-004 (session resume)
+- Structured JSON format allows programmatic access to session data
+- Iteration history enables detailed post-session analysis
+- Archive on success keeps project root clean; preserve on failure enables debugging
+- Files modified count from git diff provides insight into iteration productivity
+
+**Files changed:**
+- `ralph.sh` - Added SESSION STATE MANAGEMENT section, integrated init/update/finalize calls into main flow and cleanup()
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Works correctly
+- `./ralph.sh --dry-run` - Works correctly (session state not initialized during dry-run)
+

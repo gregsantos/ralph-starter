@@ -58,18 +58,18 @@ US-016 (Documentation) ◄──────────────────
 #### Task 1.2: US-002 Structured Session State File
 **Priority:** 2 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 1.2.1 Define session state schema (session_id, start_time, mode, model, etc.)
-- [ ] 1.2.2 Create `init_session_state()` function - creates `.ralph-session.json` with initial state
-- [ ] 1.2.3 Generate unique session_id: `$(date +%Y%m%d_%H%M%S)_$$`
-- [ ] 1.2.4 Create `update_session_state()` function - called after each iteration
-- [ ] 1.2.5 Add iteration_history array with per-iteration metadata (duration, exit_code, files_modified)
-- [ ] 1.2.6 Create `finalize_session_state()` function - sets final status, archives or cleans up
-- [ ] 1.2.7 Call `init_session_state` after config loading, before main loop
-- [ ] 1.2.8 Call `update_session_state` at end of each iteration with metrics
-- [ ] 1.2.9 Call `finalize_session_state` in cleanup() and at loop end
-- [ ] 1.2.10 On normal completion: archive session file to log directory
-- [ ] 1.2.11 On error/interrupt: preserve session file for debugging
-- [ ] 1.2.12 Run `shellcheck ralph.sh` and fix any issues
+- [x] 1.2.1 Define session state schema (session_id, start_time, mode, model, etc.)
+- [x] 1.2.2 Create `init_session_state()` function - creates `.ralph-session.json` with initial state
+- [x] 1.2.3 Generate unique session_id: `$(date +%Y%m%d_%H%M%S)_$$`
+- [x] 1.2.4 Create `update_session_state()` function - called after each iteration
+- [x] 1.2.5 Add iteration_history array with per-iteration metadata (duration, exit_code, files_modified)
+- [x] 1.2.6 Create `finalize_session_state()` function - sets final status, archives or cleans up
+- [x] 1.2.7 Call `init_session_state` after config loading, before main loop
+- [x] 1.2.8 Call `update_session_state` at end of each iteration with metrics
+- [x] 1.2.9 Call `finalize_session_state` in cleanup() and at loop end
+- [x] 1.2.10 On normal completion: archive session file to log directory
+- [x] 1.2.11 On error/interrupt: preserve session file for debugging
+- [x] 1.2.12 Run `shellcheck ralph.sh` and fix any issues
 
 **Session state schema:**
 ```json
