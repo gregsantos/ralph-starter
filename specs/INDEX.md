@@ -2,11 +2,17 @@
 
 Source of truth for all system capabilities and planned features.
 
+## Completed
+
+| Feature         | Spec                                                 | Status   | Plan                                                              | Description                                            |
+| --------------- | ---------------------------------------------------- | -------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
+| Ralph Loop v2.0 | [ralph-improvements.json](./ralph-improvements.json) | Complete | [ralph-improvements_PLAN.md](../plans/ralph-improvements_PLAN.md) | Resilience, observability, config, and DX improvements |
+
 ## Active Development
 
-| Feature         | Spec                                                 | Status      | Plan                                                              | Description                                            |
-| --------------- | ---------------------------------------------------- | ----------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
-| Ralph Loop v2.0 | [ralph-improvements.json](./ralph-improvements.json) | In Progress | [ralph-improvements_PLAN.md](../plans/ralph-improvements_PLAN.md) | Resilience, observability, config, and DX improvements |
+| Feature | Spec | Status | Plan | Description |
+| ------- | ---- | ------ | ---- | ----------- |
+|         |      |        |      |             |
 
 ## Planned
 

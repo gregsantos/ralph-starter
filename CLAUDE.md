@@ -236,6 +236,9 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh -s ./specs/feature.md        # Custom spec (plan auto-derived)
 ./ralph.sh --resume                     # Resume interrupted session
 ./ralph.sh --list-sessions              # List resumable sessions
+./ralph.sh --test                       # Single iteration test mode (no push)
+./ralph.sh -i                           # Interactive mode (confirm between iterations)
+./ralph.sh -v                           # Verbose mode (show config sources, prompts)
 ```
 
 ## Three Modes
