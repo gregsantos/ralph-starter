@@ -765,6 +765,7 @@ show_help() {
     echo "  --log-dir PATH    Log directory (default: ~/.ralph/logs/)"
     echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
     echo "  --log-format FMT  Log format: text (default) or json"
+    echo "  --notify-webhook URL  Webhook URL for session notifications"
     echo "  --global-config PATH  Global config file (default: ~/.ralph/config)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
@@ -851,6 +852,7 @@ CLI_LOG_DIR_SET=false
 CLI_LOG_FILE_SET=false
 CLI_LOG_FORMAT_SET=false
 CLI_PROGRESS_SET=false
+CLI_WEBHOOK_SET=false
 
 # Parse arguments
 POSITIONAL_ARGS=()
@@ -936,6 +938,11 @@ while [[ $# -gt 0 ]]; do
             ;;
         --global-config)
             GLOBAL_CONFIG_FILE="$2"
+            shift 2
+            ;;
+        --notify-webhook)
+            NOTIFY_WEBHOOK="$2"
+            CLI_WEBHOOK_SET=true
             shift 2
             ;;
         -s|--spec)
@@ -1068,10 +1075,10 @@ if [ -n "${RALPH_LOG_FORMAT:-}" ] && [ "$CLI_LOG_FORMAT_SET" != "true" ]; then
     esac
 fi
 
-# RALPH_NOTIFY_WEBHOOK: Webhook URL for notifications - placeholder for US-010
-if [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ]; then
+# RALPH_NOTIFY_WEBHOOK: Webhook URL for notifications
+if [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ] && [ "$CLI_WEBHOOK_SET" != "true" ]; then
     NOTIFY_WEBHOOK="${RALPH_NOTIFY_WEBHOOK}"
-else
+elif [ -z "${NOTIFY_WEBHOOK:-}" ]; then
     NOTIFY_WEBHOOK=""
 fi
 
@@ -1315,6 +1322,105 @@ log_session_end() {
         "total_duration=$duration" \
         "iterations_completed=$completed" \
         "failed_iterations=$failed"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# WEBHOOK NOTIFICATIONS
+# Send POST requests on session completion/failure/interrupt
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Send webhook notification
+# Arguments: event_type (session_complete|session_failed|session_interrupted)
+# Non-blocking: 10s timeout, failures don't block session
+send_webhook() {
+    local event_type="$1"
+
+    # Skip if no webhook configured
+    [ -z "${NOTIFY_WEBHOOK:-}" ] && return 0
+
+    # Calculate duration
+    local total_duration=$(($(date +%s) - START_TIME))
+    local minutes=$((total_duration / 60))
+    local seconds=$((total_duration % 60))
+
+    # Get last commit summary if available
+    local last_commit=""
+    last_commit=$(git log -1 --pretty=format:"%s" 2>/dev/null || echo "")
+
+    # Build summary message based on event type
+    local summary=""
+    case "$event_type" in
+        session_complete)
+            summary="All tasks complete after ${ITERATION} iteration(s)"
+            ;;
+        session_failed)
+            summary="Session failed after ${ITERATION} iteration(s)"
+            ;;
+        session_interrupted)
+            summary="Session interrupted after ${ITERATION} iteration(s)"
+            ;;
+        session_max_iterations)
+            summary="Reached max iterations (${MAX_ITERATIONS})"
+            ;;
+        *)
+            summary="Session ended: $event_type"
+            ;;
+    esac
+
+    # Build JSON payload
+    local payload
+    payload=$(jq -nc \
+        --arg event "$event_type" \
+        --arg session_id "${SESSION_ID:-unknown}" \
+        --arg status "$event_type" \
+        --argjson iterations "${ITERATION:-0}" \
+        --argjson failed "${FAILED_ITERATIONS:-0}" \
+        --argjson duration "$total_duration" \
+        --arg duration_human "${minutes}m ${seconds}s" \
+        --arg branch "${CURRENT_BRANCH:-unknown}" \
+        --arg mode "${MODE:-unknown}" \
+        --arg model "${MODEL:-unknown}" \
+        --arg summary "$summary" \
+        --arg last_commit "$last_commit" \
+        --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{
+            event: $event,
+            session_id: $session_id,
+            status: $status,
+            iterations: $iterations,
+            failed_iterations: $failed,
+            duration_seconds: $duration,
+            duration_human: $duration_human,
+            branch: $branch,
+            mode: $mode,
+            model: $model,
+            summary: $summary,
+            last_commit: $last_commit,
+            timestamp: $timestamp
+        }')
+
+    # Send webhook with 10s timeout, non-blocking on failure
+    # Run in background to not block cleanup
+    (
+        local http_code
+        http_code=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 5 \
+            --max-time 10 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "$NOTIFY_WEBHOOK" 2>/dev/null)
+
+        # Log result (only to log file, not terminal during cleanup)
+        if [ "$http_code" -ge 200 ] && [ "$http_code" -lt 300 ]; then
+            echo "  [webhook] Notification sent (HTTP $http_code)" >> "${LOG_FILE:-/dev/null}" 2>/dev/null
+        else
+            echo "  [webhook] Notification failed (HTTP $http_code)" >> "${LOG_FILE:-/dev/null}" 2>/dev/null
+        fi
+    ) &
+
+    # Wait briefly for webhook to start, but don't block
+    sleep 0.1 2>/dev/null || true
 }
 
 # Cleanup temp files on exit
@@ -1719,6 +1825,19 @@ print_config() {
     if [ "$LOG_FORMAT" = "json" ]; then
         echo -e "${DIM}│${RESET} ${BOLD}LogFmt${RESET}   ${SYM_ARROW} ${CYAN}json${RESET} (structured)"
     fi
+    if [ -n "${NOTIFY_WEBHOOK:-}" ]; then
+        # Show abbreviated webhook URL (hide potential auth info)
+        local webhook_display="${NOTIFY_WEBHOOK}"
+        # Strip basic auth from display if present
+        if [[ "$webhook_display" == *"@"* ]]; then
+            webhook_display=$(echo "$webhook_display" | sed 's|://[^@]*@|://***@|')
+        fi
+        # Truncate long URLs
+        if [ ${#webhook_display} -gt 40 ]; then
+            webhook_display="${webhook_display:0:37}..."
+        fi
+        echo -e "${DIM}│${RESET} ${BOLD}Webhook${RESET}  ${SYM_ARROW} ${CYAN}${webhook_display}${RESET}"
+    fi
     # Show loaded config files in dry-run output
     if [ "$DRY_RUN" = true ] && [ ${#LOADED_CONFIG_FILES[@]} -gt 0 ]; then
         echo -e "${DIM}│${RESET}"
@@ -2062,6 +2181,9 @@ cleanup() {
     # Log session end for structured logging
     log_session_end "interrupted" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
 
+    # Send webhook notification (non-blocking)
+    send_webhook "session_interrupted"
+
     echo -e "\n${DIM}┌─────────────────────────────────────────┐${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Session Summary${RESET}"
     echo -e "${DIM}│${RESET}   Iterations: $ITERATION"
@@ -2226,6 +2348,14 @@ total_duration=$((end_time - START_TIME))
 
 # Log session end for structured logging
 log_session_end "$EXIT_REASON" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
+
+# Send webhook notification based on exit reason
+if [ "$EXIT_REASON" = "complete" ]; then
+    send_webhook "session_complete"
+else
+    send_webhook "session_max_iterations"
+fi
+
 minutes=$((total_duration / 60))
 seconds=$((total_duration % 60))
 

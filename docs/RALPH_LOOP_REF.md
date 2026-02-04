@@ -327,6 +327,71 @@ JSON log entries include:
 
 Terminal output remains human-readable regardless of log format.
 
+### Webhook Notifications
+
+Ralph can send webhook notifications on session completion, failure, or interrupt. This enables integration with Slack, Discord, Teams, or custom monitoring systems.
+
+```bash
+# Send notifications to a webhook endpoint
+./ralph.sh --notify-webhook "https://hooks.slack.com/services/xxx/yyy/zzz" build
+
+# Or via environment variable
+RALPH_NOTIFY_WEBHOOK="https://example.com/webhook" ./ralph.sh build
+
+# Basic auth is supported via URL (credentials redacted in display)
+./ralph.sh --notify-webhook "https://user:pass@example.com/webhook" build
+```
+
+**Events:**
+
+| Event                      | Description                                      |
+| -------------------------- | ------------------------------------------------ |
+| `session_complete`         | Session finished with completion marker detected |
+| `session_max_iterations`   | Session ended due to iteration limit             |
+| `session_interrupted`      | Session interrupted by Ctrl+C or signal          |
+
+**Payload:**
+
+Webhooks send a JSON POST request with:
+
+```json
+{
+  "event": "session_complete",
+  "session_id": "20260203_143000_12345",
+  "status": "session_complete",
+  "iterations": 5,
+  "failed_iterations": 0,
+  "duration_seconds": 300,
+  "duration_human": "5m 0s",
+  "branch": "feature/auth",
+  "mode": "build",
+  "model": "opus",
+  "summary": "All tasks complete after 5 iteration(s)",
+  "last_commit": "feat: add user authentication",
+  "timestamp": "2026-02-03T14:35:00Z"
+}
+```
+
+**Behavior:**
+
+- 10-second timeout per request
+- Non-blocking: failures don't stop session cleanup
+- Basic auth supported via URL (`https://user:pass@host/path`)
+- Response status logged to session log file
+
+**Integration Examples:**
+
+```bash
+# Slack Incoming Webhook
+./ralph.sh --notify-webhook "https://hooks.slack.com/services/T00/B00/xxx" build
+
+# Discord Webhook
+./ralph.sh --notify-webhook "https://discord.com/api/webhooks/xxx/yyy" build
+
+# Custom endpoint with auth
+./ralph.sh --notify-webhook "https://api:secret@monitoring.example.com/ralph" build
+```
+
 ## Architecture
 
 ```
@@ -359,8 +424,6 @@ ralph.sh
 ```bash
 ./ralph.sh -f task1.md -f task2.md --parallel
 ```
-
-2. **Webhook Notifications**: Send alerts on completion, errors, or specific events
 
 ### Medium-term
 
@@ -558,7 +621,7 @@ Ralph supports environment variables for CI/CD integration and user defaults. Pr
 | `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
 | `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
-| `RALPH_NOTIFY_WEBHOOK` | Webhook URL for notifications - future  | `RALPH_NOTIFY_WEBHOOK=...`    |
+| `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
 
 ### Example: CI/CD Usage
 
@@ -647,7 +710,7 @@ LOG_DIR=~/.ralph/logs
 | `PUSH_ENABLED`       | Auto-push after iterations                   | `true`                            |
 | `LOG_DIR`            | Log file directory                           | `~/.ralph/logs`                   |
 | `LOG_FORMAT`         | Log format (text/json)                       | `text`                            |
-| `NOTIFY_WEBHOOK`     | Notification webhook URL - future            | (none)                            |
+| `NOTIFY_WEBHOOK`     | Notification webhook URL                     | (none)                            |
 
 ### Security
 

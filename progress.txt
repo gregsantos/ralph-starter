@@ -323,3 +323,51 @@
 - `RALPH_LOG_FORMAT=json ./ralph.sh --dry-run` - Env var works
 - `RALPH_LOG_FORMAT=json ./ralph.sh --log-format text --dry-run` - CLI overrides env
 
+## Iteration 10 - 2026-02-03
+
+### Task Completed: US-010 Webhook Notifications (Task 3.2)
+
+**What was done:**
+- Added WEBHOOK NOTIFICATIONS section after STRUCTURED LOGGING with:
+  - `send_webhook()` - Sends POST requests on session events with JSON payload
+  - Non-blocking execution with 10-second timeout using curl
+  - Background process prevents blocking session cleanup
+  - Logs webhook response to session log file
+- Added `--notify-webhook URL` CLI flag for specifying webhook endpoint
+- Added `CLI_WEBHOOK_SET` tracking flag for proper precedence handling
+- Updated `RALPH_NOTIFY_WEBHOOK` environment variable support with correct precedence (CLI > env > config)
+- Events supported: session_complete, session_max_iterations, session_interrupted
+- JSON payload includes: event, session_id, status, iterations, failed_iterations, duration, branch, mode, model, summary, last_commit, timestamp
+- Basic auth supported via URL format (https://user:pass@host/path)
+- Credentials redacted in display (shown as https://***@host/path)
+- Long URLs truncated to 40 chars in display
+- Updated `print_config()` to show webhook URL when configured
+- Updated `show_help()` with --notify-webhook flag documentation
+- Called `send_webhook()` in cleanup() for interrupted sessions
+- Called `send_webhook()` at normal session end (complete or max_iterations)
+- Updated docs/RALPH_LOOP_REF.md with comprehensive Webhook Notifications section
+- Updated ralph.conf with NOTIFY_WEBHOOK example
+- Updated environment variable and config tables to mark webhook as implemented
+
+**Why:**
+- Webhook notifications enable remote monitoring of long-running sessions
+- Integrates with Slack, Discord, Teams, PagerDuty, or custom systems
+- Non-blocking design ensures notifications don't delay session cleanup
+- Basic auth support enables secure integration with protected endpoints
+- Credential redaction in display prevents accidental exposure in logs/screenshots
+- Consistent JSON payload format supports easy parsing by receivers
+
+**Files changed:**
+- `ralph.sh` - Added WEBHOOK NOTIFICATIONS section (~90 lines), --notify-webhook flag, CLI_WEBHOOK_SET tracking, print_config() display, cleanup() and session end integration
+- `docs/RALPH_LOOP_REF.md` - Added Webhook Notifications section, updated env var and config tables
+- `ralph.conf` - Added NOTIFY_WEBHOOK example
+- `plans/ralph-improvements_PLAN.md` - Marked task 3.2 complete
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --notify-webhook flag and RALPH_NOTIFY_WEBHOOK
+- `./ralph.sh --dry-run --notify-webhook "https://example.com/webhook"` - Shows webhook in config
+- `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --dry-run` - Env var works
+- `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --notify-webhook "https://cli.example.com" --dry-run` - CLI overrides env
+- `./ralph.sh --dry-run --notify-webhook "https://user:pass@example.com/webhook"` - Basic auth redacted in display
+

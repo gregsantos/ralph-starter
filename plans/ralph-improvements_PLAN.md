@@ -278,16 +278,16 @@ NOTIFY_WEBHOOK
 #### Task 3.2: US-010 Webhook Notifications
 **Priority:** 10 | **Effort:** Small | **Depends on:** None
 
-- [ ] 3.2.1 Add `--notify-webhook URL` flag
-- [ ] 3.2.2 Add `RALPH_NOTIFY_WEBHOOK` environment variable support
-- [ ] 3.2.3 Create `send_webhook()` function using curl
-- [ ] 3.2.4 Support events: session_complete, session_failed, session_interrupted
-- [ ] 3.2.5 Payload: session_id, status, iterations, duration, branch, summary
-- [ ] 3.2.6 Support basic auth via URL (https://user:pass@host/path)
-- [ ] 3.2.7 Set timeout to 10s, don't block session on failure
-- [ ] 3.2.8 Log webhook response status
-- [ ] 3.2.9 Call send_webhook in cleanup() and at session end
-- [ ] 3.2.10 Run `shellcheck ralph.sh` and fix any issues
+- [x] 3.2.1 Add `--notify-webhook URL` flag
+- [x] 3.2.2 Add `RALPH_NOTIFY_WEBHOOK` environment variable support
+- [x] 3.2.3 Create `send_webhook()` function using curl
+- [x] 3.2.4 Support events: session_complete, session_failed, session_interrupted
+- [x] 3.2.5 Payload: session_id, status, iterations, duration, branch, summary
+- [x] 3.2.6 Support basic auth via URL (https://user:pass@host/path)
+- [x] 3.2.7 Set timeout to 10s, don't block session on failure
+- [x] 3.2.8 Log webhook response status
+- [x] 3.2.9 Call send_webhook in cleanup() and at session end
+- [x] 3.2.10 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - Webhook POSTs on complete/fail/interrupt
