@@ -27,7 +27,27 @@ Run these after implementing to get immediate feedback:
 ## Project Structure
 
 ```
-
+ralph-starter/
+├── ralph.sh                      # The loop script
+├── ralph.conf                    # Configuration defaults
+├── CLAUDE.md                     # Project context (this file)
+├── prompts/
+│   ├── PROMPT_plan.md            # Planning mode instructions
+│   ├── PROMPT_build.md           # Build mode instructions
+│   └── PROMPT_product.md         # Product artifact generation
+├── specs/
+│   ├── INDEX.md                  # Feature catalog
+│   └── {feature}.md              # Feature specs
+├── plans/
+│   └── IMPLEMENTATION_PLAN.md    # Task checklist
+├── product-input/                # Product context files
+├── product-output/               # Generated artifacts
+├── progress.txt                  # Iteration history
+├── archive/                      # Auto-archived branch state
+└── docs/
+    ├── RALPH_LOOP_REF.md         # CLI reference
+    ├── RALPH_WORKSHOP.md         # Workshop guide
+    └── PRODUCT_ARTIFACT_SPEC.md  # Artifact specifications
 ```
 
 ## TypeScript
@@ -150,6 +170,7 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ```bash
 ./ralph.sh                              # Build mode, opus, 10 iterations (default)
 ./ralph.sh plan 5                       # Plan mode, 5 iterations
+./ralph.sh product                      # Product artifact generation (12 docs)
 ./ralph.sh -p "Fix lint errors" 3       # Inline prompt, 3 iterations
 ./ralph.sh -f prompts/review.md         # Custom prompt file
 ./ralph.sh build --model sonnet         # Build with sonnet
@@ -159,10 +180,19 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh -s ./specs/feature.md        # Custom spec (plan auto-derived)
 ```
 
+## Three Modes
+
+| Mode | Purpose | Command |
+|------|---------|---------|
+| **plan** | Analyze codebase, create task checklist | `./ralph.sh plan` |
+| **build** | Execute tasks one at a time | `./ralph.sh build` |
+| **product** | Generate product documentation (12 artifacts) | `./ralph.sh product` |
+
 ## Prompt Files
 
 - `./prompts/PROMPT_plan.md` - Architecture and planning tasks
 - `./prompts/PROMPT_build.md` - Implementation tasks
+- `./prompts/PROMPT_product.md` - Product artifact generation
 
 ## Completion Marker
 
@@ -176,6 +206,12 @@ When all tasks are complete, output `<ralph>COMPLETE</ralph>` to signal the loop
 # Plans
 
 - `./plans/IMPLEMENTATION_PLAN.md` - Task checklist (the "how")
+
+# Product Artifacts
+
+- `./product-input/` - Context files for product mode (vision, research, requirements)
+- `./product-output/` - Generated artifacts (12 documents)
+- `./docs/PRODUCT_ARTIFACT_SPEC.md` - Artifact specifications
 
 # Progress
 
