@@ -30,6 +30,50 @@ The script is self-contained. Ensure you have:
 
 Ralph automatically runs pre-flight checks to verify these dependencies. Use `--skip-checks` to bypass if needed.
 
+### Shell Completion
+
+Tab completion is available for bash and zsh shells.
+
+**Bash:**
+
+```bash
+# Option 1: Source directly in your shell config
+echo 'source /path/to/ralph-starter/completions/ralph.bash' >> ~/.bashrc
+
+# Option 2: Copy to system completions directory
+sudo cp completions/ralph.bash /etc/bash_completion.d/ralph
+
+# Option 3: Copy to user completions directory
+mkdir -p ~/.local/share/bash-completion/completions
+cp completions/ralph.bash ~/.local/share/bash-completion/completions/ralph.sh
+```
+
+**Zsh:**
+
+```bash
+# Option 1: Add completions directory to fpath (BEFORE compinit in ~/.zshrc)
+fpath=(/path/to/ralph-starter/completions $fpath)
+autoload -Uz compinit && compinit
+
+# Option 2: Copy to a directory already in fpath
+cp completions/ralph.zsh ~/.zsh/completions/_ralph
+compinit
+
+# Option 3: Copy to system completions (requires sudo)
+sudo cp completions/ralph.zsh /usr/local/share/zsh/site-functions/_ralph
+```
+
+After installation, restart your shell or run `source ~/.bashrc` (bash) or `source ~/.zshrc` (zsh).
+
+**What's Completed:**
+
+- Presets: `plan`, `build`, `product`
+- All flags: `--model`, `--file`, `--spec`, `--log-format`, etc.
+- Model names: `opus`, `sonnet`, `haiku`
+- Log formats: `text`, `json`
+- File paths for flags that accept them (`-f`, `-s`, `-l`, `--log-file`, etc.)
+- Directory paths for flags that accept them (`--log-dir`, `--source`, `--context`, `--output`)
+
 ## Usage
 
 ### Basic Commands
@@ -735,6 +779,13 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh --skip-checks                     # Skip pre-flight checks
 ./ralph.sh --dry-run                         # Preview config, don't run
 ./ralph.sh --no-summary                      # Disable summary report generation
+
+# Shell completion (see Installation section for setup)
+ralph<TAB>                                   # Complete presets and options
+./ralph.sh --m<TAB>                          # Complete to --model, --max, etc.
+./ralph.sh --model <TAB>                     # Complete opus, sonnet, haiku
+./ralph.sh --log-format <TAB>                # Complete text, json
+./ralph.sh -s <TAB>                          # Complete file paths
 
 # Combined examples
 ./ralph.sh build --model sonnet --no-push 3

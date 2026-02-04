@@ -392,15 +392,15 @@ NOTIFY_WEBHOOK
 #### Task 4.4: US-015 Shell Completion Scripts
 **Priority:** 15 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 4.4.1 Create `completions/` directory
-- [ ] 4.4.2 Create `completions/ralph.bash` for bash completion
-- [ ] 4.4.3 Create `completions/ralph.zsh` for zsh completion
-- [ ] 4.4.4 Complete presets: plan, build, product
-- [ ] 4.4.5 Complete all flags: --model, --file, --prompt, etc.
-- [ ] 4.4.6 Complete model names: opus, sonnet, haiku
-- [ ] 4.4.7 Complete file paths for -f, -s, -l flags
-- [ ] 4.4.8 Add installation instructions to show_help() or docs
-- [ ] 4.4.9 Run `shellcheck completions/ralph.bash` and fix any issues
+- [x] 4.4.1 Create `completions/` directory
+- [x] 4.4.2 Create `completions/ralph.bash` for bash completion
+- [x] 4.4.3 Create `completions/ralph.zsh` for zsh completion
+- [x] 4.4.4 Complete presets: plan, build, product
+- [x] 4.4.5 Complete all flags: --model, --file, --prompt, etc.
+- [x] 4.4.6 Complete model names: opus, sonnet, haiku
+- [x] 4.4.7 Complete file paths for -f, -s, -l flags
+- [x] 4.4.8 Add installation instructions to show_help() or docs
+- [x] 4.4.9 Run `shellcheck completions/ralph.bash` and fix any issues
 
 **Acceptance criteria:**
 - Tab completion for bash and zsh

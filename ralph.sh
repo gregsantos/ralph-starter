@@ -904,6 +904,11 @@ show_help() {
     echo "  Iterations: 10 (prevents runaway sessions)"
     echo "  Model:      opus (plan/build/product), sonnet (inline)"
     echo "  Push:       enabled"
+    echo ""
+    echo -e "${BOLD}Shell Completion:${RESET}"
+    echo "  Bash: source completions/ralph.bash  # or copy to /etc/bash_completion.d/"
+    echo "  Zsh:  Add completions/ to fpath, then run compinit"
+    echo "  See completions/ralph.bash and completions/ralph.zsh for detailed instructions."
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════

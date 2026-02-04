@@ -413,7 +413,7 @@
       },
       "priority": 15,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Nice-to-have quality of life improvement"
     },
     {

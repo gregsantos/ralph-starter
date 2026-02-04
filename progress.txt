@@ -555,3 +555,50 @@
 - `RALPH_MODEL=sonnet ./ralph.sh -v --dry-run -s ./specs/ralph-improvements.json` - Correctly shows env/cli sources
 - `./ralph.sh --verbose --dry-run` - Same as -v
 
+## Iteration 15 - 2026-02-04
+
+### Task Completed: US-015 Shell Completion Scripts (Task 4.4)
+
+**What was done:**
+- Created `completions/` directory for shell completion scripts
+- Created `completions/ralph.bash` - Comprehensive bash completion script:
+  - Completes presets: plan, build, product
+  - Completes all 30+ flags: --model, --file, --spec, --log-format, etc.
+  - Completes model names: opus, sonnet, haiku
+  - Completes log formats: text, json
+  - Completes file paths for flags: -f, --file, -s, --spec, -l, --plan, --progress, --log-file, --global-config, --artifact-spec
+  - Completes directory paths for flags: --log-dir, --source, --context, --output
+  - Uses shellcheck-compliant mapfile approach for array population
+  - Includes 3 installation options with clear instructions
+- Created `completions/ralph.zsh` - Comprehensive zsh completion script:
+  - Full _arguments completion spec with descriptions for each flag
+  - Descriptive preset/model/format completions (e.g., "opus:Most capable model")
+  - Proper file and directory completion with _files
+  - 3 installation options for different user preferences
+- Updated `show_help()` in ralph.sh with new "Shell Completion" section pointing to completion scripts
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New "Shell Completion" section under Installation with detailed setup instructions for bash and zsh
+  - Added shell completion examples to Quick Reference section
+
+**Why:**
+- Tab completion significantly improves CLI usability for power users
+- Reduces need to check --help or docs for flag names
+- Prevents typos in commonly used flags and values
+- Model/format completion reduces cognitive load (no need to remember exact values)
+- File/directory completion for path flags saves typing and prevents errors
+- Both major shells (bash/zsh) supported for broad compatibility
+
+**Files changed:**
+- `completions/ralph.bash` - New bash completion script (~130 lines)
+- `completions/ralph.zsh` - New zsh completion script (~80 lines)
+- `ralph.sh` - Added Shell Completion section to show_help()
+- `docs/RALPH_LOOP_REF.md` - Added Shell Completion section under Installation, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.4 complete
+- `specs/ralph-improvements.json` - Updated US-015 passes: true
+
+**Verification:**
+- `shellcheck completions/ralph.bash` - Passes with no warnings or errors
+- `./ralph.sh --help` - Shows new Shell Completion section at end of help output
+- `ls completions/` - Both ralph.bash and ralph.zsh present
+- Bash completion tested: presets, flags, --model values, --log-format values, file paths all complete correctly
+
