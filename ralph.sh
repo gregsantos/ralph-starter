@@ -79,6 +79,10 @@ DEFAULT_LOG_DIR="${HOME}/.ralph/logs"
 LOG_DIR=""                # Set by --log-dir or RALPH_LOG_DIR
 LOG_FILE_OVERRIDE=""      # Set by --log-file
 
+# Config File Tracking
+GLOBAL_CONFIG_FILE=""     # Path to global config file (default: ~/.ralph/config)
+LOADED_CONFIG_FILES=()    # Array of config files that were loaded
+
 # Iteration Status Tracking
 ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
 ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
@@ -746,6 +750,7 @@ show_help() {
     echo "  --list-sessions   List all resumable sessions"
     echo "  --log-dir PATH    Log directory (default: ~/.ralph/logs/)"
     echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
+    echo "  --global-config PATH  Global config file (default: ~/.ralph/config)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
@@ -906,6 +911,10 @@ while [[ $# -gt 0 ]]; do
         --log-file)
             LOG_FILE_OVERRIDE="$2"
             CLI_LOG_FILE_SET=true
+            shift 2
+            ;;
+        --global-config)
+            GLOBAL_CONFIG_FILE="$2"
             shift 2
             ;;
         -s|--spec)
@@ -1360,10 +1369,35 @@ safe_load_config() {
     [ "$warnings_shown" = true ] && echo "" >&2
 }
 
-# Load config file safely (CLI args override config values)
+# Load config files safely (CLI args override config values)
+# Precedence: CLI > project ralph.conf > ~/.ralph/config > defaults
 load_ralph_config() {
-    local config_file="${SCRIPT_DIR}/ralph.conf"
-    safe_load_config "$config_file"
+    local global_config
+    local project_config="${SCRIPT_DIR}/ralph.conf"
+
+    # Determine global config path (CLI --global-config > default location)
+    if [ -n "$GLOBAL_CONFIG_FILE" ]; then
+        global_config="$GLOBAL_CONFIG_FILE"
+    else
+        global_config="${HOME}/.ralph/config"
+    fi
+
+    # Create ~/.ralph/ directory if it doesn't exist (for first run)
+    if [ ! -d "${HOME}/.ralph" ]; then
+        mkdir -p "${HOME}/.ralph"
+    fi
+
+    # Load global config first (lowest precedence after defaults)
+    if [ -f "$global_config" ]; then
+        safe_load_config "$global_config"
+        LOADED_CONFIG_FILES+=("$global_config")
+    fi
+
+    # Load project config second (overrides global)
+    if [ -f "$project_config" ]; then
+        safe_load_config "$project_config"
+        LOADED_CONFIG_FILES+=("$project_config")
+    fi
 }
 
 substitute_template() {
@@ -1517,6 +1551,14 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Retry${RESET}    ${SYM_ARROW} ${DIM}disabled${RESET}"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Log${RESET}      ${SYM_ARROW} ${DIM}$LOG_FILE${RESET}"
+    # Show loaded config files in dry-run output
+    if [ "$DRY_RUN" = true ] && [ ${#LOADED_CONFIG_FILES[@]} -gt 0 ]; then
+        echo -e "${DIM}│${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Config files loaded:${RESET}"
+        for config_file in "${LOADED_CONFIG_FILES[@]}"; do
+            echo -e "${DIM}│${RESET}   ${DIM}${SYM_DOT}${RESET} ${config_file}"
+        done
+    fi
     echo -e "${DIM}└─────────────────────────────────────────┘${RESET}\n"
 }
 

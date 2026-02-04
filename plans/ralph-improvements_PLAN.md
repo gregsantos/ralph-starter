@@ -232,14 +232,14 @@ NOTIFY_WEBHOOK
 #### Task 2.3: US-008 Global Config File Support
 **Priority:** 8 | **Effort:** Small | **Depends on:** US-007
 
-- [ ] 2.3.1 Check `~/.ralph/config` if it exists
-- [ ] 2.3.2 Update config loading order: global first, then project
-- [ ] 2.3.3 Project ralph.conf overrides global config
-- [ ] 2.3.4 CLI args override both
-- [ ] 2.3.5 Create `~/.ralph/` directory on first run if doesn't exist
-- [ ] 2.3.6 Add `--global-config PATH` flag to specify alternate global config
-- [ ] 2.3.7 Display which config files were loaded in --dry-run output
-- [ ] 2.3.8 Run `shellcheck ralph.sh` and fix any issues
+- [x] 2.3.1 Check `~/.ralph/config` if it exists
+- [x] 2.3.2 Update config loading order: global first, then project
+- [x] 2.3.3 Project ralph.conf overrides global config
+- [x] 2.3.4 CLI args override both
+- [x] 2.3.5 Create `~/.ralph/` directory on first run if doesn't exist
+- [x] 2.3.6 Add `--global-config PATH` flag to specify alternate global config
+- [x] 2.3.7 Display which config files were loaded in --dry-run output
+- [x] 2.3.8 Run `shellcheck ralph.sh` and fix any issues
 
 **Precedence:** CLI > project ralph.conf > ~/.ralph/config > defaults
 

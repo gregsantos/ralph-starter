@@ -243,3 +243,37 @@
   - Unknown keys → Warning displayed, keys ignored
   - Shell injection attempts ($(), ``, ${}, ||, &&, ;) → All detected and rejected
 
+## Iteration 8 - 2026-02-03
+
+### Task Completed: US-008 Global Config File Support (Task 2.3)
+
+**What was done:**
+- Added global config file support at `~/.ralph/config` (default location)
+- Modified `load_ralph_config()` to load config files in correct order:
+  1. Global config file first (lowest precedence after defaults)
+  2. Project `ralph.conf` second (overrides global)
+- Added `--global-config PATH` flag to specify alternate global config file
+- Added `LOADED_CONFIG_FILES[]` array to track which config files were loaded
+- Updated `print_config()` to display loaded config files in `--dry-run` output
+- Auto-creates `~/.ralph/` directory on first run if it doesn't exist
+- Updated `show_help()` with new `--global-config` flag documentation
+
+**Why:**
+- Users with multiple projects can now set global defaults (model, log directory, etc.) once
+- Reduces repetitive configuration across projects
+- CI/CD pipelines can use a global config for consistent behavior
+- `--dry-run` now shows config precedence for debugging configuration issues
+- Auto-creation of `~/.ralph/` directory improves first-run experience
+
+**Files changed:**
+- `ralph.sh` - Added GLOBAL_CONFIG_FILE variable, LOADED_CONFIG_FILES array, --global-config flag, updated load_ralph_config() function, updated print_config() for dry-run output, updated show_help()
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --global-config flag
+- `./ralph.sh --dry-run` - Shows "Config files loaded" section with both global and project configs
+- `./ralph.sh --global-config /tmp/custom.conf --dry-run` - Uses custom global config path
+- Global config values (e.g., MAX_ITERATIONS=99) correctly loaded
+- Project config values correctly override global config values
+- CLI flags correctly override both config files
+

@@ -253,7 +253,7 @@
       },
       "priority": 8,
       "effort": "small",
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-007 (safe config parsing)"
     },
     {
