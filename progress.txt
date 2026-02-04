@@ -96,3 +96,39 @@
 - `./ralph.sh --dry-run --no-retry` - Shows "Retry → disabled"
 - `./ralph.sh --dry-run --max-retries 5` - Shows "Retry → enabled (max 5, backoff 5s)"
 
+## Iteration 4 - 2026-02-03
+
+### Task Completed: US-004 Session Resume Capability (Task 1.4)
+
+**What was done:**
+- Added SESSION RESUME section after SESSION STATE MANAGEMENT with three functions:
+  - `list_sessions()` - Lists resumable sessions in current directory and ~/.ralph/logs/
+  - `validate_session()` - Validates session file (exists, valid JSON, not complete, branch matches)
+  - `restore_session()` - Restores all session state and displays resume summary
+- Added `--resume` flag to resume from `.ralph-session.json`
+- Added `--list-sessions` flag to show all resumable sessions
+- Session age check warns if session is >24 hours old (but allows resume)
+- Branch mismatch detection with clear error message and suggested fixes
+- Completed session detection prevents resuming already-finished sessions
+- Resume shows previous iteration history before continuing
+- Restores: mode, model, prompt_file, iteration count, max_iterations, branch, spec/plan/progress files
+- Updated session status to "in_progress" when resuming
+
+**Why:**
+- Resume capability prevents losing progress when sessions are interrupted (laptop sleep, network drop, Ctrl+C)
+- --list-sessions helps users find sessions that can be resumed
+- Branch validation prevents accidentally mixing work from different features
+- Session age warning helps users avoid resuming stale sessions with outdated context
+- Completed session check prevents confusion when trying to resume finished work
+- Iteration history display helps users understand where they're resuming from
+
+**Files changed:**
+- `ralph.sh` - Added SESSION RESUME section, --resume/--list-sessions flags, help text, integration into main flow
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --resume and --list-sessions flags
+- `./ralph.sh --list-sessions` - Shows "No resumable sessions found" when clean
+- `./ralph.sh --resume` - Shows appropriate error when no session file exists
+- Branch mismatch, completed session, and age warnings all tested
+

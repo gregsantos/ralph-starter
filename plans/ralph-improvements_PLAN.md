@@ -126,16 +126,16 @@ US-016 (Documentation) ◄──────────────────
 #### Task 1.4: US-004 Session Resume Capability
 **Priority:** 4 | **Effort:** Medium | **Depends on:** US-002
 
-- [ ] 1.4.1 Add `--resume` flag to argument parsing
-- [ ] 1.4.2 Add `--list-sessions` flag to show resumable sessions
-- [ ] 1.4.3 Create `list_sessions()` function - finds .ralph-session.json files
-- [ ] 1.4.4 Create `validate_session()` function - checks file exists, branch matches, not completed
-- [ ] 1.4.5 Create `restore_session()` function - loads state, sets variables
-- [ ] 1.4.6 Add session age check - warn if >24h old
-- [ ] 1.4.7 Display resume summary before continuing
-- [ ] 1.4.8 If session was already completed, error with helpful message
-- [ ] 1.4.9 Restore: mode, model, prompt_file, iteration count, branch
-- [ ] 1.4.10 Run `shellcheck ralph.sh` and fix any issues
+- [x] 1.4.1 Add `--resume` flag to argument parsing
+- [x] 1.4.2 Add `--list-sessions` flag to show resumable sessions
+- [x] 1.4.3 Create `list_sessions()` function - finds .ralph-session.json files
+- [x] 1.4.4 Create `validate_session()` function - checks file exists, branch matches, not completed
+- [x] 1.4.5 Create `restore_session()` function - loads state, sets variables
+- [x] 1.4.6 Add session age check - warn if >24h old
+- [x] 1.4.7 Display resume summary before continuing
+- [x] 1.4.8 If session was already completed, error with helpful message
+- [x] 1.4.9 Restore: mode, model, prompt_file, iteration count, branch
+- [x] 1.4.10 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --resume reads .ralph-session.json and continues

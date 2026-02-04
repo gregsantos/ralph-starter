@@ -266,6 +266,236 @@ finalize_session_state() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# SESSION RESUME
+# Resume interrupted sessions from .ralph-session.json
+# ═══════════════════════════════════════════════════════════════════════════════
+
+RESUME_SESSION=false
+LIST_SESSIONS=false
+
+# List all resumable sessions (in current directory and ~/.ralph/logs/)
+list_sessions() {
+    local found_any=false
+
+    echo -e "${BOLD}Resumable Sessions${RESET}\n"
+
+    # Check current directory for active session
+    if [ -f ".ralph-session.json" ]; then
+        local status
+        status=$(jq -r '.status // "unknown"' ".ralph-session.json" 2>/dev/null)
+
+        if [ "$status" != "complete" ]; then
+            found_any=true
+            local session_id start_time mode model branch current_iter max_iter
+            session_id=$(jq -r '.session_id // "unknown"' ".ralph-session.json")
+            start_time=$(jq -r '.start_time // "unknown"' ".ralph-session.json")
+            mode=$(jq -r '.mode // "unknown"' ".ralph-session.json")
+            model=$(jq -r '.model // "unknown"' ".ralph-session.json")
+            branch=$(jq -r '.branch // "unknown"' ".ralph-session.json")
+            current_iter=$(jq -r '.current_iteration // 0' ".ralph-session.json")
+            max_iter=$(jq -r '.max_iterations // 0' ".ralph-session.json")
+
+            echo -e "${GREEN}${SYM_DOT} Active session (current directory)${RESET}"
+            echo -e "   ${BOLD}Session:${RESET}  $session_id"
+            echo -e "   ${BOLD}Started:${RESET}  $start_time"
+            echo -e "   ${BOLD}Mode:${RESET}     $mode"
+            echo -e "   ${BOLD}Model:${RESET}    $model"
+            echo -e "   ${BOLD}Branch:${RESET}   $branch"
+            echo -e "   ${BOLD}Progress:${RESET} ${current_iter}/${max_iter} iterations"
+            echo -e "   ${BOLD}Status:${RESET}   ${YELLOW}${status}${RESET}"
+            echo -e "   ${DIM}Resume with: ./ralph.sh --resume${RESET}"
+            echo ""
+        fi
+    fi
+
+    # Check for interrupted sessions in log directory
+    local log_dir="${HOME}/.ralph/logs"
+    if [ -d "$log_dir" ]; then
+        local session_files
+        session_files=$(find "$log_dir" -name "*_session.json" -type f 2>/dev/null | head -10)
+
+        for file in $session_files; do
+            local status
+            status=$(jq -r '.status // "unknown"' "$file" 2>/dev/null)
+
+            # Only show non-complete sessions
+            if [ "$status" != "complete" ] && [ "$status" != "unknown" ]; then
+                found_any=true
+                local session_id start_time mode branch
+                session_id=$(jq -r '.session_id // "unknown"' "$file")
+                start_time=$(jq -r '.start_time // "unknown"' "$file")
+                mode=$(jq -r '.mode // "unknown"' "$file")
+                branch=$(jq -r '.branch // "unknown"' "$file")
+
+                echo -e "${YELLOW}${SYM_DOT} Archived session${RESET}"
+                echo -e "   ${BOLD}File:${RESET}     $file"
+                echo -e "   ${BOLD}Session:${RESET}  $session_id"
+                echo -e "   ${BOLD}Started:${RESET}  $start_time"
+                echo -e "   ${BOLD}Mode:${RESET}     $mode"
+                echo -e "   ${BOLD}Branch:${RESET}   $branch"
+                echo -e "   ${BOLD}Status:${RESET}   ${RED}${status}${RESET}"
+                echo ""
+            fi
+        done
+    fi
+
+    if [ "$found_any" = false ]; then
+        echo -e "${DIM}No resumable sessions found.${RESET}"
+        echo -e "${DIM}Sessions are preserved when interrupted or failed.${RESET}"
+    fi
+}
+
+# Validate session file for resume
+# Arguments: session_file_path
+# Returns: 0 if valid, 1 if invalid (with error message)
+validate_session() {
+    local session_file="$1"
+
+    # Check file exists
+    if [ ! -f "$session_file" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Session file not found: ${session_file}${RESET}"
+        echo -e "  ${DIM}Run ./ralph.sh --list-sessions to see available sessions${RESET}"
+        return 1
+    fi
+
+    # Check it's valid JSON
+    if ! jq empty "$session_file" 2>/dev/null; then
+        echo -e "${RED}${SYM_CROSS} Error: Invalid session file (not valid JSON)${RESET}"
+        return 1
+    fi
+
+    # Check status - can't resume completed sessions
+    local status
+    status=$(jq -r '.status // "unknown"' "$session_file")
+    if [ "$status" = "complete" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Cannot resume completed session${RESET}"
+        echo -e "  ${DIM}Session was already successfully completed.${RESET}"
+        echo -e "  ${DIM}Start a new session with: ./ralph.sh${RESET}"
+        return 1
+    fi
+
+    # Check branch matches current branch
+    local session_branch
+    session_branch=$(jq -r '.branch // ""' "$session_file")
+    local current_branch
+    current_branch=$(git branch --show-current 2>/dev/null)
+
+    if [ -n "$session_branch" ] && [ "$session_branch" != "$current_branch" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Branch mismatch${RESET}"
+        echo -e "  ${BOLD}Session branch:${RESET} ${session_branch}"
+        echo -e "  ${BOLD}Current branch:${RESET} ${current_branch}"
+        echo -e "\n  ${DIM}Either switch to the session branch:${RESET}"
+        echo -e "    git checkout ${session_branch}"
+        echo -e "  ${DIM}Or delete the session file to start fresh:${RESET}"
+        echo -e "    rm ${session_file}"
+        return 1
+    fi
+
+    # Check session age (warn if > 24 hours)
+    local start_time
+    start_time=$(jq -r '.start_time // ""' "$session_file")
+    if [ -n "$start_time" ]; then
+        local session_epoch now_epoch age_hours
+        # Convert ISO timestamp to epoch (works on macOS and Linux)
+        if date --version >/dev/null 2>&1; then
+            # GNU date (Linux)
+            session_epoch=$(date -d "$start_time" +%s 2>/dev/null || echo "0")
+        else
+            # BSD date (macOS)
+            # Convert ISO 8601 to a format BSD date understands
+            local converted_time
+            converted_time=$(echo "$start_time" | sed 's/T/ /; s/Z//')
+            session_epoch=$(date -j -f "%Y-%m-%d %H:%M:%S" "$converted_time" +%s 2>/dev/null || echo "0")
+        fi
+        now_epoch=$(date +%s)
+
+        if [ "$session_epoch" -gt 0 ]; then
+            age_hours=$(( (now_epoch - session_epoch) / 3600 ))
+            if [ "$age_hours" -ge 24 ]; then
+                echo -e "${YELLOW}${SYM_DOT} Warning: Session is ${age_hours} hours old${RESET}"
+                echo -e "  ${DIM}Consider starting fresh if significant time has passed.${RESET}"
+                echo ""
+            fi
+        fi
+    fi
+
+    return 0
+}
+
+# Restore session state from session file
+# Arguments: session_file_path
+# Sets global variables for mode, model, iteration count, etc.
+restore_session() {
+    local session_file="$1"
+
+    # Read session values
+    SESSION_ID=$(jq -r '.session_id // ""' "$session_file")
+    local saved_mode saved_model saved_prompt_file saved_iteration saved_max
+    local saved_branch saved_spec saved_plan saved_progress
+    saved_mode=$(jq -r '.mode // "build"' "$session_file")
+    saved_model=$(jq -r '.model // "opus"' "$session_file")
+    saved_prompt_file=$(jq -r '.prompt_file // ""' "$session_file")
+    saved_iteration=$(jq -r '.current_iteration // 0' "$session_file")
+    saved_max=$(jq -r '.max_iterations // 10' "$session_file")
+    saved_branch=$(jq -r '.branch // ""' "$session_file")
+    saved_spec=$(jq -r '.spec_file // ""' "$session_file")
+    saved_plan=$(jq -r '.plan_file // ""' "$session_file")
+    saved_progress=$(jq -r '.progress_file // ""' "$session_file")
+
+    # Display resume summary
+    echo -e "${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
+    echo -e "${CYAN}${BOLD}║${RESET}                    ${BOLD}RESUMING SESSION${RESET}                          ${CYAN}${BOLD}║${RESET}"
+    echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}\n"
+
+    echo -e "${DIM}┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${DIM}│${RESET} ${BOLD}Session${RESET}  ${SYM_ARROW} ${GREEN}${SESSION_ID}${RESET}"
+    echo -e "${DIM}│${RESET} ${BOLD}Mode${RESET}     ${SYM_ARROW} ${saved_mode}"
+    echo -e "${DIM}│${RESET} ${BOLD}Model${RESET}    ${SYM_ARROW} ${saved_model}"
+    echo -e "${DIM}│${RESET} ${BOLD}Branch${RESET}   ${SYM_ARROW} ${MAGENTA}${saved_branch}${RESET}"
+    echo -e "${DIM}│${RESET} ${BOLD}Progress${RESET} ${SYM_ARROW} ${YELLOW}Resuming at iteration $((saved_iteration + 1))/${saved_max}${RESET}"
+    echo -e "${DIM}└─────────────────────────────────────────┘${RESET}\n"
+
+    # Show iteration history summary
+    local history_count
+    history_count=$(jq '.iteration_history | length' "$session_file" 2>/dev/null || echo "0")
+    if [ "$history_count" -gt 0 ]; then
+        echo -e "${DIM}Previous iterations:${RESET}"
+        jq -r '.iteration_history[] | "  \(.iteration). \(.duration)s - \(.commit_message // "no commit")[0:40]"' "$session_file" 2>/dev/null | head -5
+        if [ "$history_count" -gt 5 ]; then
+            echo -e "  ${DIM}... and $((history_count - 5)) more${RESET}"
+        fi
+        echo ""
+    fi
+
+    # Restore global variables
+    MODE="$saved_mode"
+    MODEL="$saved_model"
+    ITERATION="$saved_iteration"
+    MAX_ITERATIONS="$saved_max"
+    CURRENT_BRANCH="$saved_branch"
+
+    # Restore file paths if they were saved
+    [ -n "$saved_spec" ] && SPEC_FILE="$saved_spec"
+    [ -n "$saved_plan" ] && PLAN_FILE="$saved_plan"
+    [ -n "$saved_progress" ] && PROGRESS_FILE="$saved_progress"
+
+    # Restore prompt file - verify it exists
+    if [ -n "$saved_prompt_file" ] && [ -f "$saved_prompt_file" ]; then
+        PROMPT_FILE="$saved_prompt_file"
+    else
+        # Fall back to preset prompt file
+        PROMPT_FILE="${SCRIPT_DIR}/prompts/PROMPT_${MODE}.md"
+    fi
+
+    # Update session status to in_progress (was interrupted/failed)
+    local updated
+    updated=$(jq '.status = "in_progress"' "$session_file")
+    echo "$updated" > "$session_file"
+
+    echo -e "${GREEN}${SYM_CHECK} Session restored. Continuing...${RESET}\n"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # RETRY LOGIC
 # Automatic retry for transient failures with exponential backoff
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -507,6 +737,8 @@ show_help() {
     echo "  --skip-checks     Skip pre-flight dependency checks"
     echo "  --no-retry        Disable retry on transient failures"
     echo "  --max-retries N   Max retry attempts (default: 3)"
+    echo "  --resume          Resume interrupted session from .ralph-session.json"
+    echo "  --list-sessions   List all resumable sessions"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
@@ -625,6 +857,14 @@ while [[ $# -gt 0 ]]; do
             MAX_RETRIES="$2"
             shift 2
             ;;
+        --resume)
+            RESUME_SESSION=true
+            shift
+            ;;
+        --list-sessions)
+            LIST_SESSIONS=true
+            shift
+            ;;
         -s|--spec)
             SPEC_FILE="$2"
             CLI_SPEC_SET=true
@@ -667,6 +907,12 @@ while [[ $# -gt 0 ]]; do
             ;;
     esac
 done
+
+# Handle --list-sessions early (before other processing)
+if [ "$LIST_SESSIONS" = true ]; then
+    list_sessions
+    exit 0
+fi
 
 # Process positional args - last numeric arg is max_iterations
 ITERATIONS_SET=false
@@ -1274,8 +1520,18 @@ if [ "$SKIP_CHECKS" = false ]; then
     preflight_checks
 fi
 
-print_header
-print_config
+# Handle session resume
+if [ "$RESUME_SESSION" = true ]; then
+    # Validate and restore session
+    if ! validate_session "$SESSION_FILE"; then
+        exit 1
+    fi
+    restore_session "$SESSION_FILE"
+    # Skip normal print_header/print_config - restore_session shows its own summary
+else
+    print_header
+    print_config
+fi
 
 # Show inline prompt preview if applicable
 if [ "$MODE" = "inline" ]; then
@@ -1289,7 +1545,10 @@ if [ "$DRY_RUN" = true ]; then
 fi
 
 # Initialize session state (after config, before main loop)
-init_session_state
+# Skip if resuming - session state was already restored
+if [ "$RESUME_SESSION" != true ]; then
+    init_session_state
+fi
 
 # Track exit status
 EXIT_STATUS=1  # Default: max iterations reached
