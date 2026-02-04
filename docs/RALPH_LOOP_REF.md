@@ -156,6 +156,37 @@ Test mode is ideal for:
 - Debugging configuration issues
 - Quick one-off tasks without affecting remote branches
 
+### Interactive Mode
+
+```bash
+# Prompt for confirmation between iterations
+./ralph.sh --interactive
+./ralph.sh -i                    # Short flag
+
+# Set custom timeout (default: 300 seconds / 5 minutes)
+./ralph.sh -i --interactive-timeout 60
+
+# Combine with other options
+./ralph.sh -i --model sonnet     # Interactive with sonnet
+./ralph.sh -i --test             # Effectively same as --test (1 iteration)
+```
+
+When interactive mode is enabled, after each iteration Ralph will:
+1. Display an iteration summary (duration, status, files changed)
+2. Prompt: `Continue to next iteration? [Y/n/s]`
+   - **Y** (or Enter): Continue to next iteration
+   - **n**: Stop the session gracefully
+   - **s**: Show git diff, then prompt again
+3. Auto-continue after timeout (default 5 minutes)
+
+Interactive mode is ideal for:
+- Learning how Ralph works by watching each iteration
+- Reviewing changes before continuing
+- Cautious sessions where you want control between iterations
+- Long-running sessions where you want periodic check-ins
+
+**Non-TTY environments**: If Ralph detects it's not running in an interactive terminal (e.g., CI/CD, cron, piped input), the interactive prompt is skipped with a warning and iterations continue automatically.
+
 ### Product Mode
 
 ```bash
@@ -638,6 +669,11 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh --test                            # Test mode
 ./ralph.sh -1                                # Short flag for test mode
 ./ralph.sh --test --dry-run                  # Preview test mode config
+
+# Interactive mode (prompt between iterations)
+./ralph.sh --interactive                     # Enable interactive mode
+./ralph.sh -i                                # Short flag
+./ralph.sh -i --interactive-timeout 60       # Custom timeout (default: 300s)
 
 # Configuration
 ./ralph.sh --global-config ~/.config/ralph   # Custom global config

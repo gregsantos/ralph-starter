@@ -368,7 +368,7 @@
       },
       "priority": 13,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Useful for learning/reviewing what ralph does"
     },
     {

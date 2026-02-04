@@ -348,15 +348,15 @@ NOTIFY_WEBHOOK
 #### Task 4.2: US-013 Interactive Confirmation Mode
 **Priority:** 13 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 4.2.1 Add `--interactive` or `-i` flag to argument parsing
-- [ ] 4.2.2 Add `--interactive-timeout N` flag (default 300 seconds)
-- [ ] 4.2.3 Create `prompt_continue()` function
-- [ ] 4.2.4 After each iteration, prompt: 'Continue to next iteration? [Y/n/s]'
-- [ ] 4.2.5 'Y' continues, 'n' exits, 's' shows git diff then asks again
-- [ ] 4.2.6 Add timeout with read -t
-- [ ] 4.2.7 Display iteration summary before prompt
-- [ ] 4.2.8 Check for TTY: `[ -t 0 ]` - if non-TTY, skip interactive or error
-- [ ] 4.2.9 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.2.1 Add `--interactive` or `-i` flag to argument parsing
+- [x] 4.2.2 Add `--interactive-timeout N` flag (default 300 seconds)
+- [x] 4.2.3 Create `prompt_continue()` function
+- [x] 4.2.4 After each iteration, prompt: 'Continue to next iteration? [Y/n/s]'
+- [x] 4.2.5 'Y' continues, 'n' exits, 's' shows git diff then asks again
+- [x] 4.2.6 Add timeout with read -t
+- [x] 4.2.7 Display iteration summary before prompt
+- [x] 4.2.8 Check for TTY: `[ -t 0 ]` - if non-TTY, skip interactive or error
+- [x] 4.2.9 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --interactive prompts between iterations

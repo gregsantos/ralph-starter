@@ -453,3 +453,51 @@
 - `./ralph.sh --test --dry-run` - Shows TEST MODE banner, 1 iteration, push disabled
 - `./ralph.sh -1 --dry-run` - Same as --test
 
+## Iteration 13 - 2026-02-04
+
+### Task Completed: US-013 Interactive Confirmation Mode (Task 4.2)
+
+**What was done:**
+- Added INTERACTIVE CONFIRMATION MODE section after SESSION SUMMARY REPORT with:
+  - `INTERACTIVE_MODE` variable (default: false)
+  - `INTERACTIVE_TIMEOUT` variable (default: 300 seconds / 5 minutes)
+  - `show_iteration_summary()` - Displays iteration summary (duration, status, files changed)
+  - `prompt_continue()` - Prompts user with Y/n/s options and timeout
+  - `handle_interactive_confirmation()` - Orchestrates summary + prompt + diff loop
+- Added `--interactive` and `-i` CLI flags for enabling interactive mode
+- Added `--interactive-timeout N` flag for custom timeout (with validation)
+- Integrated into main loop after completion marker check
+- Added TTY detection: in non-TTY environments, warns and continues automatically
+- Options implemented:
+  - `Y` or Enter: Continue to next iteration
+  - `n`: Stop session gracefully (exit_reason=user_stopped)
+  - `s`: Show git diff --stat then prompt again
+- Added `user_stopped` exit reason with proper webhook and summary handling
+- Updated `print_header()` to show "⚡ INTERACTIVE RALPH LOOP" banner
+- Updated `print_config()` to show interactive mode status and timeout
+- Updated `show_help()` with new flags and examples
+- Updated header comment in ralph.sh with new flags
+- Updated `docs/RALPH_LOOP_REF.md` with Interactive Mode section and Quick Reference
+
+**Why:**
+- Interactive mode provides control for cautious users who want to review changes between iterations
+- Useful for learning how Ralph works by watching each iteration
+- Enables periodic check-ins during long-running sessions
+- The 's' option allows reviewing changes before deciding to continue
+- TTY detection prevents hanging in non-interactive environments (CI/CD, cron, piped input)
+- Timeout default of 5 minutes provides reasonable wait without indefinite blocking
+
+**Files changed:**
+- `ralph.sh` - Added INTERACTIVE CONFIRMATION MODE section (~100 lines), INTERACTIVE_MODE/INTERACTIVE_TIMEOUT variables, --interactive/-i and --interactive-timeout flags, main loop integration, print_header()/print_config() updates, user_stopped handling
+- `docs/RALPH_LOOP_REF.md` - Added Interactive Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.2 complete
+- `specs/ralph-improvements.json` - Updated US-013 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from interactive code)
+- `./ralph.sh --help` - Shows new --interactive/-i and --interactive-timeout flags
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --interactive --dry-run` - Shows INTERACTIVE banner and "Interact → enabled (prompt between iters, timeout 300s)"
+- `./ralph.sh -i --interactive-timeout 60 --dry-run` - Shows custom timeout of 60s
+- `./ralph.sh --interactive-timeout abc` - Proper validation error
+

@@ -16,6 +16,8 @@
 #   --unlimited       Remove iteration limit (use with caution)
 #   --dry-run         Show config and exit without running Claude
 #   --test, -1        Test mode: single iteration, no push, ignore completion marker
+#   --interactive, -i Prompt for confirmation between iterations
+#   --interactive-timeout N  Timeout for interactive prompt (default: 300s)
 #   --push            Enable git push after iterations (default)
 #   --no-push         Disable git push
 #   -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
@@ -829,6 +831,8 @@ show_help() {
     echo "  --unlimited       Remove iteration limit (use with caution)"
     echo "  --dry-run         Show config and exit without running Claude"
     echo "  --test, -1        Test mode: single iteration, no push, ignore completion marker"
+    echo "  --interactive, -i Prompt for confirmation between iterations"
+    echo "  --interactive-timeout N  Timeout for interactive prompt (default: 300s)"
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
     echo "  --skip-checks     Skip pre-flight dependency checks"
@@ -864,6 +868,8 @@ show_help() {
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
     echo "  ./ralph.sh --test                     # Test mode: 1 iteration, no push"
+    echo "  ./ralph.sh --interactive              # Interactive: confirm between iterations"
+    echo "  ./ralph.sh -i --interactive-timeout 60  # Interactive with 60s timeout"
     echo "  ./ralph.sh -s ./specs/feature.md -l ./plans/feature_PLAN.md  # Custom spec+plan"
     echo ""
     echo -e "${BOLD}Environment Variables:${RESET}"
@@ -904,6 +910,8 @@ MAX_ITERATIONS=10         # Default limit to prevent runaway sessions
 UNLIMITED=false           # Explicit flag for unlimited iterations
 DRY_RUN=false             # Show config without running Claude
 TEST_MODE=false           # Single iteration test mode (no push, ignore completion marker)
+INTERACTIVE_MODE=false    # Prompt for confirmation between iterations
+INTERACTIVE_TIMEOUT=300   # Timeout in seconds for interactive prompt (default: 5 minutes)
 TEMP_PROMPT_FILE=""
 
 # Template variable defaults (CLI args override, then config, then these)
@@ -981,6 +989,19 @@ while [[ $# -gt 0 ]]; do
         --test|-1)
             TEST_MODE=true
             shift
+            ;;
+        --interactive|-i)
+            INTERACTIVE_MODE=true
+            shift
+            ;;
+        --interactive-timeout)
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                INTERACTIVE_TIMEOUT="$2"
+            else
+                echo -e "${RED}${SYM_CROSS} Error: --interactive-timeout must be a positive integer (seconds)${RESET}"
+                exit 1
+            fi
+            shift 2
             ;;
         --skip-checks)
             SKIP_CHECKS=true
@@ -1764,6 +1785,112 @@ generate_summary() {
     echo -e "  ${DIM}Summary:${RESET} ${summary_file}"
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERACTIVE CONFIRMATION MODE
+# Prompts user for confirmation between iterations
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Display iteration summary before interactive prompt
+# Arguments: iteration_number, duration, exit_code
+show_iteration_summary() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+
+    echo -e "\n${CYAN}${BOLD}┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${CYAN}${BOLD}│${RESET}      ${BOLD}Iteration $iteration Summary${RESET}               ${CYAN}${BOLD}│${RESET}"
+    echo -e "${CYAN}${BOLD}├─────────────────────────────────────────┤${RESET}"
+    echo -e "${CYAN}${BOLD}│${RESET}  Duration: ${duration}s                          ${CYAN}${BOLD}│${RESET}"
+
+    if [ "$exit_code" -eq 0 ]; then
+        echo -e "${CYAN}${BOLD}│${RESET}  Status:   ${GREEN}${SYM_CHECK} Success${RESET}                      ${CYAN}${BOLD}│${RESET}"
+    else
+        echo -e "${CYAN}${BOLD}│${RESET}  Status:   ${RED}${SYM_CROSS} Had errors${RESET}                   ${CYAN}${BOLD}│${RESET}"
+    fi
+
+    # Show files changed
+    local files_changed=0
+    files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    echo -e "${CYAN}${BOLD}│${RESET}  Files:    ${files_changed} changed                        ${CYAN}${BOLD}│${RESET}"
+
+    echo -e "${CYAN}${BOLD}└─────────────────────────────────────────┘${RESET}"
+}
+
+# Prompt user to continue to next iteration
+# Returns: 0 to continue, 1 to stop, 2 to show diff then prompt again
+# Arguments: timeout_seconds
+prompt_continue() {
+    local timeout="$1"
+
+    # Check if running in a TTY
+    if [ ! -t 0 ]; then
+        echo -e "${YELLOW}Warning: Interactive mode requires a TTY. Continuing automatically...${RESET}"
+        return 0
+    fi
+
+    echo -e "\n${YELLOW}${BOLD}Continue to next iteration?${RESET} [${GREEN}Y${RESET}/n/s] (timeout: ${timeout}s)"
+    echo -e "  ${DIM}Y = continue, n = stop, s = show git diff${RESET}"
+    echo -n "> "
+
+    local response
+    if read -r -t "$timeout" response; then
+        case "${response,,}" in  # Convert to lowercase
+            ""|y|yes)
+                return 0  # Continue
+                ;;
+            n|no)
+                return 1  # Stop
+                ;;
+            s|show|diff)
+                return 2  # Show diff
+                ;;
+            *)
+                echo -e "${YELLOW}Unknown option '${response}'. Continuing...${RESET}"
+                return 0
+                ;;
+        esac
+    else
+        # Timeout - continue by default
+        echo -e "\n${DIM}Timeout reached. Continuing to next iteration...${RESET}"
+        return 0
+    fi
+}
+
+# Handle interactive confirmation between iterations
+# Arguments: iteration_number, duration, exit_code
+# Returns: 0 to continue, 1 to stop
+handle_interactive_confirmation() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+
+    # Show iteration summary first
+    show_iteration_summary "$iteration" "$duration" "$exit_code"
+
+    while true; do
+        prompt_continue "$INTERACTIVE_TIMEOUT"
+        local result=$?
+
+        case $result in
+            0)  # Continue
+                return 0
+                ;;
+            1)  # Stop
+                echo -e "\n${YELLOW}${SYM_DOT} User requested stop. Ending session...${RESET}"
+                return 1
+                ;;
+            2)  # Show diff
+                echo -e "\n${CYAN}${BOLD}Git Diff:${RESET}"
+                echo -e "${DIM}───────────────────────────────────────${RESET}"
+                git diff --stat 2>/dev/null || echo "  (no changes)"
+                echo -e "${DIM}───────────────────────────────────────${RESET}"
+                echo ""
+                # Loop back to prompt again
+                ;;
+        esac
+    done
+}
+
 # Cleanup temp files on exit
 cleanup_temp() {
     [ -n "$TEMP_PROMPT_FILE" ] && [ -f "$TEMP_PROMPT_FILE" ] && rm -f "$TEMP_PROMPT_FILE"
@@ -2141,6 +2268,8 @@ print_header() {
     echo -e "\n${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
     if [ "$TEST_MODE" = true ]; then
         echo -e "${CYAN}${BOLD}║${RESET}                 ${YELLOW}${BOLD}⚠ TEST MODE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
+    elif [ "$INTERACTIVE_MODE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}⚡ INTERACTIVE${RESET} ${BOLD}RALPH LOOP${RESET}                     ${CYAN}${BOLD}║${RESET}"
     else
         echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
     fi
@@ -2172,6 +2301,9 @@ print_config() {
     fi
     if [ "$TEST_MODE" = true ]; then
         echo -e "${DIM}│${RESET} ${BOLD}Test${RESET}     ${SYM_ARROW} ${YELLOW}enabled${RESET} (1 iter, no push, no marker check)"
+    fi
+    if [ "$INTERACTIVE_MODE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Interact${RESET} ${SYM_ARROW} ${YELLOW}enabled${RESET} (prompt between iters, timeout ${INTERACTIVE_TIMEOUT}s)"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Push${RESET}     ${SYM_ARROW} ${DIM}$( [ "$PUSH_ENABLED" = true ] && echo "enabled" || echo "disabled" )${RESET}"
     if [ "$RETRY_ENABLED" = true ]; then
@@ -2699,6 +2831,16 @@ while true; do
         break
     fi
 
+    # Interactive confirmation mode - prompt before next iteration
+    if [ "$INTERACTIVE_MODE" = true ]; then
+        if ! handle_interactive_confirmation "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code"; then
+            EXIT_STATUS=0
+            EXIT_REASON="user_stopped"
+            ITERATION=$((ITERATION + 1))
+            break
+        fi
+    fi
+
     ITERATION=$((ITERATION + 1))
 
     # Clear completion file for next iteration
@@ -2729,21 +2871,33 @@ total_duration=$((end_time - START_TIME))
 log_session_end "$EXIT_REASON" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
 
 # Send webhook notification based on exit reason
-if [ "$EXIT_REASON" = "complete" ]; then
-    send_webhook "session_complete"
-else
-    send_webhook "session_max_iterations"
-fi
+case "$EXIT_REASON" in
+    complete)
+        send_webhook "session_complete"
+        ;;
+    user_stopped)
+        send_webhook "session_user_stopped"
+        ;;
+    *)
+        send_webhook "session_max_iterations"
+        ;;
+esac
 
 minutes=$((total_duration / 60))
 seconds=$((total_duration % 60))
 
 echo -e "\n${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
-if [ "$EXIT_REASON" = "complete" ]; then
-    echo -e "${CYAN}${BOLD}║${RESET}              ${GREEN}${BOLD}${SYM_CHECK} ALL TASKS COMPLETE${RESET}                        ${CYAN}${BOLD}║${RESET}"
-else
-    echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} MAX ITERATIONS REACHED${RESET}                     ${CYAN}${BOLD}║${RESET}"
-fi
+case "$EXIT_REASON" in
+    complete)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${GREEN}${BOLD}${SYM_CHECK} ALL TASKS COMPLETE${RESET}                        ${CYAN}${BOLD}║${RESET}"
+        ;;
+    user_stopped)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} STOPPED BY USER${RESET}                           ${CYAN}${BOLD}║${RESET}"
+        ;;
+    *)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} MAX ITERATIONS REACHED${RESET}                     ${CYAN}${BOLD}║${RESET}"
+        ;;
+esac
 echo -e "${CYAN}${BOLD}╠════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}                                                                ${CYAN}${BOLD}║${RESET}"
 if [ "$EXIT_STATUS" -eq 0 ]; then
