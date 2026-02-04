@@ -2120,11 +2120,15 @@ parse_claude_output() {
         if [[ "$line" == *'"type":"tool_result"'* ]] && [[ "$line" == *'"is_error":true'* ]]; then
             error_count=$((error_count + 1))
             local tool_error=$(echo "$line" | jq -r '.content // empty' 2>/dev/null)
+            # Always display error and set failure status, even if content extraction fails
             if [ -n "$tool_error" ]; then
                 echo -e "  ${RED}${SYM_CROSS} Tool error:${RESET} ${tool_error:0:60}"
                 failure_reasons+=("Tool error: ${tool_error:0:200}")
-                echo "failed" > "$ITERATION_STATUS_FILE"
+            else
+                echo -e "  ${RED}${SYM_CROSS} Tool error:${RESET} (error content unavailable)"
+                failure_reasons+=("Tool error: (content extraction failed)")
             fi
+            echo "failed" > "$ITERATION_STATUS_FILE"
         fi
 
         # Check for system errors or rate limits
