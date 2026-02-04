@@ -55,31 +55,32 @@ Ralph Loop is an **autonomous AI agent runner** that breaks software development
 
 Each iteration starts with **zero memory** of previous runs. The AI reads its state from files:
 
-| File | Purpose |
-|------|---------|
-| `specs/{feature}.md` | Feature specification (the "what & why") |
+| File                           | Purpose                                        |
+| ------------------------------ | ---------------------------------------------- |
+| `specs/{feature}.md`           | Feature specification (the "what & why")       |
 | `plans/IMPLEMENTATION_PLAN.md` | Checklist of tasks (`[ ]` pending, `[x]` done) |
-| `progress.txt` | Append-only log of decisions and learnings |
-| `CLAUDE.md` | Project context and discovered patterns |
+| `progress.txt`                 | Append-only log of decisions and learnings     |
+| `CLAUDE.md`                    | Project context and discovered patterns        |
 
 ### Specs vs Plans
 
-| Directory | Contains | Purpose | Lifecycle |
-|-----------|----------|---------|-----------|
-| `specs/` | Feature specifications | Requirements, architecture, rationale | Semi-permanent |
-| `plans/` | Implementation checklists | Step-by-step tasks | Disposable |
+| Directory | Contains                  | Purpose                               | Lifecycle      |
+| --------- | ------------------------- | ------------------------------------- | -------------- |
+| `specs/`  | Feature specifications    | Requirements, architecture, rationale | Semi-permanent |
+| `plans/`  | Implementation checklists | Step-by-step tasks                    | Disposable     |
 
 **When to use each:**
+
 - **Inline prompts** (`-p "Fix X"`) — Quick fixes, no spec/plan needed
 - **Single plan file** — Small features where a checklist is sufficient
 - **Spec + Plan** — Major features needing stable requirements doc
 
 ### 2. Two Modes
 
-| Mode | Purpose | When to Use |
-|------|---------|-------------|
-| **Plan** | Analyze codebase, create task checklist | Starting a new feature, investigating issues |
-| **Build** | Execute tasks one at a time | Implementing the plan |
+| Mode      | Purpose                                 | When to Use                                  |
+| --------- | --------------------------------------- | -------------------------------------------- |
+| **Plan**  | Analyze codebase, create task checklist | Starting a new feature, investigating issues |
+| **Build** | Execute tasks one at a time             | Implementing the plan                        |
 
 ### 3. One Task Per Iteration
 
@@ -215,6 +216,7 @@ This prompt tells the AI how to implement:
 ## Iteration Model
 
 Each iteration:
+
 1. Complete **ONE** checklist item
 2. Mark it `[x]` and document in progress file
 3. Commit and push
@@ -276,9 +278,9 @@ Project context the AI reads each iteration:
 ## Key Commands
 
 \`\`\`bash
-npm run test       # Run tests
-npm run typecheck  # Type checking
-npm run build      # Build project
+npm run test # Run tests
+npm run typecheck # Type checking
+npm run build # Build project
 \`\`\`
 
 ## Architecture
@@ -290,9 +292,11 @@ npm run build      # Build project
 _Update this section as you learn the codebase._
 
 ### Conventions
+
 - (discovered patterns go here)
 
 ### Gotchas
+
 - (pitfalls to avoid go here)
 ```
 
@@ -335,12 +339,12 @@ PUSH_ENABLED=true
 
 Prompts support these placeholders (automatically substituted):
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `{{SPEC_FILE}}` | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification (the "what & why") |
-| `{{PLAN_FILE}}` | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist (the "how") |
-| `{{PROGRESS_FILE}}` | `progress.txt` | Iteration log |
-| `{{SOURCE_DIR}}` | `src/*` | Source code location |
+| Variable            | Default                          | Description                              |
+| ------------------- | -------------------------------- | ---------------------------------------- |
+| `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification (the "what & why") |
+| `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist (the "how")     |
+| `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration log                            |
+| `{{SOURCE_DIR}}`    | `src/*`                          | Source code location                     |
 
 ### CLI Overrides
 
@@ -358,9 +362,9 @@ Any config can be overridden via command line:
 
 When you specify a spec file without a plan file, the plan is automatically derived:
 
-| Spec File | Derived Plan File |
-|-----------|-------------------|
-| `./specs/feature.md` | `./plans/feature_PLAN.md` |
+| Spec File                | Derived Plan File             |
+| ------------------------ | ----------------------------- |
+| `./specs/feature.md`     | `./plans/feature_PLAN.md`     |
 | `./specs/auth-system.md` | `./plans/auth-system_PLAN.md` |
 
 This keeps spec and plan files paired by naming convention.
@@ -480,28 +484,30 @@ Each iteration completes **exactly one** checklist item:
 
 ```markdown
 Before iteration 3:
+
 - [x] Add dependency
 - [x] Create auth utilities
-- [ ] Add middleware        <- This iteration works on this
+- [ ] Add middleware <- This iteration works on this
 - [ ] Protect routes
 - [ ] Add login endpoint
 
 After iteration 3:
+
 - [x] Add dependency
 - [x] Create auth utilities
-- [x] Add middleware        <- Now complete
-- [ ] Protect routes        <- Next iteration
+- [x] Add middleware <- Now complete
+- [ ] Protect routes <- Next iteration
 - [ ] Add login endpoint
 ```
 
 ### Build Mode Rules
 
-| Rule | Why |
-|------|-----|
-| **Don't assume missing** | Search codebase before adding new code |
-| **Fix all failures** | Never leave broken builds for next iteration |
-| **Capture the why** | Document reasoning, not just what |
-| **No placeholders** | Implement completely or don't start |
+| Rule                     | Why                                          |
+| ------------------------ | -------------------------------------------- |
+| **Don't assume missing** | Search codebase before adding new code       |
+| **Fix all failures**     | Never leave broken builds for next iteration |
+| **Capture the why**      | Document reasoning, not just what            |
+| **No placeholders**      | Implement completely or don't start          |
 
 ---
 
@@ -576,16 +582,17 @@ After iteration 3:
 ### Writing Good Checklist Items
 
 **Good items are:**
+
 - Atomic (one thing)
 - Verifiable (clear done/not-done)
 - Right-sized (completable in one iteration)
 
-| Bad | Good |
-|-----|------|
-| "Implement authentication" | "Create token generation utility" |
-| "Fix bugs" | "Fix null pointer in UserCard component" |
-| "Add tests" | "Add unit tests for auth.ts" |
-| "Refactor code" | "Extract validation logic to src/lib/validate.ts" |
+| Bad                        | Good                                              |
+| -------------------------- | ------------------------------------------------- |
+| "Implement authentication" | "Create token generation utility"                 |
+| "Fix bugs"                 | "Fix null pointer in UserCard component"          |
+| "Add tests"                | "Add unit tests for auth.ts"                      |
+| "Refactor code"            | "Extract validation logic to src/lib/validate.ts" |
 
 ### The "Don't Assume Missing" Rule
 
@@ -605,15 +612,16 @@ GOOD: "Need to add a date formatter"
 
 The AI discovers things each iteration. Capture them:
 
-| Discovery | Where to Put It |
-|-----------|-----------------|
-| "This test is flaky" | progress.txt (immediate note) |
+| Discovery                              | Where to Put It               |
+| -------------------------------------- | ----------------------------- |
+| "This test is flaky"                   | progress.txt (immediate note) |
 | "Always use `api.fetch` not raw fetch" | CLAUDE.md (permanent pattern) |
-| "Item 5 depends on item 3" | specs file (plan update) |
+| "Item 5 depends on item 3"             | specs file (plan update)      |
 
 ### When to Regenerate Plans
 
 Regenerate (don't patch) when:
+
 - Current approach isn't working after 3+ iterations
 - Discovered codebase is structured differently than assumed
 - Better approach became apparent
@@ -623,11 +631,11 @@ Regenerate (don't patch) when:
 
 The AI can spawn subagents for parallel work:
 
-| Task | Subagent Strategy |
-|------|-------------------|
-| Reading/searching files | Many parallel (up to 500) |
-| Building/testing | Single sequential |
-| Complex reasoning | Opus for "Ultrathink" moments |
+| Task                    | Subagent Strategy             |
+| ----------------------- | ----------------------------- |
+| Reading/searching files | Many parallel (up to 500)     |
+| Building/testing        | Single sequential             |
+| Complex reasoning       | Opus for "Ultrathink" moments |
 
 ---
 
@@ -635,11 +643,11 @@ The AI can spawn subagents for parallel work:
 
 ### Model Selection
 
-| Model | Speed | Cost | Best For |
-|-------|-------|------|----------|
-| `opus` | Slowest | Highest | Complex reasoning, architecture |
-| `sonnet` | Medium | Medium | Standard implementation |
-| `haiku` | Fastest | Lowest | Simple fixes, documentation |
+| Model    | Speed   | Cost    | Best For                        |
+| -------- | ------- | ------- | ------------------------------- |
+| `opus`   | Slowest | Highest | Complex reasoning, architecture |
+| `sonnet` | Medium  | Medium  | Standard implementation         |
+| `haiku`  | Fastest | Lowest  | Simple fixes, documentation     |
 
 ```bash
 # Override default model
@@ -693,6 +701,7 @@ The AI can spawn subagents for parallel work:
 ### Branch Archiving
 
 When you switch branches, Ralph automatically archives:
+
 - Previous branch's spec file
 - Previous branch's progress.txt
 - Saved to `archive/YYYY-MM-DD-branch-name/`
@@ -716,11 +725,11 @@ grep -i error /tmp/ralph_*.log
 
 ### Exit Codes
 
-| Code | Meaning |
-|------|---------|
-| `0` | Success—all tasks complete |
-| `1` | Max iterations reached—work may remain |
-| `130` | Interrupted (Ctrl+C) |
+| Code  | Meaning                                |
+| ----- | -------------------------------------- |
+| `0`   | Success—all tasks complete             |
+| `1`   | Max iterations reached—work may remain |
+| `130` | Interrupted (Ctrl+C)                   |
 
 ### Background Execution
 
@@ -745,6 +754,7 @@ screen -S ralph
 ### "Error: Prompt file not found"
 
 Ensure prompt files exist:
+
 ```bash
 ls prompts/PROMPT_plan.md prompts/PROMPT_build.md
 ```
@@ -752,6 +762,7 @@ ls prompts/PROMPT_plan.md prompts/PROMPT_build.md
 ### Loop runs but no progress
 
 Check that:
+
 1. Spec file has `[ ]` items (unchecked)
 2. AI can understand the task (not too vague)
 3. Tests aren't failing immediately
@@ -759,6 +770,7 @@ Check that:
 ### Tests keep failing
 
 The AI should fix failures, but if stuck:
+
 1. Check progress.txt for what it tried
 2. Run tests manually to understand failure
 3. Consider simplifying the task
@@ -766,11 +778,14 @@ The AI should fix failures, but if stuck:
 ### AI keeps "searching" but not implementing
 
 Common when tasks are too vague. Improve checklist:
+
 ```markdown
 # Bad
+
 - [ ] Add authentication
 
 # Good
+
 - [ ] Create JWT token utility in src/lib/auth.ts
 - [ ] Add login endpoint POST /api/auth/login
 ```
@@ -778,11 +793,13 @@ Common when tasks are too vague. Improve checklist:
 ### Session seems stuck
 
 Check the log file:
+
 ```bash
 tail -100 /tmp/ralph_build_*.log | less
 ```
 
 Look for:
+
 - Rate limiting messages
 - Error responses
 - Repeated tool calls
@@ -790,6 +807,7 @@ Look for:
 ### Completion signal not triggering
 
 Verify:
+
 1. ALL checklist items are `[x]`
 2. Tests pass (`npm run test`)
 3. Type checks pass (`npm run typecheck`)
@@ -831,17 +849,17 @@ Verify:
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `ralph.sh` | Loop script |
-| `ralph.conf` | Optional defaults |
-| `prompts/PROMPT_plan.md` | Planning instructions |
-| `prompts/PROMPT_build.md` | Build instructions |
-| `specs/INDEX.md` | Feature catalog |
-| `specs/{feature}.md` | Feature specification (the "what & why") |
-| `plans/IMPLEMENTATION_PLAN.md` | Task checklist (the "how") |
-| `progress.txt` | Iteration history |
-| `CLAUDE.md` | Project context |
+| File                           | Purpose                                  |
+| ------------------------------ | ---------------------------------------- |
+| `ralph.sh`                     | Loop script                              |
+| `ralph.conf`                   | Optional defaults                        |
+| `prompts/PROMPT_plan.md`       | Planning instructions                    |
+| `prompts/PROMPT_build.md`      | Build instructions                       |
+| `specs/INDEX.md`               | Feature catalog                          |
+| `specs/{feature}.md`           | Feature specification (the "what & why") |
+| `plans/IMPLEMENTATION_PLAN.md` | Task checklist (the "how")               |
+| `progress.txt`                 | Iteration history                        |
+| `CLAUDE.md`                    | Project context                          |
 
 ### The Golden Rules
 
