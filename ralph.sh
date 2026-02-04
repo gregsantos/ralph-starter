@@ -1517,7 +1517,7 @@ safe_load_config() {
                     [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "$LOG_DIR" ] && LOG_DIR="$value"
                     ;;
                 LOG_FORMAT)
-                    ([ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ]) && LOG_FORMAT="$value"
+                    [ "$CLI_LOG_FORMAT_SET" != "true" ] && ([ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ]) && LOG_FORMAT="$value"
                     ;;
                 NOTIFY_WEBHOOK)
                     [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
