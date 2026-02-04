@@ -286,6 +286,47 @@ Full session logs are saved to `~/.ralph/logs/{mode}_{branch}_{timestamp}.log` b
 
 A `latest.log` symlink in the log directory always points to the current/most recent session log for quick access.
 
+### Structured JSON Logging
+
+For log aggregation systems (ELK, Datadog, Splunk, etc.), enable JSON logging:
+
+```bash
+# Enable JSON logging
+./ralph.sh --log-format json build
+
+# Or via environment variable
+RALPH_LOG_FORMAT=json ./ralph.sh build
+```
+
+JSON log entries include:
+
+- `timestamp` - ISO 8601 timestamp (UTC)
+- `session_id` - Unique session identifier for correlation
+- `event` - Event type (see below)
+- `data` - Event-specific details
+
+**Event Types:**
+
+| Event             | Description                   | Data Fields                                                       |
+| ----------------- | ----------------------------- | ----------------------------------------------------------------- |
+| `session_start`   | Session begins                | mode, model, branch, max_iterations, prompt_file, push_enabled    |
+| `iteration_start` | Iteration begins              | iteration, max                                                    |
+| `tool_call`       | Claude uses a tool            | tool, detail                                                      |
+| `error`           | Error occurred                | message, code                                                     |
+| `iteration_end`   | Iteration completes           | iteration, duration, exit_code, status                            |
+| `session_end`     | Session ends                  | status, total_duration, iterations_completed, failed_iterations   |
+
+**Example JSON log entries:**
+
+```json
+{"timestamp":"2026-02-03T22:30:00Z","session_id":"20260203_223000_12345","event":"session_start","data":{"mode":"build","model":"opus","branch":"feature/auth"}}
+{"timestamp":"2026-02-03T22:30:01Z","session_id":"20260203_223000_12345","event":"iteration_start","data":{"iteration":"1","max":"10"}}
+{"timestamp":"2026-02-03T22:30:15Z","session_id":"20260203_223000_12345","event":"tool_call","data":{"tool":"Read","detail":"src/lib/auth.ts"}}
+{"timestamp":"2026-02-03T22:31:00Z","session_id":"20260203_223000_12345","event":"iteration_end","data":{"iteration":"1","duration":"59","exit_code":"0","status":"success"}}
+```
+
+Terminal output remains human-readable regardless of log format.
+
 ## Architecture
 
 ```
@@ -319,9 +360,7 @@ ralph.sh
 ./ralph.sh -f task1.md -f task2.md --parallel
 ```
 
-2. **Structured JSON Logging**: Machine-readable log format (LOG_FORMAT=json)
-
-3. **Webhook Notifications**: Send alerts on completion, errors, or specific events
+2. **Webhook Notifications**: Send alerts on completion, errors, or specific events
 
 ### Medium-term
 
@@ -444,6 +483,7 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 # Logging
 ./ralph.sh --log-dir /custom/logs            # Custom log directory
 ./ralph.sh --log-file /path/to/session.log   # Explicit log file
+./ralph.sh --log-format json                 # Structured JSON logging
 
 # Configuration
 ./ralph.sh --global-config ~/.config/ralph   # Custom global config
@@ -517,7 +557,7 @@ Ralph supports environment variables for CI/CD integration and user defaults. Pr
 | `RALPH_PLAN_FILE`      | Path to plan file                       | `RALPH_PLAN_FILE=./plan.md`   |
 | `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
-| `RALPH_LOG_FORMAT`     | Log format (text/json) - future use     | `RALPH_LOG_FORMAT=json`       |
+| `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
 | `RALPH_NOTIFY_WEBHOOK` | Webhook URL for notifications - future  | `RALPH_NOTIFY_WEBHOOK=...`    |
 
 ### Example: CI/CD Usage
@@ -606,7 +646,7 @@ LOG_DIR=~/.ralph/logs
 | `MAX_ITERATIONS`     | Maximum iterations limit                     | `10`                              |
 | `PUSH_ENABLED`       | Auto-push after iterations                   | `true`                            |
 | `LOG_DIR`            | Log file directory                           | `~/.ralph/logs`                   |
-| `LOG_FORMAT`         | Log format (text/json) - future              | `text`                            |
+| `LOG_FORMAT`         | Log format (text/json)                       | `text`                            |
 | `NOTIFY_WEBHOOK`     | Notification webhook URL - future            | (none)                            |
 
 ### Security

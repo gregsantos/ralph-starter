@@ -256,15 +256,15 @@ NOTIFY_WEBHOOK
 #### Task 3.1: US-009 Structured JSON Logging Option
 **Priority:** 9 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 3.1.1 Add `--log-format` flag: text (default) | json
-- [ ] 3.1.2 Add `RALPH_LOG_FORMAT` environment variable support
-- [ ] 3.1.3 Create `log_event()` function for structured logging
-- [ ] 3.1.4 Define events: session_start, iteration_start, tool_call, iteration_end, error, session_end
-- [ ] 3.1.5 JSON format: `{"timestamp":"...","session_id":"...","event":"...","data":{...}}`
-- [ ] 3.1.6 Include session_id in all entries for correlation
-- [ ] 3.1.7 Integrate log_event() calls throughout code
-- [ ] 3.1.8 Maintain human-readable terminal output regardless of log format
-- [ ] 3.1.9 Run `shellcheck ralph.sh` and fix any issues
+- [x] 3.1.1 Add `--log-format` flag: text (default) | json
+- [x] 3.1.2 Add `RALPH_LOG_FORMAT` environment variable support
+- [x] 3.1.3 Create `log_event()` function for structured logging
+- [x] 3.1.4 Define events: session_start, iteration_start, tool_call, iteration_end, error, session_end
+- [x] 3.1.5 JSON format: `{"timestamp":"...","session_id":"...","event":"...","data":{...}}`
+- [x] 3.1.6 Include session_id in all entries for correlation
+- [x] 3.1.7 Integrate log_event() calls throughout code
+- [x] 3.1.8 Maintain human-readable terminal output regardless of log format
+- [x] 3.1.9 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --log-format json produces valid JSON logs

@@ -78,6 +78,7 @@ RETRY_BACKOFF_BASE=5   # Base delay in seconds (5s, 15s, 45s)
 DEFAULT_LOG_DIR="${HOME}/.ralph/logs"
 LOG_DIR=""                # Set by --log-dir or RALPH_LOG_DIR
 LOG_FILE_OVERRIDE=""      # Set by --log-file
+LOG_FORMAT="text"         # text or json (set by --log-format or RALPH_LOG_FORMAT)
 
 # Config File Tracking
 GLOBAL_CONFIG_FILE=""     # Path to global config file (default: ~/.ralph/config)
@@ -184,6 +185,9 @@ init_session_state() {
         }' > "$SESSION_FILE"
 
     echo -e "  ${DIM}Session:${RESET} ${SESSION_ID}"
+
+    # Log session start for structured logging
+    log_session_start
 }
 
 # Update session state after each iteration
@@ -750,6 +754,7 @@ show_help() {
     echo "  --list-sessions   List all resumable sessions"
     echo "  --log-dir PATH    Log directory (default: ~/.ralph/logs/)"
     echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
+    echo "  --log-format FMT  Log format: text (default) or json"
     echo "  --global-config PATH  Global config file (default: ~/.ralph/config)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
@@ -834,6 +839,7 @@ CLI_MAX_SET=false
 CLI_PUSH_SET=false
 CLI_LOG_DIR_SET=false
 CLI_LOG_FILE_SET=false
+CLI_LOG_FORMAT_SET=false
 CLI_PROGRESS_SET=false
 
 # Parse arguments
@@ -911,6 +917,11 @@ while [[ $# -gt 0 ]]; do
         --log-file)
             LOG_FILE_OVERRIDE="$2"
             CLI_LOG_FILE_SET=true
+            shift 2
+            ;;
+        --log-format)
+            LOG_FORMAT="$2"
+            CLI_LOG_FORMAT_SET=true
             shift 2
             ;;
         --global-config)
@@ -1035,11 +1046,16 @@ if [ -n "${RALPH_LOG_DIR:-}" ] && [ "$CLI_LOG_DIR_SET" != "true" ]; then
     LOG_DIR="$RALPH_LOG_DIR"
 fi
 
-# RALPH_LOG_FORMAT: Log format (text or json) - placeholder for US-009
-if [ -n "${RALPH_LOG_FORMAT:-}" ]; then
-    LOG_FORMAT="${RALPH_LOG_FORMAT}"
-else
-    LOG_FORMAT="text"
+# RALPH_LOG_FORMAT: Log format (text or json)
+if [ -n "${RALPH_LOG_FORMAT:-}" ] && [ "$CLI_LOG_FORMAT_SET" != "true" ]; then
+    case "$RALPH_LOG_FORMAT" in
+        text|json)
+            LOG_FORMAT="$RALPH_LOG_FORMAT"
+            ;;
+        *)
+            echo -e "${YELLOW}Warning: RALPH_LOG_FORMAT must be text or json, ignoring: $RALPH_LOG_FORMAT${RESET}"
+            ;;
+    esac
 fi
 
 # RALPH_NOTIFY_WEBHOOK: Webhook URL for notifications - placeholder for US-010
@@ -1085,6 +1101,15 @@ case $MODEL in
     opus|sonnet|haiku) ;;
     *)
         echo -e "${RED}${SYM_CROSS} Error: Invalid model '$MODEL'. Use: opus, sonnet, haiku${RESET}"
+        exit 1
+        ;;
+esac
+
+# Validate log format
+case $LOG_FORMAT in
+    text|json) ;;
+    *)
+        echo -e "${RED}${SYM_CROSS} Error: Invalid log format '$LOG_FORMAT'. Use: text, json${RESET}"
         exit 1
         ;;
 esac
@@ -1151,6 +1176,135 @@ setup_log_file() {
 
 # Set up log file (called after all config is loaded)
 setup_log_file
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# STRUCTURED LOGGING
+# Provides JSON logging option for log aggregation systems (ELK, Datadog, etc.)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Log a structured event to the log file
+# Arguments: event_type, [additional JSON data as key=value pairs]
+# Event types: session_start, iteration_start, tool_call, iteration_end, error, session_end
+#
+# Usage:
+#   log_event "session_start"
+#   log_event "iteration_start" "iteration=1" "max=10"
+#   log_event "tool_call" "tool=Read" "file=/path/to/file"
+#   log_event "error" "message=Something failed" "code=1"
+#
+# When LOG_FORMAT=text, this does nothing (raw output goes to log via parse_claude_output)
+# When LOG_FORMAT=json, this outputs structured JSON to the log file
+log_event() {
+    # Only output JSON when format is json
+    [ "$LOG_FORMAT" != "json" ] && return 0
+
+    local event_type="$1"
+    shift
+
+    local timestamp
+    timestamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+    # Build JSON data object from key=value pairs
+    local data_json="{}"
+    for pair in "$@"; do
+        local key="${pair%%=*}"
+        local value="${pair#*=}"
+        # Escape special characters in value for JSON
+        value=$(printf '%s' "$value" | jq -Rs '.')
+        # Build data object
+        data_json=$(echo "$data_json" | jq --arg k "$key" --argjson v "$value" '. + {($k): $v}')
+    done
+
+    # Build complete log entry
+    local log_entry
+    log_entry=$(jq -nc \
+        --arg timestamp "$timestamp" \
+        --arg session_id "${SESSION_ID:-}" \
+        --arg event "$event_type" \
+        --argjson data "$data_json" \
+        '{
+            timestamp: $timestamp,
+            session_id: $session_id,
+            event: $event,
+            data: $data
+        }')
+
+    # Append to log file
+    echo "$log_entry" >> "$LOG_FILE"
+}
+
+# Log session start event with full configuration
+log_session_start() {
+    log_event "session_start" \
+        "mode=$MODE" \
+        "model=$MODEL" \
+        "branch=$CURRENT_BRANCH" \
+        "max_iterations=$MAX_ITERATIONS" \
+        "prompt_file=$PROMPT_FILE" \
+        "spec_file=${SPEC_FILE:-}" \
+        "plan_file=${PLAN_FILE:-}" \
+        "push_enabled=$PUSH_ENABLED" \
+        "retry_enabled=$RETRY_ENABLED" \
+        "log_format=$LOG_FORMAT"
+}
+
+# Log iteration start event
+# Arguments: iteration_number, max_iterations
+log_iteration_start() {
+    local iteration="$1"
+    local max="$2"
+    log_event "iteration_start" \
+        "iteration=$iteration" \
+        "max=$max"
+}
+
+# Log iteration end event
+# Arguments: iteration_number, duration_seconds, exit_code, status
+log_iteration_end() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+    local status="$4"
+    log_event "iteration_end" \
+        "iteration=$iteration" \
+        "duration=$duration" \
+        "exit_code=$exit_code" \
+        "status=$status"
+}
+
+# Log tool call event
+# Arguments: tool_name, detail
+log_tool_call() {
+    local tool="$1"
+    local detail="$2"
+    log_event "tool_call" \
+        "tool=$tool" \
+        "detail=$detail"
+}
+
+# Log error event
+# Arguments: message, [code]
+log_error() {
+    local message="$1"
+    local code="${2:-1}"
+    log_event "error" \
+        "message=$message" \
+        "code=$code"
+}
+
+# Log session end event
+# Arguments: status, total_duration, iterations_completed, failed_iterations
+log_session_end() {
+    local status="$1"
+    local duration="$2"
+    local completed="$3"
+    local failed="$4"
+    log_event "session_end" \
+        "status=$status" \
+        "total_duration=$duration" \
+        "iterations_completed=$completed" \
+        "failed_iterations=$failed"
+}
 
 # Cleanup temp files on exit
 cleanup_temp() {
@@ -1551,6 +1705,9 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Retry${RESET}    ${SYM_ARROW} ${DIM}disabled${RESET}"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Log${RESET}      ${SYM_ARROW} ${DIM}$LOG_FILE${RESET}"
+    if [ "$LOG_FORMAT" = "json" ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}LogFmt${RESET}   ${SYM_ARROW} ${CYAN}json${RESET} (structured)"
+    fi
     # Show loaded config files in dry-run output
     if [ "$DRY_RUN" = true ] && [ ${#LOADED_CONFIG_FILES[@]} -gt 0 ]; then
         echo -e "${DIM}│${RESET}"
@@ -1574,6 +1731,9 @@ print_iteration_start() {
     echo -e "\n${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
     echo -e "${YELLOW}${BOLD}  ${SYM_GEAR} ITERATION $((iter + 1))${progress}${RESET}  ${DIM}$(date '+%H:%M:%S')${RESET}"
     echo -e "${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}\n"
+
+    # Log for structured logging
+    log_iteration_start "$((iter + 1))" "$max"
 }
 
 print_iteration_end() {
@@ -1757,6 +1917,9 @@ parse_claude_output() {
                             echo -e "  ${DIM}${SYM_DOT} $tool_name${RESET}"
                             ;;
                     esac
+
+                    # Log tool call for structured logging
+                    log_tool_call "$tool_name" "$tool_detail"
                 done <<< "$tool_info"
             fi
         fi
@@ -1785,6 +1948,8 @@ parse_claude_output() {
                 last_error_msg="$error_msg"
                 failure_reasons+=("Error: ${error_msg:0:200}")
                 echo "failed" > "$ITERATION_STATUS_FILE"
+                # Log error for structured logging
+                log_error "$error_msg"
             fi
         fi
 
@@ -1883,6 +2048,9 @@ cleanup() {
     local end_time=$(date +%s)
     local total_duration=$((end_time - START_TIME))
 
+    # Log session end for structured logging
+    log_session_end "interrupted" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
+
     echo -e "\n${DIM}┌─────────────────────────────────────────┐${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Session Summary${RESET}"
     echo -e "${DIM}│${RESET}   Iterations: $ITERATION"
@@ -1961,6 +2129,7 @@ while true; do
         echo "failed" > "$ITERATION_STATUS_FILE"
         echo "Claude CLI exited with code $claude_exit_code (after retries)" >> "$ITERATION_REASON_FILE"
         echo -e "  ${RED}${SYM_CROSS} Claude CLI failed with code ${claude_exit_code}${RESET}"
+        log_error "Claude CLI exited with code $claude_exit_code (after retries)" "$claude_exit_code"
     fi
 
     iter_end=$(date +%s)
@@ -2003,6 +2172,9 @@ while true; do
 
     print_iteration_end $ITERATION $iter_duration
 
+    # Log iteration end for structured logging
+    log_iteration_end "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code" "$iter_status"
+
     # Check for completion marker
     if [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
         echo -e "\n${GREEN}${BOLD}${SYM_CHECK} All tasks complete!${RESET}"
@@ -2037,6 +2209,9 @@ finalize_session_state "$EXIT_REASON"
 # Final summary
 end_time=$(date +%s)
 total_duration=$((end_time - START_TIME))
+
+# Log session end for structured logging
+log_session_end "$EXIT_REASON" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
 minutes=$((total_duration / 60))
 seconds=$((total_duration % 60))
 

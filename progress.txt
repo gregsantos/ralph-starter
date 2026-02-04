@@ -277,3 +277,49 @@
 - Project config values correctly override global config values
 - CLI flags correctly override both config files
 
+## Iteration 9 - 2026-02-03
+
+### Task Completed: US-009 Structured JSON Logging Option (Task 3.1)
+
+**What was done:**
+- Added `--log-format` flag accepting `text` (default) or `json`
+- Added `RALPH_LOG_FORMAT` environment variable support with proper precedence
+- Created comprehensive STRUCTURED LOGGING section with:
+  - `log_event()` - Core function for structured JSON logging
+  - `log_session_start()` - Logs session configuration at start
+  - `log_iteration_start()` - Logs iteration begins
+  - `log_iteration_end()` - Logs iteration completion with metrics
+  - `log_tool_call()` - Logs tool invocations
+  - `log_error()` - Logs errors with message and code
+  - `log_session_end()` - Logs session completion status
+- JSON format: `{"timestamp":"...","session_id":"...","event":"...","data":{...}}`
+- All events include session_id for correlation across log entries
+- Terminal output remains human-readable regardless of log format
+- Updated `print_config()` to show log format when JSON is selected
+- Updated `show_help()` with new flag documentation
+- Updated `docs/RALPH_LOOP_REF.md` with comprehensive structured logging documentation
+- Updated `ralph.conf` with LOG_FORMAT setting example
+- Validation for invalid log format values (CLI and env var)
+
+**Why:**
+- Structured logging enables integration with log aggregation systems (ELK, Datadog, Splunk)
+- JSON format allows programmatic analysis of session data
+- session_id correlation enables tracking entire sessions across multiple log entries
+- Event types provide structured insight into session lifecycle
+- Maintaining human-readable terminal output preserves developer experience
+
+**Files changed:**
+- `ralph.sh` - Added STRUCTURED LOGGING section (~100 lines), --log-format flag, CLI_LOG_FORMAT_SET tracking, validation, integrated log calls
+- `docs/RALPH_LOOP_REF.md` - Added Structured JSON Logging section, updated Future Improvements, updated env var and config tables
+- `ralph.conf` - Added LOG_FORMAT setting with comment
+- `plans/ralph-improvements_PLAN.md` - Marked task 3.1 complete
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings)
+- `./ralph.sh --help` - Shows new --log-format flag and RALPH_LOG_FORMAT
+- `./ralph.sh --dry-run` - Works correctly (log format not shown for text default)
+- `./ralph.sh --dry-run --log-format json` - Shows "LogFmt → json (structured)"
+- `./ralph.sh --log-format invalid --dry-run` - Proper validation error
+- `RALPH_LOG_FORMAT=json ./ralph.sh --dry-run` - Env var works
+- `RALPH_LOG_FORMAT=json ./ralph.sh --log-format text --dry-run` - CLI overrides env
+
