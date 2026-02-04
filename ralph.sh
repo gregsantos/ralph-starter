@@ -18,6 +18,7 @@
 #   --test, -1        Test mode: single iteration, no push, ignore completion marker
 #   --interactive, -i Prompt for confirmation between iterations
 #   --interactive-timeout N  Timeout for interactive prompt (default: 300s)
+#   --verbose, -v     Verbose mode: show prompt content, config precedence, session updates
 #   --push            Enable git push after iterations (default)
 #   --no-push         Disable git push
 #   -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
@@ -191,6 +192,9 @@ init_session_state() {
 
     # Log session start for structured logging
     log_session_start
+
+    # Verbose logging
+    verbose_session_update "init" "created ${SESSION_FILE} with id ${SESSION_ID}"
 }
 
 # Update session state after each iteration
@@ -253,6 +257,7 @@ update_session_state() {
         tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
         echo "$updated" > "$tmp_file"
         mv "$tmp_file" "$SESSION_FILE"
+        verbose_session_update "update" "iteration ${iteration}: ${duration}s, exit=${exit_code}, files=${files_modified}"
     else
         echo -e "${YELLOW}Warning: Failed to update session state${RESET}" >&2
     fi
@@ -306,9 +311,11 @@ finalize_session_state() {
         rm -f "$SESSION_FILE"
 
         echo -e "  ${DIM}Session archived:${RESET} ${archive_path}"
+        verbose_session_update "finalize" "archived to ${archive_path}"
     else
         # Keep session file for debugging/resume
         echo -e "  ${DIM}Session preserved:${RESET} ${SESSION_FILE}"
+        verbose_session_update "finalize" "preserved at ${SESSION_FILE} (status: ${final_status})"
     fi
 }
 
@@ -782,12 +789,14 @@ run_with_retry() {
         # Check if retry is disabled
         if [ "$RETRY_ENABLED" = false ]; then
             echo -e "  ${YELLOW}${SYM_DOT} Retry disabled (--no-retry)${RESET}"
+            verbose_retry_decision "skip" "retry disabled via --no-retry"
             return "$exit_code"
         fi
 
         # Check if we've exhausted retries
         if [ "$attempt" -gt "$MAX_RETRIES" ]; then
             echo -e "  ${RED}${SYM_CROSS} Max retries ($MAX_RETRIES) exhausted${RESET}"
+            verbose_retry_decision "give up" "max retries (${MAX_RETRIES}) exhausted"
             log_retry_attempt "$attempt" 0 "$LAST_ERROR_MSG" "false"
             return "$exit_code"
         fi
@@ -795,11 +804,14 @@ run_with_retry() {
         # Check if error is retryable
         if ! is_retryable_error "$LAST_ERROR_MSG" "$exit_code"; then
             echo -e "  ${RED}${SYM_CROSS} Fatal error (not retryable):${RESET} ${LAST_ERROR_MSG:0:60}"
+            verbose_retry_decision "abort" "fatal error pattern detected"
             return "$exit_code"
         fi
 
         # Calculate exponential backoff: 5s, 15s, 45s (base * 3^(attempt-1))
         delay=$((RETRY_BACKOFF_BASE * (3 ** (attempt - 1))))
+
+        verbose_retry_decision "retry" "transient error, attempt ${attempt}/${MAX_RETRIES}, backoff ${delay}s"
 
         # Log retry attempt to session state
         log_retry_attempt "$attempt" "$delay" "$LAST_ERROR_MSG" "false"
@@ -833,6 +845,7 @@ show_help() {
     echo "  --test, -1        Test mode: single iteration, no push, ignore completion marker"
     echo "  --interactive, -i Prompt for confirmation between iterations"
     echo "  --interactive-timeout N  Timeout for interactive prompt (default: 300s)"
+    echo "  --verbose, -v     Verbose mode: show prompt content, config precedence, session updates"
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
     echo "  --skip-checks     Skip pre-flight dependency checks"
@@ -870,6 +883,7 @@ show_help() {
     echo "  ./ralph.sh --test                     # Test mode: 1 iteration, no push"
     echo "  ./ralph.sh --interactive              # Interactive: confirm between iterations"
     echo "  ./ralph.sh -i --interactive-timeout 60  # Interactive with 60s timeout"
+    echo "  ./ralph.sh --verbose                   # Verbose: show prompt, config sources"
     echo "  ./ralph.sh -s ./specs/feature.md -l ./plans/feature_PLAN.md  # Custom spec+plan"
     echo ""
     echo -e "${BOLD}Environment Variables:${RESET}"
@@ -912,6 +926,7 @@ DRY_RUN=false             # Show config without running Claude
 TEST_MODE=false           # Single iteration test mode (no push, ignore completion marker)
 INTERACTIVE_MODE=false    # Prompt for confirmation between iterations
 INTERACTIVE_TIMEOUT=300   # Timeout in seconds for interactive prompt (default: 5 minutes)
+VERBOSE=false             # Verbose mode: show prompt content, config precedence, and detailed logging
 TEMP_PROMPT_FILE=""
 
 # Template variable defaults (CLI args override, then config, then these)
@@ -1002,6 +1017,10 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             shift 2
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
             ;;
         --skip-checks)
             SKIP_CHECKS=true
@@ -1891,6 +1910,100 @@ handle_interactive_confirmation() {
     done
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# VERBOSE MODE
+# Detailed logging for debugging configuration and prompt issues
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Log a verbose message (only shown when --verbose is set)
+# Arguments: message
+# Prefix: [verbose] in DIM color, clearly indented
+verbose_log() {
+    [ "$VERBOSE" != true ] && return 0
+    local message="$1"
+    echo -e "${DIM}  [verbose] ${message}${RESET}"
+}
+
+# Log verbose message with label and value
+# Arguments: label, value
+verbose_log_kv() {
+    [ "$VERBOSE" != true ] && return 0
+    local label="$1"
+    local value="$2"
+    echo -e "${DIM}  [verbose] ${label}: ${RESET}${value}"
+}
+
+# Show where a config value came from (for debugging precedence)
+# Arguments: variable_name, value, source (cli|env|config|default)
+verbose_log_source() {
+    [ "$VERBOSE" != true ] && return 0
+    local var_name="$1"
+    local value="$2"
+    local source="$3"
+    local source_color=""
+
+    case "$source" in
+        cli)     source_color="${GREEN}" ;;
+        env)     source_color="${CYAN}" ;;
+        config)  source_color="${YELLOW}" ;;
+        default) source_color="${DIM}" ;;
+        *)       source_color="${DIM}" ;;
+    esac
+
+    echo -e "${DIM}  [verbose] ${var_name} = ${RESET}${value} ${source_color}(${source})${RESET}"
+}
+
+# Show resolved prompt content (first N lines + total line count)
+# Arguments: prompt_content, max_lines (default: 20)
+verbose_show_prompt() {
+    [ "$VERBOSE" != true ] && return 0
+    local prompt_content="$1"
+    local max_lines="${2:-20}"
+
+    echo -e "\n${DIM}  [verbose] ┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${DIM}  [verbose] │ Resolved Prompt Content                 │${RESET}"
+    echo -e "${DIM}  [verbose] └─────────────────────────────────────────┘${RESET}"
+
+    local line_count
+    line_count=$(echo "$prompt_content" | wc -l | tr -d ' ')
+
+    echo -e "${DIM}  [verbose] Total lines: ${line_count}${RESET}"
+    echo -e "${DIM}  [verbose] First ${max_lines} lines:${RESET}"
+    echo -e "${DIM}  [verbose] ────────────────────────────────────────${RESET}"
+
+    echo "$prompt_content" | head -n "$max_lines" | while IFS= read -r line; do
+        # Truncate long lines for readability
+        if [ ${#line} -gt 80 ]; then
+            echo -e "${DIM}  │ ${line:0:77}...${RESET}"
+        else
+            echo -e "${DIM}  │ ${line}${RESET}"
+        fi
+    done
+
+    if [ "$line_count" -gt "$max_lines" ]; then
+        echo -e "${DIM}  │ ... (${line_count} total lines)${RESET}"
+    fi
+    echo -e "${DIM}  [verbose] ────────────────────────────────────────${RESET}"
+}
+
+# Show session state update in verbose mode
+# Arguments: operation (init|update|finalize), details
+verbose_session_update() {
+    [ "$VERBOSE" != true ] && return 0
+    local operation="$1"
+    local details="$2"
+    echo -e "${DIM}  [verbose] Session ${operation}: ${details}${RESET}"
+}
+
+# Show retry decision in verbose mode
+# Arguments: decision, reason
+verbose_retry_decision() {
+    [ "$VERBOSE" != true ] && return 0
+    local decision="$1"
+    local reason="$2"
+    echo -e "${DIM}  [verbose] Retry decision: ${decision} - ${reason}${RESET}"
+}
+
 # Cleanup temp files on exit
 cleanup_temp() {
     [ -n "$TEMP_PROMPT_FILE" ] && [ -f "$TEMP_PROMPT_FILE" ] && rm -f "$TEMP_PROMPT_FILE"
@@ -2187,6 +2300,76 @@ else
     PLAN_FILE="${PLAN_FILE:-./plans/IMPLEMENTATION_PLAN.md}"
 fi
 
+# Show config precedence in verbose mode
+# This function displays where each config value came from
+show_config_precedence() {
+    [ "$VERBOSE" != true ] && return 0
+
+    echo -e "\n${DIM}  [verbose] ┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${DIM}  [verbose] │ Configuration Precedence                │${RESET}"
+    echo -e "${DIM}  [verbose] │ (cli > env > config > default)          │${RESET}"
+    echo -e "${DIM}  [verbose] └─────────────────────────────────────────┘${RESET}"
+
+    # Determine source for each key variable
+    local model_source="default"
+    [ -n "${RALPH_MODEL:-}" ] && model_source="env"
+    [ "$CLI_MODEL_SET" = "true" ] && model_source="cli"
+
+    local max_source="default"
+    [ -n "${RALPH_MAX_ITERATIONS:-}" ] && max_source="env"
+    [ "$CLI_MAX_SET" = "true" ] && max_source="cli"
+    [ "$UNLIMITED" = true ] && max_source="cli"
+    [ "$TEST_MODE" = true ] && max_source="cli (test mode)"
+
+    local push_source="default"
+    [ -n "${RALPH_PUSH_ENABLED:-}" ] && push_source="env"
+    [ "$CLI_PUSH_SET" = "true" ] && push_source="cli"
+    [ "$TEST_MODE" = true ] && push_source="cli (test mode)"
+
+    local spec_source="default"
+    [ -n "${RALPH_SPEC_FILE:-}" ] && spec_source="env"
+    [ "$CLI_SPEC_SET" = "true" ] && spec_source="cli"
+
+    local plan_source="default"
+    [ -n "${RALPH_PLAN_FILE:-}" ] && plan_source="env"
+    [ "$CLI_PLAN_SET" = "true" ] && plan_source="cli"
+    [ "$CLI_SPEC_SET" = "true" ] && [ "$CLI_PLAN_SET" != "true" ] && plan_source="derived from spec"
+
+    local log_dir_source="default"
+    [ -n "${RALPH_LOG_DIR:-}" ] && log_dir_source="env"
+    [ "$CLI_LOG_DIR_SET" = "true" ] && log_dir_source="cli"
+    [ "$CLI_LOG_FILE_SET" = "true" ] && log_dir_source="cli (--log-file)"
+
+    local log_format_source="default"
+    [ -n "${RALPH_LOG_FORMAT:-}" ] && log_format_source="env"
+    [ "$CLI_LOG_FORMAT_SET" = "true" ] && log_format_source="cli"
+
+    local webhook_source="none"
+    [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ] && webhook_source="env"
+    [ "$CLI_WEBHOOK_SET" = "true" ] && webhook_source="cli"
+    [ -z "${NOTIFY_WEBHOOK:-}" ] && webhook_source="(not set)"
+
+    verbose_log_source "MODEL" "$MODEL" "$model_source"
+    verbose_log_source "MAX_ITERATIONS" "$MAX_ITERATIONS" "$max_source"
+    verbose_log_source "PUSH_ENABLED" "$PUSH_ENABLED" "$push_source"
+    verbose_log_source "SPEC_FILE" "$SPEC_FILE" "$spec_source"
+    verbose_log_source "PLAN_FILE" "$PLAN_FILE" "$plan_source"
+    verbose_log_source "LOG_DIR" "${LOG_DIR:-$DEFAULT_LOG_DIR}" "$log_dir_source"
+    verbose_log_source "LOG_FORMAT" "$LOG_FORMAT" "$log_format_source"
+    [ -n "${NOTIFY_WEBHOOK:-}" ] && verbose_log_source "WEBHOOK" "${NOTIFY_WEBHOOK:0:30}..." "$webhook_source"
+
+    # Show loaded config files
+    if [ ${#LOADED_CONFIG_FILES[@]} -gt 0 ]; then
+        echo -e "${DIM}  [verbose] Config files loaded:${RESET}"
+        for config_file in "${LOADED_CONFIG_FILES[@]}"; do
+            echo -e "${DIM}  [verbose]   • ${config_file}${RESET}"
+        done
+    else
+        echo -e "${DIM}  [verbose] No config files loaded${RESET}"
+    fi
+    echo ""
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BRANCH-CHANGE ARCHIVING
 # Archives previous branch's specs and progress when switching branches
@@ -2270,6 +2453,8 @@ print_header() {
         echo -e "${CYAN}${BOLD}║${RESET}                 ${YELLOW}${BOLD}⚠ TEST MODE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
     elif [ "$INTERACTIVE_MODE" = true ]; then
         echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}⚡ INTERACTIVE${RESET} ${BOLD}RALPH LOOP${RESET}                     ${CYAN}${BOLD}║${RESET}"
+    elif [ "$VERBOSE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}                ${CYAN}${BOLD}🔍 VERBOSE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
     else
         echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
     fi
@@ -2304,6 +2489,9 @@ print_config() {
     fi
     if [ "$INTERACTIVE_MODE" = true ]; then
         echo -e "${DIM}│${RESET} ${BOLD}Interact${RESET} ${SYM_ARROW} ${YELLOW}enabled${RESET} (prompt between iters, timeout ${INTERACTIVE_TIMEOUT}s)"
+    fi
+    if [ "$VERBOSE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Verbose${RESET}  ${SYM_ARROW} ${CYAN}enabled${RESET} (prompt preview, config sources)"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Push${RESET}     ${SYM_ARROW} ${DIM}$( [ "$PUSH_ENABLED" = true ] && echo "enabled" || echo "disabled" )${RESET}"
     if [ "$RETRY_ENABLED" = true ]; then
@@ -2723,6 +2911,8 @@ if [ "$RESUME_SESSION" = true ]; then
 else
     print_header
     print_config
+    # Show config precedence in verbose mode
+    show_config_precedence
 fi
 
 # Show inline prompt preview if applicable
@@ -2768,6 +2958,10 @@ while true; do
     # --verbose is required for stream-json, parser filters the noise
     # substitute_template replaces {{SPEC_FILE}}, {{PROGRESS_FILE}}, {{SOURCE_DIR}}
     prompt_content=$(substitute_template "$(cat "$PROMPT_FILE")")
+
+    # Show resolved prompt content in verbose mode
+    verbose_show_prompt "$prompt_content"
+
     run_with_retry "$prompt_content"
     claude_exit_code=$?
 

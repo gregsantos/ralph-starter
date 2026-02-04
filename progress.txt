@@ -501,3 +501,57 @@
 - `./ralph.sh -i --interactive-timeout 60 --dry-run` - Shows custom timeout of 60s
 - `./ralph.sh --interactive-timeout abc` - Proper validation error
 
+## Iteration 14 - 2026-02-04
+
+### Task Completed: US-014 Verbose Mode with Prompt Preview (Task 4.3)
+
+**What was done:**
+- Added VERBOSE MODE section after INTERACTIVE CONFIRMATION MODE with:
+  - `VERBOSE` variable (default: false)
+  - `verbose_log()` - Log single verbose message with [verbose] prefix
+  - `verbose_log_kv()` - Log key-value pairs with [verbose] prefix
+  - `verbose_log_source()` - Log config value with source attribution (cli/env/config/default)
+  - `verbose_show_prompt()` - Display resolved prompt content (first 20 lines with line count)
+  - `verbose_session_update()` - Log session state changes
+  - `verbose_retry_decision()` - Log retry logic decisions
+- Added `--verbose` and `-v` CLI flags for enabling verbose mode
+- Created `show_config_precedence()` function to display where each config value came from:
+  - Shows MODEL, MAX_ITERATIONS, PUSH_ENABLED, SPEC_FILE, PLAN_FILE, LOG_DIR, LOG_FORMAT, WEBHOOK with source labels
+  - Color-coded by source: green (cli), cyan (env), yellow (config), dim (default)
+  - Lists loaded config files
+- Updated `print_header()` to show "🔍 VERBOSE RALPH LOOP" banner when active
+- Updated `print_config()` to show "Verbose → enabled (prompt preview, config sources)"
+- Integrated verbose calls throughout codebase:
+  - `init_session_state()` - Logs session creation
+  - `update_session_state()` - Logs iteration metrics
+  - `finalize_session_state()` - Logs archive/preserve actions
+  - `run_with_retry()` - Logs retry decisions (skip, give up, abort, retry)
+  - Main loop - Shows resolved prompt content before sending to Claude
+- Updated `show_help()` with new --verbose/-v flag and example
+- Updated header comment in ralph.sh with new flag
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New Verbose Mode section with usage examples and output examples
+  - Updated Quick Reference with verbose mode commands
+
+**Why:**
+- Verbose mode is essential for debugging configuration issues in complex setups
+- Config precedence display clarifies which value came from where (CLI vs env vs config vs default)
+- Prompt preview allows verification of template substitution before execution
+- Session state logging helps debug state management issues
+- Retry decision logging helps understand failure classification
+- Clear [verbose] prefix distinguishes debug output from normal output
+
+**Files changed:**
+- `ralph.sh` - Added VERBOSE variable, --verbose/-v flag parsing, VERBOSE MODE section (~90 lines), show_config_precedence() function (~55 lines), integrated verbose calls in session state functions, retry logic, and main loop
+- `docs/RALPH_LOOP_REF.md` - Added Verbose Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.3 complete
+- `specs/ralph-improvements.json` - Updated US-014 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from verbose code)
+- `./ralph.sh --help` - Shows new --verbose/-v flag and example
+- `./ralph.sh --dry-run` - Works correctly (no verbose output when not requested)
+- `./ralph.sh -v --dry-run` - Shows VERBOSE banner, config precedence with sources
+- `RALPH_MODEL=sonnet ./ralph.sh -v --dry-run -s ./specs/ralph-improvements.json` - Correctly shows env/cli sources
+- `./ralph.sh --verbose --dry-run` - Same as -v
+

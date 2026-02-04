@@ -187,6 +187,56 @@ Interactive mode is ideal for:
 
 **Non-TTY environments**: If Ralph detects it's not running in an interactive terminal (e.g., CI/CD, cron, piped input), the interactive prompt is skipped with a warning and iterations continue automatically.
 
+### Verbose Mode
+
+```bash
+# Enable verbose output for debugging
+./ralph.sh --verbose
+./ralph.sh -v                    # Short flag
+
+# Combine with other options
+./ralph.sh -v --dry-run          # Preview config with precedence details
+./ralph.sh -v --test             # Verbose test mode
+```
+
+When verbose mode is enabled, Ralph provides detailed debugging information:
+
+1. **Configuration Precedence**: Shows where each config value came from
+   - `(cli)` - Set via command line flag
+   - `(env)` - Set via environment variable
+   - `(config)` - Set via config file
+   - `(default)` - Using built-in default
+   - `(derived from spec)` - Computed from another value
+
+2. **Prompt Preview**: Shows the resolved prompt content (first 20 lines) before sending to Claude, including all template variable substitutions
+
+3. **Session State Updates**: Logs session initialization, iteration updates, and finalization
+
+4. **Retry Logic Decisions**: Shows when retries are attempted, skipped, or exhausted
+
+**Example verbose output:**
+
+```
+  [verbose] ┌─────────────────────────────────────────┐
+  [verbose] │ Configuration Precedence                │
+  [verbose] │ (cli > env > config > default)          │
+  [verbose] └─────────────────────────────────────────┘
+  [verbose] MODEL = sonnet (env)
+  [verbose] MAX_ITERATIONS = 10 (default)
+  [verbose] PUSH_ENABLED = false (cli)
+  [verbose] SPEC_FILE = ./specs/feature.json (cli)
+  [verbose] PLAN_FILE = ./plans/feature_PLAN.md (derived from spec)
+  [verbose] Config files loaded:
+  [verbose]   • ~/.ralph/config
+  [verbose]   • ./ralph.conf
+```
+
+Verbose mode is ideal for:
+- Debugging configuration issues
+- Understanding where settings come from
+- Verifying prompt content before execution
+- Troubleshooting retry behavior
+
 ### Product Mode
 
 ```bash
@@ -674,6 +724,11 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh --interactive                     # Enable interactive mode
 ./ralph.sh -i                                # Short flag
 ./ralph.sh -i --interactive-timeout 60       # Custom timeout (default: 300s)
+
+# Verbose mode (debugging output)
+./ralph.sh --verbose                         # Enable verbose mode
+./ralph.sh -v                                # Short flag
+./ralph.sh -v --dry-run                      # Verbose dry run (config sources)
 
 # Configuration
 ./ralph.sh --global-config ~/.config/ralph   # Custom global config

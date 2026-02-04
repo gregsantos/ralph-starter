@@ -370,15 +370,15 @@ NOTIFY_WEBHOOK
 #### Task 4.3: US-014 Verbose Mode with Prompt Preview
 **Priority:** 14 | **Effort:** Small | **Depends on:** None
 
-- [ ] 4.3.1 Add `--verbose` or `-v` flag (distinct from Claude's --verbose)
-- [ ] 4.3.2 Add VERBOSE variable
-- [ ] 4.3.3 Create `verbose_log()` function with DIM color and '[verbose]' prefix
-- [ ] 4.3.4 Display resolved prompt content (after template substitution) before sending
-- [ ] 4.3.5 Show config precedence (which value came from where)
-- [ ] 4.3.6 Display session state updates
-- [ ] 4.3.7 Show retry logic decisions
-- [ ] 4.3.8 Verbose output clearly marked/indented
-- [ ] 4.3.9 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.3.1 Add `--verbose` or `-v` flag (distinct from Claude's --verbose)
+- [x] 4.3.2 Add VERBOSE variable
+- [x] 4.3.3 Create `verbose_log()` function with DIM color and '[verbose]' prefix
+- [x] 4.3.4 Display resolved prompt content (after template substitution) before sending
+- [x] 4.3.5 Show config precedence (which value came from where)
+- [x] 4.3.6 Display session state updates
+- [x] 4.3.7 Show retry logic decisions
+- [x] 4.3.8 Verbose output clearly marked/indented
+- [x] 4.3.9 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - -v shows prompt content before send

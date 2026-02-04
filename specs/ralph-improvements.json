@@ -391,7 +391,7 @@
       },
       "priority": 14,
       "effort": "small",
-      "passes": false,
+      "passes": true,
       "notes": "Helpful for debugging configuration issues"
     },
     {
