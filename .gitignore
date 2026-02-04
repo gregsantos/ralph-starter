@@ -6,6 +6,7 @@ archive/
 # Claude settings (but not skills)
 .claude/*
 !.claude/skills/
+!.claude/skills/**
 
 # Dependencies
 node_modules/

@@ -1271,6 +1271,24 @@ log_session_start() {
         "log_format=$LOG_FORMAT"
 }
 
+# Log session resume event (called when --resume is used)
+# Logs session metadata for log correlation in resumed sessions
+log_session_resume() {
+    local resumed_iteration="$1"
+    log_event "session_resume" \
+        "mode=$MODE" \
+        "model=$MODEL" \
+        "branch=$CURRENT_BRANCH" \
+        "max_iterations=$MAX_ITERATIONS" \
+        "resumed_at_iteration=$resumed_iteration" \
+        "prompt_file=$PROMPT_FILE" \
+        "spec_file=${SPEC_FILE:-}" \
+        "plan_file=${PLAN_FILE:-}" \
+        "push_enabled=$PUSH_ENABLED" \
+        "retry_enabled=$RETRY_ENABLED" \
+        "log_format=$LOG_FORMAT"
+}
+
 # Log iteration start event
 # Arguments: iteration_number, max_iterations
 log_iteration_start() {
@@ -1629,9 +1647,11 @@ safe_load_config() {
                     ;;
                 LOG_FORMAT)
                     # Normalize to lowercase (validation accepts TEXT/JSON but rest of script expects lowercase)
+                    # Only override if CLI wasn't used AND env var wasn't set
+                    # (checking env var presence ensures explicit RALPH_LOG_FORMAT=text isn't overridden)
                     local normalized_format
                     normalized_format=$(echo "$value" | tr '[:upper:]' '[:lower:]')
-                    [ "$CLI_LOG_FORMAT_SET" != "true" ] && ([ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ]) && LOG_FORMAT="$normalized_format"
+                    [ "$CLI_LOG_FORMAT_SET" != "true" ] && [ -z "${RALPH_LOG_FORMAT:-}" ] && LOG_FORMAT="$normalized_format"
                     ;;
                 NOTIFY_WEBHOOK)
                     [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
@@ -2249,6 +2269,10 @@ fi
 # Skip if resuming - session state was already restored
 if [ "$RESUME_SESSION" != true ]; then
     init_session_state
+else
+    # Log session resume event for JSON log completeness
+    # This ensures resumed sessions have metadata for log correlation
+    log_session_resume "$ITERATION"
 fi
 
 # Track exit status
