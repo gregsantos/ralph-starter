@@ -1197,8 +1197,8 @@ setup_log_file() {
     fi
 }
 
-# Set up log file (called after all config is loaded)
-setup_log_file
+# NOTE: setup_log_file is called AFTER load_ralph_config (see below)
+# to ensure LOG_DIR from config files is respected
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # STRUCTURED LOGGING
@@ -1714,6 +1714,10 @@ substitute_template() {
 
 # Load config file (CLI args override config values)
 load_ralph_config
+
+# Set up log file AFTER config is loaded so LOG_DIR from config is respected
+# Precedence: --log-file > --log-dir > RALPH_LOG_DIR > config LOG_DIR > default
+setup_log_file
 
 # Apply defaults for any values not set by CLI or config
 SPEC_FILE="${SPEC_FILE:-./specs/IMPLEMENTATION_PLAN.md}"
