@@ -2113,10 +2113,12 @@ parse_claude_output() {
 
         # Check for tool errors in result messages
         if [[ "$line" == *'"type":"tool_result"'* ]] && [[ "$line" == *'"is_error":true'* ]]; then
+            error_count=$((error_count + 1))
             local tool_error=$(echo "$line" | jq -r '.content // empty' 2>/dev/null)
             if [ -n "$tool_error" ]; then
                 echo -e "  ${RED}${SYM_CROSS} Tool error:${RESET} ${tool_error:0:60}"
                 failure_reasons+=("Tool error: ${tool_error:0:200}")
+                echo "failed" > "$ITERATION_STATUS_FILE"
             fi
         fi
 
@@ -2191,7 +2193,16 @@ parse_claude_output() {
     # Return non-zero if errors occurred to trigger retry logic
     # This is critical: with pipefail, $? captures the first non-zero exit
     # If we always return 0, retry logic is bypassed entirely
+    #
+    # Check both explicit failure status AND error_count as fallback
+    # This catches cases where errors were detected but status wasn't explicitly set
     if [ "$(cat "$ITERATION_STATUS_FILE" 2>/dev/null)" = "failed" ]; then
+        return 1
+    fi
+    # Fallback: if any errors were counted, treat as failure
+    # This prevents unrecognized error patterns from being treated as success
+    if [ "$error_count" -gt 0 ]; then
+        echo "failed" > "$ITERATION_STATUS_FILE"
         return 1
     fi
     return 0
