@@ -693,7 +693,7 @@ run_with_retry() {
         fi
 
         # Check if we've exhausted retries
-        if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+        if [ "$attempt" -gt "$MAX_RETRIES" ]; then
             echo -e "  ${RED}${SYM_CROSS} Max retries ($MAX_RETRIES) exhausted${RESET}"
             log_retry_attempt "$attempt" 0 "$LAST_ERROR_MSG" "false"
             return "$exit_code"
@@ -1343,7 +1343,7 @@ safe_load_config() {
                     [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "$LOG_DIR" ] && LOG_DIR="$value"
                     ;;
                 LOG_FORMAT)
-                    [ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ] && LOG_FORMAT="$value"
+                    ([ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ]) && LOG_FORMAT="$value"
                     ;;
                 NOTIFY_WEBHOOK)
                     [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
