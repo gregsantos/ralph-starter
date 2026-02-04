@@ -150,16 +150,16 @@ US-016 (Documentation) ◄──────────────────
 #### Task 1.5: US-005 Persistent Log Directory
 **Priority:** 5 | **Effort:** Small | **Depends on:** None
 
-- [ ] 1.5.1 Define default log directory: `~/.ralph/logs/`
-- [ ] 1.5.2 Create directory if not exists: `mkdir -p ~/.ralph/logs`
-- [ ] 1.5.3 Add `--log-dir PATH` flag to argument parsing
-- [ ] 1.5.4 Add `RALPH_LOG_DIR` environment variable support
-- [ ] 1.5.5 Add `--log-file PATH` flag for explicit file path
-- [ ] 1.5.6 Update LOG_FILE assignment with precedence: --log-file > --log-dir > RALPH_LOG_DIR > config > default
-- [ ] 1.5.7 Log filename format: `{mode}_{branch}_{timestamp}.log`
-- [ ] 1.5.8 Create symlink: `~/.ralph/logs/latest.log` pointing to current log
-- [ ] 1.5.9 Display log path in print_config()
-- [ ] 1.5.10 Run `shellcheck ralph.sh` and fix any issues
+- [x] 1.5.1 Define default log directory: `~/.ralph/logs/`
+- [x] 1.5.2 Create directory if not exists: `mkdir -p ~/.ralph/logs`
+- [x] 1.5.3 Add `--log-dir PATH` flag to argument parsing
+- [x] 1.5.4 Add `RALPH_LOG_DIR` environment variable support
+- [x] 1.5.5 Add `--log-file PATH` flag for explicit file path
+- [x] 1.5.6 Update LOG_FILE assignment with precedence: --log-file > --log-dir > RALPH_LOG_DIR > config > default
+- [x] 1.5.7 Log filename format: `{mode}_{branch}_{timestamp}.log`
+- [x] 1.5.8 Create symlink: `~/.ralph/logs/latest.log` pointing to current log
+- [x] 1.5.9 Display log path in print_config()
+- [x] 1.5.10 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - Logs saved to ~/.ralph/logs/ by default

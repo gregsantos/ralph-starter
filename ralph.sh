@@ -74,6 +74,11 @@ RETRY_ENABLED=true
 MAX_RETRIES=3
 RETRY_BACKOFF_BASE=5   # Base delay in seconds (5s, 15s, 45s)
 
+# Logging Configuration
+DEFAULT_LOG_DIR="${HOME}/.ralph/logs"
+LOG_DIR=""                # Set by --log-dir or RALPH_LOG_DIR
+LOG_FILE_OVERRIDE=""      # Set by --log-file
+
 # Iteration Status Tracking
 ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
 ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
@@ -739,6 +744,8 @@ show_help() {
     echo "  --max-retries N   Max retry attempts (default: 3)"
     echo "  --resume          Resume interrupted session from .ralph-session.json"
     echo "  --list-sessions   List all resumable sessions"
+    echo "  --log-dir PATH    Log directory (default: ~/.ralph/logs/)"
+    echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
@@ -865,6 +872,14 @@ while [[ $# -gt 0 ]]; do
             LIST_SESSIONS=true
             shift
             ;;
+        --log-dir)
+            LOG_DIR="$2"
+            shift 2
+            ;;
+        --log-file)
+            LOG_FILE_OVERRIDE="$2"
+            shift 2
+            ;;
         -s|--spec)
             SPEC_FILE="$2"
             CLI_SPEC_SET=true
@@ -972,7 +987,64 @@ ITERATION=0
 FAILED_ITERATIONS=0
 CURRENT_BRANCH=$(git branch --show-current)
 START_TIME=$(date +%s)
-LOG_FILE="/tmp/ralph_${MODE}_$(date +%Y%m%d_%H%M%S).log"
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# LOG FILE SETUP
+# Precedence: --log-file > --log-dir > RALPH_LOG_DIR > config > default
+# ═══════════════════════════════════════════════════════════════════════════════
+
+setup_log_file() {
+    local timestamp
+    timestamp=$(date +%Y%m%d_%H%M%S)
+
+    # Sanitize branch name for filename (replace / with -)
+    local safe_branch
+    safe_branch=$(echo "$CURRENT_BRANCH" | tr '/' '-')
+
+    # Log filename format: {mode}_{branch}_{timestamp}.log
+    local log_filename="${MODE}_${safe_branch}_${timestamp}.log"
+
+    # Determine log file path with precedence
+    if [ -n "$LOG_FILE_OVERRIDE" ]; then
+        # --log-file takes highest precedence
+        LOG_FILE="$LOG_FILE_OVERRIDE"
+    else
+        # Determine log directory with precedence: --log-dir > RALPH_LOG_DIR > config > default
+        local effective_log_dir
+        if [ -n "$LOG_DIR" ]; then
+            effective_log_dir="$LOG_DIR"
+        elif [ -n "${RALPH_LOG_DIR:-}" ]; then
+            effective_log_dir="$RALPH_LOG_DIR"
+        else
+            effective_log_dir="$DEFAULT_LOG_DIR"
+        fi
+
+        # Create log directory if it doesn't exist
+        if [ ! -d "$effective_log_dir" ]; then
+            mkdir -p "$effective_log_dir"
+        fi
+
+        LOG_FILE="${effective_log_dir}/${log_filename}"
+    fi
+
+    # Create parent directory if needed (for explicit --log-file paths)
+    local log_dir
+    log_dir=$(dirname "$LOG_FILE")
+    if [ ! -d "$log_dir" ]; then
+        mkdir -p "$log_dir"
+    fi
+
+    # Create/update latest.log symlink in ~/.ralph/logs/
+    if [ -d "$DEFAULT_LOG_DIR" ] || mkdir -p "$DEFAULT_LOG_DIR"; then
+        local latest_link="${DEFAULT_LOG_DIR}/latest.log"
+        # Remove old symlink if exists, then create new one
+        rm -f "$latest_link"
+        ln -s "$LOG_FILE" "$latest_link"
+    fi
+}
+
+# Set up log file (called after all config is loaded)
+setup_log_file
 
 # Cleanup temp files on exit
 cleanup_temp() {

@@ -132,3 +132,38 @@
 - `./ralph.sh --resume` - Shows appropriate error when no session file exists
 - Branch mismatch, completed session, and age warnings all tested
 
+## Iteration 5 - 2026-02-03
+
+### Task Completed: US-005 Persistent Log Directory (Task 1.5)
+
+**What was done:**
+- Added LOG FILE SETUP section after argument parsing with `setup_log_file()` function
+- Default log directory: `~/.ralph/logs/` (created automatically if not exists)
+- Added `--log-dir PATH` flag to specify custom log directory
+- Added `--log-file PATH` flag to specify explicit log file path (overrides --log-dir)
+- Added `RALPH_LOG_DIR` environment variable support
+- Precedence chain: --log-file > --log-dir > RALPH_LOG_DIR > config > default
+- Log filename format: `{mode}_{branch}_{timestamp}.log` (branch sanitized: / → -)
+- Creates `~/.ralph/logs/latest.log` symlink pointing to current session log
+- Updated help text with new options
+
+**Why:**
+- Persistent log directory provides consistent location for session logs
+- Environment variable support enables CI/CD configuration
+- --log-file override allows explicit control for specific use cases
+- Symlink to latest.log enables quick access without knowing exact filename
+- Branch in filename helps identify which feature the log relates to
+- Auto-creation of directories reduces setup friction
+
+**Files changed:**
+- `ralph.sh` - Added logging configuration variables, setup_log_file() function, --log-dir/--log-file flags, help text updates
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --log-dir and --log-file flags
+- `./ralph.sh --dry-run` - Shows log path in ~/.ralph/logs/ format
+- `./ralph.sh --dry-run --log-dir /tmp/custom-logs` - Uses custom directory
+- `./ralph.sh --dry-run --log-file /tmp/my-session.log` - Uses explicit file path
+- `RALPH_LOG_DIR=/tmp/env-logs ./ralph.sh --dry-run` - Uses env var directory
+- `~/.ralph/logs/latest.log` symlink created correctly
+
