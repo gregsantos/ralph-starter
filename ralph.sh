@@ -288,6 +288,9 @@ finalize_session_state() {
         echo -e "${YELLOW}Warning: Failed to finalize session state${RESET}" >&2
     fi
 
+    # Generate session summary report (if not disabled)
+    generate_summary "$final_status"
+
     # Archive on successful completion, preserve on failure/interrupt for debugging
     if [ "$final_status" = "complete" ]; then
         # Create log directory if needed
@@ -835,6 +838,7 @@ show_help() {
     echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
     echo "  --log-format FMT  Log format: text (default) or json"
     echo "  --notify-webhook URL  Webhook URL for session notifications"
+    echo "  --no-summary      Disable session summary report generation"
     echo "  --global-config PATH  Global config file (default: ~/.ralph/config)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
@@ -1018,6 +1022,10 @@ while [[ $# -gt 0 ]]; do
             NOTIFY_WEBHOOK="$2"
             CLI_WEBHOOK_SET=true
             shift 2
+            ;;
+        --no-summary)
+            GENERATE_SUMMARY=false
+            shift
             ;;
         -s|--spec)
             SPEC_FILE="$2"
@@ -1518,6 +1526,228 @@ send_webhook() {
 
     # Wait briefly for webhook to start, but don't block
     sleep 0.1 2>/dev/null || true
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION SUMMARY REPORT
+# Generates markdown summary after each session
+# ═══════════════════════════════════════════════════════════════════════════════
+
+GENERATE_SUMMARY=true
+
+# Generate session summary report
+# Arguments: final_status (complete|failed|interrupted|max_iterations)
+# Outputs: {session_id}_summary.md in log directory
+generate_summary() {
+    local final_status="$1"
+
+    # Skip if disabled
+    [ "$GENERATE_SUMMARY" != true ] && return 0
+
+    # Skip if no session file exists
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    # Determine log directory
+    local log_dir
+    log_dir=$(dirname "${LOG_FILE:-${DEFAULT_LOG_DIR}/session.log}")
+    mkdir -p "$log_dir" 2>/dev/null || log_dir="$DEFAULT_LOG_DIR"
+
+    local summary_file="${log_dir}/${SESSION_ID}_summary.md"
+
+    # Calculate total duration
+    local total_duration=$(($(date +%s) - START_TIME))
+    local duration_min=$((total_duration / 60))
+    local duration_sec=$((total_duration % 60))
+
+    # Get session data from session file
+    local mode model branch start_time iter_count max_iter
+    mode=$(jq -r '.mode // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    model=$(jq -r '.model // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    branch=$(jq -r '.branch // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    start_time=$(jq -r '.start_time // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    iter_count=$(jq -r '.current_iteration // 0' "$SESSION_FILE" 2>/dev/null)
+    max_iter=$(jq -r '.max_iterations // 0' "$SESSION_FILE" 2>/dev/null)
+
+    # Get spec and plan files
+    local spec_file plan_file progress_file
+    spec_file=$(jq -r '.spec_file // ""' "$SESSION_FILE" 2>/dev/null)
+    plan_file=$(jq -r '.plan_file // ""' "$SESSION_FILE" 2>/dev/null)
+    progress_file=$(jq -r '.progress_file // ""' "$SESSION_FILE" 2>/dev/null)
+
+    # Determine status emoji and text
+    local status_emoji status_text
+    case "$final_status" in
+        complete)
+            status_emoji="✅"
+            status_text="Complete"
+            ;;
+        failed)
+            status_emoji="❌"
+            status_text="Failed"
+            ;;
+        interrupted)
+            status_emoji="⚠️"
+            status_text="Interrupted"
+            ;;
+        max_iterations)
+            status_emoji="🔄"
+            status_text="Max Iterations Reached"
+            ;;
+        *)
+            status_emoji="❓"
+            status_text="Unknown ($final_status)"
+            ;;
+    esac
+
+    # Start writing summary
+    {
+        echo "# Ralph Session Summary"
+        echo ""
+        echo "## Session Overview"
+        echo ""
+        echo "| Property | Value |"
+        echo "|----------|-------|"
+        echo "| **Status** | ${status_emoji} ${status_text} |"
+        echo "| **Session ID** | \`${SESSION_ID}\` |"
+        echo "| **Mode** | ${mode} |"
+        echo "| **Model** | ${model} |"
+        echo "| **Branch** | \`${branch}\` |"
+        echo "| **Started** | ${start_time} |"
+        echo "| **Duration** | ${duration_min}m ${duration_sec}s |"
+        echo "| **Iterations** | ${iter_count}/${max_iter} |"
+        echo ""
+
+        # Configuration section
+        echo "## Configuration"
+        echo ""
+        echo "| File | Path |"
+        echo "|------|------|"
+        [ -n "$spec_file" ] && echo "| Spec | \`${spec_file}\` |"
+        [ -n "$plan_file" ] && echo "| Plan | \`${plan_file}\` |"
+        [ -n "$progress_file" ] && echo "| Progress | \`${progress_file}\` |"
+        echo "| Log | \`${LOG_FILE:-N/A}\` |"
+        echo ""
+
+        # Iteration Details section
+        echo "## Iteration Details"
+        echo ""
+
+        local iteration_count
+        iteration_count=$(jq '.iteration_history | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+
+        if [ "$iteration_count" -gt 0 ]; then
+            echo "| # | Duration | Exit | Files | Commit |"
+            echo "|---|----------|------|-------|--------|"
+
+            # Use jq to format iteration history
+            jq -r '.iteration_history[] | "| \(.iteration) | \(.duration)s | \(.exit_code) | \(.files_modified) | \(.commit_message // "-")[0:50] |"' "$SESSION_FILE" 2>/dev/null
+            echo ""
+
+            # Timing breakdown
+            echo "### Timing Breakdown"
+            echo ""
+            local total_iter_time avg_iter_time
+            total_iter_time=$(jq '[.iteration_history[].duration] | add // 0' "$SESSION_FILE" 2>/dev/null)
+            if [ "$iteration_count" -gt 0 ]; then
+                avg_iter_time=$((total_iter_time / iteration_count))
+            else
+                avg_iter_time=0
+            fi
+            echo "- **Total iteration time:** ${total_iter_time}s"
+            echo "- **Average per iteration:** ${avg_iter_time}s"
+            echo "- **Overhead:** $((total_duration - total_iter_time))s"
+            echo ""
+        else
+            echo "*No iterations completed*"
+            echo ""
+        fi
+
+        # Files Modified section
+        echo "## Files Modified"
+        echo ""
+        local files_modified
+        files_modified=$(git diff --name-only HEAD~"${iter_count}" HEAD 2>/dev/null | head -30)
+        if [ -n "$files_modified" ]; then
+            echo '```'
+            echo "$files_modified"
+            echo '```'
+            local file_count
+            file_count=$(echo "$files_modified" | wc -l | tr -d ' ')
+            if [ "$file_count" -ge 30 ]; then
+                echo "*... and possibly more (showing first 30)*"
+            fi
+        else
+            echo "*No file changes detected or unable to determine*"
+        fi
+        echo ""
+
+        # Commits Made section
+        echo "## Commits Made"
+        echo ""
+        local commits
+        commits=$(git log --oneline HEAD~"${iter_count}"..HEAD 2>/dev/null | head -20)
+        if [ -n "$commits" ]; then
+            echo '```'
+            echo "$commits"
+            echo '```'
+        else
+            echo "*No commits detected or unable to determine*"
+        fi
+        echo ""
+
+        # Errors section (for failed/interrupted sessions)
+        if [ "$final_status" = "failed" ] || [ "$final_status" = "interrupted" ]; then
+            echo "## Troubleshooting"
+            echo ""
+
+            # Check for failed iterations
+            local failed_iters
+            failed_iters=$(jq '[.iteration_history[] | select(.exit_code != 0)] | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+
+            if [ "$failed_iters" -gt 0 ]; then
+                echo "### Failed Iterations"
+                echo ""
+                jq -r '.iteration_history[] | select(.exit_code != 0) | "- **Iteration \(.iteration):** exit code \(.exit_code)"' "$SESSION_FILE" 2>/dev/null
+                echo ""
+            fi
+
+            echo "### Suggested Actions"
+            echo ""
+            case "$final_status" in
+                failed)
+                    echo "1. Check the log file for detailed error messages:"
+                    echo "   \`\`\`"
+                    echo "   tail -100 ${LOG_FILE:-'~/.ralph/logs/latest.log'}"
+                    echo "   \`\`\`"
+                    echo "2. Review the last iteration output for specific errors"
+                    echo "3. Check if API rate limits were exceeded"
+                    echo "4. Verify the spec/plan files are valid"
+                    ;;
+                interrupted)
+                    echo "1. Resume the session with: \`./ralph.sh --resume\`"
+                    echo "2. Check \`.ralph-session.json\` for session state"
+                    echo "3. Review progress.txt for completed work"
+                    ;;
+            esac
+            echo ""
+        fi
+
+        # Links section
+        echo "## Related Files"
+        echo ""
+        echo "- **Full Log:** [\`${LOG_FILE:-N/A}\`](${LOG_FILE:-})"
+        echo "- **Session State:** [\`.ralph-session.json\`](.ralph-session.json) (if preserved)"
+        [ -n "$progress_file" ] && echo "- **Progress:** [\`${progress_file}\`](${progress_file})"
+        [ -n "$plan_file" ] && echo "- **Plan:** [\`${plan_file}\`](${plan_file})"
+        echo ""
+
+        # Footer
+        echo "---"
+        echo "*Generated by ralph.sh at $(date -u +%Y-%m-%dT%H:%M:%SZ)*"
+
+    } > "$summary_file"
+
+    echo -e "  ${DIM}Summary:${RESET} ${summary_file}"
 }
 
 # Cleanup temp files on exit

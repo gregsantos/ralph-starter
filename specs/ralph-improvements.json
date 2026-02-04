@@ -323,7 +323,7 @@
       },
       "priority": 11,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-002 (session state) for iteration data"
     },
     {

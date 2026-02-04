@@ -371,3 +371,47 @@
 - `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --notify-webhook "https://cli.example.com" --dry-run` - CLI overrides env
 - `./ralph.sh --dry-run --notify-webhook "https://user:pass@example.com/webhook"` - Basic auth redacted in display
 
+## Iteration 11 - 2026-02-04
+
+### Task Completed: US-011 Session Summary Report (Task 3.3)
+
+**What was done:**
+- Added SESSION SUMMARY REPORT section after WEBHOOK NOTIFICATIONS with:
+  - `generate_summary()` function - Generates comprehensive markdown summary report
+  - `GENERATE_SUMMARY` variable for controlling summary generation (default: true)
+- Summary report includes:
+  - Session Overview table: status (with emoji), session_id, mode, model, branch, start time, duration, iterations
+  - Configuration section: spec, plan, progress, and log file paths
+  - Iteration Details table: per-iteration duration, exit code, files modified, commit message
+  - Timing Breakdown: total iteration time, average per iteration, overhead
+  - Files Modified: git diff list of all changed files
+  - Commits Made: git log of commits during session
+  - Troubleshooting section (for failed/interrupted sessions): failed iteration details, suggested actions
+  - Related Files: links to log, session state, progress, and plan files
+- Added `--no-summary` CLI flag to disable summary generation
+- Integrated `generate_summary()` call into `finalize_session_state()` before archive/cleanup
+- Output file location: `{log_directory}/{session_id}_summary.md`
+- Updated `show_help()` with --no-summary flag documentation
+- Updated `docs/RALPH_LOOP_REF.md` with comprehensive Session Summary Reports section
+- Updated user files documentation to include summary files
+
+**Why:**
+- Summary reports provide post-session visibility into what was accomplished
+- Useful for team visibility when running autonomous sessions
+- Troubleshooting section helps diagnose failed/interrupted sessions
+- Iteration timing breakdown enables efficiency analysis
+- Markdown format integrates well with documentation workflows
+- --no-summary flag allows disabling for minimal overhead
+
+**Files changed:**
+- `ralph.sh` - Added SESSION SUMMARY REPORT section (~170 lines), generate_summary() function, --no-summary flag, integration into finalize_session_state()
+- `docs/RALPH_LOOP_REF.md` - Added Session Summary Reports section, updated User Files structure, added --no-summary to quick reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 3.3 complete
+- `specs/ralph-improvements.json` - Updated US-011 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from summary code)
+- `./ralph.sh --help` - Shows new --no-summary flag
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --no-summary --dry-run` - Flag accepted without error
+

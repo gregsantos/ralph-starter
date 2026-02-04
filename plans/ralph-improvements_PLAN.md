@@ -301,19 +301,19 @@ NOTIFY_WEBHOOK
 #### Task 3.3: US-011 Session Summary Report
 **Priority:** 11 | **Effort:** Medium | **Depends on:** US-002
 
-- [ ] 3.3.1 Create `generate_summary()` function
-- [ ] 3.3.2 Generate `{session_id}_summary.md` in log directory
-- [ ] 3.3.3 Include session metadata (mode, model, branch, duration)
-- [ ] 3.3.4 Include iteration summaries from session state
-- [ ] 3.3.5 Include files modified list
-- [ ] 3.3.6 Include commits made list
-- [ ] 3.3.7 Include errors encountered
-- [ ] 3.3.8 Include timing breakdown per iteration
-- [ ] 3.3.9 Link to full log file
-- [ ] 3.3.10 Add `--no-summary` flag to disable
-- [ ] 3.3.11 For failed sessions: include last error and suggested fixes
-- [ ] 3.3.12 Call generate_summary in finalize_session_state()
-- [ ] 3.3.13 Run `shellcheck ralph.sh` and fix any issues
+- [x] 3.3.1 Create `generate_summary()` function
+- [x] 3.3.2 Generate `{session_id}_summary.md` in log directory
+- [x] 3.3.3 Include session metadata (mode, model, branch, duration)
+- [x] 3.3.4 Include iteration summaries from session state
+- [x] 3.3.5 Include files modified list
+- [x] 3.3.6 Include commits made list
+- [x] 3.3.7 Include errors encountered
+- [x] 3.3.8 Include timing breakdown per iteration
+- [x] 3.3.9 Link to full log file
+- [x] 3.3.10 Add `--no-summary` flag to disable
+- [x] 3.3.11 For failed sessions: include last error and suggested fixes
+- [x] 3.3.12 Call generate_summary in finalize_session_state()
+- [x] 3.3.13 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - Markdown summary generated after session
