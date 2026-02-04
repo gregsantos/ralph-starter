@@ -415,3 +415,41 @@
 - `./ralph.sh --dry-run` - Works correctly
 - `./ralph.sh --no-summary --dry-run` - Flag accepted without error
 
+## Iteration 12 - 2026-02-04
+
+### Task Completed: US-012 Single Iteration Test Mode (Task 4.1)
+
+**What was done:**
+- Added `--test` and `-1` CLI flags for single iteration test mode
+- Added `TEST_MODE` variable in CONFIGURATION section
+- Test mode sets: MAX_ITERATIONS=1, PUSH_ENABLED=false
+- Updated `print_header()` to display "⚠ TEST MODE RALPH LOOP" banner when active
+- Updated `print_config()` to show "Test → enabled (1 iter, no push, no marker check)"
+- Modified completion marker check in main loop to skip when TEST_MODE is true
+- Updated header comment in ralph.sh with new flag
+- Updated `show_help()` with --test/-1 flag and example
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New Test Mode section in usage documentation
+  - Test mode commands in Quick Reference
+
+**Why:**
+- Test mode enables quick prompt validation without committing to full loops
+- Ideal for debugging configuration or prompt issues
+- Single iteration prevents wasted time on bad prompts
+- No push keeps remote branches clean during testing
+- Ignoring completion marker ensures the iteration always completes (no early exit)
+- -1 shorthand is intuitive (run 1 iteration)
+
+**Files changed:**
+- `ralph.sh` - Added TEST_MODE variable, --test/-1 flag parsing, test mode handling, print_header() banner, print_config() indicator, completion marker skip logic
+- `docs/RALPH_LOOP_REF.md` - Added Test Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.1 complete
+- `specs/ralph-improvements.json` - Updated US-012 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --test/-1 flag and example
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --test --dry-run` - Shows TEST MODE banner, 1 iteration, push disabled
+- `./ralph.sh -1 --dry-run` - Same as --test
+

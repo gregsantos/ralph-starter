@@ -15,6 +15,7 @@
 #   -n, --max N       Max iterations (default: 10)
 #   --unlimited       Remove iteration limit (use with caution)
 #   --dry-run         Show config and exit without running Claude
+#   --test, -1        Test mode: single iteration, no push, ignore completion marker
 #   --push            Enable git push after iterations (default)
 #   --no-push         Disable git push
 #   -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
@@ -827,6 +828,7 @@ show_help() {
     echo "  -n, --max N       Max iterations (default: 10)"
     echo "  --unlimited       Remove iteration limit (use with caution)"
     echo "  --dry-run         Show config and exit without running Claude"
+    echo "  --test, -1        Test mode: single iteration, no push, ignore completion marker"
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
     echo "  --skip-checks     Skip pre-flight dependency checks"
@@ -861,6 +863,7 @@ show_help() {
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
+    echo "  ./ralph.sh --test                     # Test mode: 1 iteration, no push"
     echo "  ./ralph.sh -s ./specs/feature.md -l ./plans/feature_PLAN.md  # Custom spec+plan"
     echo ""
     echo -e "${BOLD}Environment Variables:${RESET}"
@@ -900,6 +903,7 @@ PUSH_ENABLED=true
 MAX_ITERATIONS=10         # Default limit to prevent runaway sessions
 UNLIMITED=false           # Explicit flag for unlimited iterations
 DRY_RUN=false             # Show config without running Claude
+TEST_MODE=false           # Single iteration test mode (no push, ignore completion marker)
 TEMP_PROMPT_FILE=""
 
 # Template variable defaults (CLI args override, then config, then these)
@@ -972,6 +976,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
+            ;;
+        --test|-1)
+            TEST_MODE=true
             shift
             ;;
         --skip-checks)
@@ -1088,6 +1096,12 @@ done
 # Handle unlimited flag (overrides everything)
 if [ "$UNLIMITED" = true ]; then
     MAX_ITERATIONS=0
+fi
+
+# Handle test mode (single iteration, no push)
+if [ "$TEST_MODE" = true ]; then
+    MAX_ITERATIONS=1
+    PUSH_ENABLED=false
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -2125,7 +2139,11 @@ check_branch_change
 
 print_header() {
     echo -e "\n${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}                 ${YELLOW}${BOLD}⚠ TEST MODE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
+    else
+        echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
+    fi
     echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}\n"
 }
 
@@ -2151,6 +2169,9 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${RED}unlimited${RESET}"
     else
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${YELLOW}$MAX_ITERATIONS iterations${RESET}"
+    fi
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Test${RESET}     ${SYM_ARROW} ${YELLOW}enabled${RESET} (1 iter, no push, no marker check)"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Push${RESET}     ${SYM_ARROW} ${DIM}$( [ "$PUSH_ENABLED" = true ] && echo "enabled" || echo "disabled" )${RESET}"
     if [ "$RETRY_ENABLED" = true ]; then
@@ -2669,8 +2690,8 @@ while true; do
     # Log iteration end for structured logging
     log_iteration_end "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code" "$iter_status"
 
-    # Check for completion marker
-    if [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
+    # Check for completion marker (skip in test mode - always exit after 1 iteration)
+    if [ "$TEST_MODE" != true ] && [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
         echo -e "\n${GREEN}${BOLD}${SYM_CHECK} All tasks complete!${RESET}"
         EXIT_STATUS=0
         EXIT_REASON="complete"

@@ -139,6 +139,23 @@ Default global config: `~/.ralph/config` (loaded before project `ralph.conf`)
 ./ralph.sh -s ./specs/my-feature.md --dry-run
 ```
 
+### Test Mode
+
+```bash
+# Single iteration, no push, ignore completion marker
+./ralph.sh --test
+./ralph.sh -1                    # Short flag
+
+# Combine with other options
+./ralph.sh --test --model haiku  # Test with haiku
+./ralph.sh --test --dry-run      # Preview test config
+```
+
+Test mode is ideal for:
+- Validating prompts before committing to full loops
+- Debugging configuration issues
+- Quick one-off tasks without affecting remote branches
+
 ### Product Mode
 
 ```bash
@@ -616,6 +633,11 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh --log-dir /custom/logs            # Custom log directory
 ./ralph.sh --log-file /path/to/session.log   # Explicit log file
 ./ralph.sh --log-format json                 # Structured JSON logging
+
+# Test mode (single iteration, no push, ignore completion marker)
+./ralph.sh --test                            # Test mode
+./ralph.sh -1                                # Short flag for test mode
+./ralph.sh --test --dry-run                  # Preview test mode config
 
 # Configuration
 ./ralph.sh --global-config ~/.config/ralph   # Custom global config

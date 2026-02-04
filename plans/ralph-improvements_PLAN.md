@@ -329,13 +329,13 @@ NOTIFY_WEBHOOK
 #### Task 4.1: US-012 Single Iteration Test Mode
 **Priority:** 12 | **Effort:** Small | **Depends on:** None
 
-- [ ] 4.1.1 Add `--test` or `-1` flag to argument parsing
-- [ ] 4.1.2 When set: MAX_ITERATIONS=1, PUSH_ENABLED=false
-- [ ] 4.1.3 Add TEST_MODE variable for display
-- [ ] 4.1.4 Display 'TEST MODE' banner in print_header()
-- [ ] 4.1.5 Skip completion marker detection (always exit after 1 iteration)
-- [ ] 4.1.6 Can combine with --dry-run for config-only preview
-- [ ] 4.1.7 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.1.1 Add `--test` or `-1` flag to argument parsing
+- [x] 4.1.2 When set: MAX_ITERATIONS=1, PUSH_ENABLED=false
+- [x] 4.1.3 Add TEST_MODE variable for display
+- [x] 4.1.4 Display 'TEST MODE' banner in print_header()
+- [x] 4.1.5 Skip completion marker detection (always exit after 1 iteration)
+- [x] 4.1.6 Can combine with --dry-run for config-only preview
+- [x] 4.1.7 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --test runs single iteration without push

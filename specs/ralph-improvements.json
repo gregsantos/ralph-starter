@@ -345,7 +345,7 @@
       },
       "priority": 12,
       "effort": "small",
-      "passes": false,
+      "passes": true,
       "notes": "Quick win for prompt development workflow"
     },
     {
