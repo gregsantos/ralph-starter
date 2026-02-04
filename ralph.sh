@@ -69,6 +69,11 @@ COMPLETION_MARKER="<ralph>COMPLETE</ralph>"
 TASK_COMPLETE=false
 COMPLETION_FILE=$(mktemp /tmp/ralph_complete_XXXXXX)
 
+# Retry Configuration
+RETRY_ENABLED=true
+MAX_RETRIES=3
+RETRY_BACKOFF_BASE=5   # Base delay in seconds (5s, 15s, 45s)
+
 # Iteration Status Tracking
 ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
 ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
@@ -261,6 +266,222 @@ finalize_session_state() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# RETRY LOGIC
+# Automatic retry for transient failures with exponential backoff
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Retryable error patterns (transient failures that may succeed on retry)
+RETRYABLE_PATTERNS=(
+    "rate_limit"
+    "rate limit"
+    "429"
+    "529"
+    "overloaded"
+    "timeout"
+    "timed out"
+    "connection_error"
+    "connection refused"
+    "ECONNRESET"
+    "ETIMEDOUT"
+    "network error"
+    "temporarily unavailable"
+    "service unavailable"
+    "503"
+    "502"
+    "504"
+)
+
+# Fatal error patterns (unrecoverable, don't retry)
+FATAL_PATTERNS=(
+    "authentication"
+    "auth failure"
+    "unauthorized"
+    "401"
+    "403"
+    "forbidden"
+    "permission denied"
+    "invalid api key"
+    "invalid_api_key"
+    "bad request"
+    "invalid prompt"
+    "malformed"
+    "quota exceeded"
+)
+
+# Temp file for capturing claude output during retry
+RETRY_OUTPUT_FILE=$(mktemp /tmp/ralph_retry_XXXXXX)
+
+# Check if an error message indicates a retryable failure
+# Arguments: error_message, exit_code
+# Returns: 0 if retryable, 1 if fatal
+is_retryable_error() {
+    local error_msg="$1"
+    local exit_code="$2"
+    local error_lower
+    error_lower=$(echo "$error_msg" | tr '[:upper:]' '[:lower:]')
+
+    # First check for fatal errors - these should never be retried
+    for pattern in "${FATAL_PATTERNS[@]}"; do
+        if [[ "$error_lower" == *"$pattern"* ]]; then
+            return 1  # Fatal error, don't retry
+        fi
+    done
+
+    # Check for retryable patterns
+    for pattern in "${RETRYABLE_PATTERNS[@]}"; do
+        if [[ "$error_lower" == *"$pattern"* ]]; then
+            return 0  # Retryable
+        fi
+    done
+
+    # Exit codes that indicate transient failures
+    # 1 = general error (could be transient)
+    # Signal-related codes (128+) are not retryable
+    if [ "$exit_code" -ge 128 ]; then
+        return 1  # Signal, not retryable
+    fi
+
+    # Default: not retryable (be conservative)
+    return 1
+}
+
+# Display retry countdown with reason
+# Arguments: delay_seconds, attempt_number, max_attempts, reason
+show_retry_countdown() {
+    local delay="$1"
+    local attempt="$2"
+    local max="$3"
+    local reason="$4"
+
+    echo -e "\n${YELLOW}${BOLD}  ⏳ Retry ${attempt}/${max}${RESET} - ${reason}"
+    echo -ne "     ${DIM}Waiting: "
+
+    for ((i=delay; i>0; i--)); do
+        echo -ne "${i}s "
+        sleep 1
+    done
+
+    echo -e "${RESET}"
+}
+
+# Log retry attempt to session state
+# Arguments: attempt_number, delay, reason, success
+log_retry_attempt() {
+    local attempt="$1"
+    local delay="$2"
+    local reason="$3"
+    local success="$4"
+
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    # Create retry entry
+    local retry_entry
+    retry_entry=$(jq -n \
+        --argjson attempt "$attempt" \
+        --argjson delay "$delay" \
+        --arg reason "$reason" \
+        --arg success "$success" \
+        --arg timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        '{
+            attempt: $attempt,
+            delay: $delay,
+            reason: $reason,
+            success: ($success == "true"),
+            timestamp: $timestamp
+        }')
+
+    # Add to current iteration's retry_attempts array
+    local updated
+    updated=$(jq \
+        --argjson entry "$retry_entry" \
+        'if .current_retry_attempts == null then .current_retry_attempts = [] else . end | .current_retry_attempts += [$entry]' \
+        "$SESSION_FILE")
+
+    echo "$updated" > "$SESSION_FILE"
+}
+
+# Clear retry attempts from session (called after iteration completes)
+clear_retry_attempts() {
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    local updated
+    updated=$(jq 'del(.current_retry_attempts)' "$SESSION_FILE")
+    echo "$updated" > "$SESSION_FILE"
+}
+
+# Run claude with retry logic
+# Arguments: prompt_content
+# Returns: exit code from claude (or last attempt)
+# Sets: LAST_CLAUDE_OUTPUT (path to output file), LAST_ERROR_MSG
+LAST_CLAUDE_OUTPUT=""
+LAST_ERROR_MSG=""
+
+run_with_retry() {
+    local prompt_content="$1"
+    local attempt=0
+    local exit_code=0
+    local delay=0
+
+    LAST_CLAUDE_OUTPUT="$RETRY_OUTPUT_FILE"
+    LAST_ERROR_MSG=""
+
+    while true; do
+        attempt=$((attempt + 1))
+
+        # Run claude and capture output
+        : > "$RETRY_OUTPUT_FILE"  # Clear output file
+
+        set -o pipefail
+        echo "$prompt_content" | claude -p \
+            --dangerously-skip-permissions \
+            --output-format=stream-json \
+            --model "$MODEL" \
+            --verbose \
+            2>&1 | tee "$RETRY_OUTPUT_FILE" | parse_claude_output
+        exit_code=${PIPESTATUS[1]}
+        set +o pipefail
+
+        # Success - no retry needed
+        if [ "$exit_code" -eq 0 ]; then
+            # Clear any pending retry attempts from session
+            clear_retry_attempts
+            return 0
+        fi
+
+        # Extract error message from output for classification
+        LAST_ERROR_MSG=$(grep -i '"error"' "$RETRY_OUTPUT_FILE" | head -1 | jq -r '.error.message // .message // empty' 2>/dev/null || echo "Unknown error (exit code $exit_code)")
+
+        # Check if retry is disabled
+        if [ "$RETRY_ENABLED" = false ]; then
+            echo -e "  ${YELLOW}${SYM_DOT} Retry disabled (--no-retry)${RESET}"
+            return "$exit_code"
+        fi
+
+        # Check if we've exhausted retries
+        if [ "$attempt" -ge "$MAX_RETRIES" ]; then
+            echo -e "  ${RED}${SYM_CROSS} Max retries ($MAX_RETRIES) exhausted${RESET}"
+            log_retry_attempt "$attempt" 0 "$LAST_ERROR_MSG" "false"
+            return "$exit_code"
+        fi
+
+        # Check if error is retryable
+        if ! is_retryable_error "$LAST_ERROR_MSG" "$exit_code"; then
+            echo -e "  ${RED}${SYM_CROSS} Fatal error (not retryable):${RESET} ${LAST_ERROR_MSG:0:60}"
+            return "$exit_code"
+        fi
+
+        # Calculate exponential backoff: 5s, 15s, 45s (base * 3^(attempt-1))
+        delay=$((RETRY_BACKOFF_BASE * (3 ** (attempt - 1))))
+
+        # Log retry attempt to session state
+        log_retry_attempt "$attempt" "$delay" "$LAST_ERROR_MSG" "false"
+
+        # Show countdown
+        show_retry_countdown "$delay" "$attempt" "$MAX_RETRIES" "${LAST_ERROR_MSG:0:40}"
+    done
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HELP
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -284,6 +505,8 @@ show_help() {
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
     echo "  --skip-checks     Skip pre-flight dependency checks"
+    echo "  --no-retry        Disable retry on transient failures"
+    echo "  --max-retries N   Max retry attempts (default: 3)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
@@ -394,6 +617,14 @@ while [[ $# -gt 0 ]]; do
             SKIP_CHECKS=true
             shift
             ;;
+        --no-retry)
+            RETRY_ENABLED=false
+            shift
+            ;;
+        --max-retries)
+            MAX_RETRIES="$2"
+            shift 2
+            ;;
         -s|--spec)
             SPEC_FILE="$2"
             CLI_SPEC_SET=true
@@ -503,6 +734,7 @@ cleanup_temp() {
     [ -n "$COMPLETION_FILE" ] && [ -f "$COMPLETION_FILE" ] && rm -f "$COMPLETION_FILE"
     [ -n "$ITERATION_STATUS_FILE" ] && [ -f "$ITERATION_STATUS_FILE" ] && rm -f "$ITERATION_STATUS_FILE"
     [ -n "$ITERATION_REASON_FILE" ] && [ -f "$ITERATION_REASON_FILE" ] && rm -f "$ITERATION_REASON_FILE"
+    [ -n "$RETRY_OUTPUT_FILE" ] && [ -f "$RETRY_OUTPUT_FILE" ] && rm -f "$RETRY_OUTPUT_FILE"
 }
 trap cleanup_temp EXIT
 
@@ -691,6 +923,11 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${YELLOW}$MAX_ITERATIONS iterations${RESET}"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Push${RESET}     ${SYM_ARROW} ${DIM}$( [ "$PUSH_ENABLED" = true ] && echo "enabled" || echo "disabled" )${RESET}"
+    if [ "$RETRY_ENABLED" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Retry${RESET}    ${SYM_ARROW} ${DIM}enabled (max ${MAX_RETRIES}, backoff ${RETRY_BACKOFF_BASE}s)${RESET}"
+    else
+        echo -e "${DIM}│${RESET} ${BOLD}Retry${RESET}    ${SYM_ARROW} ${DIM}disabled${RESET}"
+    fi
     echo -e "${DIM}│${RESET} ${BOLD}Log${RESET}      ${SYM_ARROW} ${DIM}$LOG_FILE${RESET}"
     echo -e "${DIM}└─────────────────────────────────────────┘${RESET}\n"
 }
@@ -1069,25 +1306,18 @@ while true; do
     iter_start=$(date +%s)
     print_iteration_start $ITERATION $MAX_ITERATIONS
 
-    # Run Claude and parse output
+    # Run Claude with retry logic for transient failures
     # --verbose is required for stream-json, parser filters the noise
     # substitute_template replaces {{SPEC_FILE}}, {{PROGRESS_FILE}}, {{SOURCE_DIR}}
-    # Use pipefail to catch claude command failures
-    set -o pipefail
-    substitute_template "$(cat "$PROMPT_FILE")" | claude -p \
-        --dangerously-skip-permissions \
-        --output-format=stream-json \
-        --model "$MODEL" \
-        --verbose \
-        2>&1 | parse_claude_output
-    claude_exit_code=${PIPESTATUS[1]}
-    set +o pipefail
+    prompt_content=$(substitute_template "$(cat "$PROMPT_FILE")")
+    run_with_retry "$prompt_content"
+    claude_exit_code=$?
 
-    # Check if Claude command itself failed
+    # Check if Claude command itself failed after all retries
     if [ "$claude_exit_code" -ne 0 ]; then
         echo "failed" > "$ITERATION_STATUS_FILE"
-        echo "Claude CLI exited with code $claude_exit_code" >> "$ITERATION_REASON_FILE"
-        echo -e "  ${RED}${SYM_CROSS} Claude CLI exited with code ${claude_exit_code}${RESET}"
+        echo "Claude CLI exited with code $claude_exit_code (after retries)" >> "$ITERATION_REASON_FILE"
+        echo -e "  ${RED}${SYM_CROSS} Claude CLI failed with code ${claude_exit_code}${RESET}"
     fi
 
     iter_end=$(date +%s)

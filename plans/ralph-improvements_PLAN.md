@@ -101,17 +101,17 @@ US-016 (Documentation) ◄──────────────────
 #### Task 1.3: US-003 Retry Logic for Transient Failures
 **Priority:** 3 | **Effort:** Medium | **Depends on:** US-002
 
-- [ ] 1.3.1 Add `--no-retry` flag to argument parsing
-- [ ] 1.3.2 Add `--max-retries N` flag (default 3)
-- [ ] 1.3.3 Define retryable error patterns: rate_limit, timeout, connection_error, 529
-- [ ] 1.3.4 Define fatal error patterns: auth failure, bad prompt, permission denied
-- [ ] 1.3.5 Create `is_retryable_error()` function - parses JSON/exit code to classify
-- [ ] 1.3.6 Create `run_with_retry()` function wrapping claude invocation
-- [ ] 1.3.7 Implement exponential backoff: 5s, 15s, 45s (configurable)
-- [ ] 1.3.8 Display retry countdown with reason: "Rate limited. Retrying in 15s..."
-- [ ] 1.3.9 Log retry attempts to session state (update_session_state)
-- [ ] 1.3.10 Replace direct claude call in main loop with `run_with_retry`
-- [ ] 1.3.11 Run `shellcheck ralph.sh` and fix any issues
+- [x] 1.3.1 Add `--no-retry` flag to argument parsing
+- [x] 1.3.2 Add `--max-retries N` flag (default 3)
+- [x] 1.3.3 Define retryable error patterns: rate_limit, timeout, connection_error, 529
+- [x] 1.3.4 Define fatal error patterns: auth failure, bad prompt, permission denied
+- [x] 1.3.5 Create `is_retryable_error()` function - parses JSON/exit code to classify
+- [x] 1.3.6 Create `run_with_retry()` function wrapping claude invocation
+- [x] 1.3.7 Implement exponential backoff: 5s, 15s, 45s (configurable)
+- [x] 1.3.8 Display retry countdown with reason: "Rate limited. Retrying in 15s..."
+- [x] 1.3.9 Log retry attempts to session state (update_session_state)
+- [x] 1.3.10 Replace direct claude call in main loop with `run_with_retry`
+- [x] 1.3.11 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - Retries on rate limit, timeout, connection errors

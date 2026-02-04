@@ -57,3 +57,42 @@
 - `./ralph.sh --help` - Works correctly
 - `./ralph.sh --dry-run` - Works correctly (session state not initialized during dry-run)
 
+## Iteration 3 - 2026-02-03
+
+### Task Completed: US-003 Retry Logic for Transient Failures (Task 1.3)
+
+**What was done:**
+- Added RETRY LOGIC section after SESSION STATE MANAGEMENT with comprehensive retry functionality:
+  - `RETRYABLE_PATTERNS[]` - Array of transient error patterns (rate_limit, 429, 529, timeout, connection errors, etc.)
+  - `FATAL_PATTERNS[]` - Array of unrecoverable errors (auth failure, 401, 403, permission denied, etc.)
+  - `is_retryable_error()` - Classifies errors as retryable vs fatal based on message and exit code
+  - `show_retry_countdown()` - Displays countdown timer with retry reason
+  - `log_retry_attempt()` - Records retry attempts to session state JSON
+  - `clear_retry_attempts()` - Cleans up retry tracking after iteration completes
+  - `run_with_retry()` - Wrapper around claude invocation with full retry logic
+- Added configuration variables: RETRY_ENABLED, MAX_RETRIES (default 3), RETRY_BACKOFF_BASE (5s)
+- Exponential backoff: 5s → 15s → 45s (base * 3^attempt)
+- Added CLI flags: `--no-retry` to disable, `--max-retries N` to customize
+- Updated help text with new options
+- Updated print_config() to show retry settings
+- Replaced direct claude invocation in main loop with run_with_retry()
+- Added RETRY_OUTPUT_FILE temp file to cleanup_temp()
+
+**Why:**
+- Transient failures (rate limits, network issues) shouldn't abort long-running sessions
+- Exponential backoff prevents hammering the API during outages
+- Clear error classification avoids wasting retries on fatal errors (auth, bad config)
+- Session state logging enables post-session analysis of retry patterns
+- --no-retry flag allows disabling for debugging or when you want immediate failure
+- Countdown display keeps user informed during wait periods
+
+**Files changed:**
+- `ralph.sh` - Added RETRY LOGIC section, CLI flags, config display, main loop integration
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from retry code)
+- `./ralph.sh --help` - Shows new --no-retry and --max-retries flags
+- `./ralph.sh --dry-run` - Shows "Retry → enabled (max 3, backoff 5s)"
+- `./ralph.sh --dry-run --no-retry` - Shows "Retry → disabled"
+- `./ralph.sh --dry-run --max-retries 5` - Shows "Retry → enabled (max 5, backoff 5s)"
+
