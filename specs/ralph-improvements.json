@@ -1,0 +1,503 @@
+{
+  "project": "Ralph Loop Improvements",
+  "branchName": "ralph/resilience-and-dx",
+  "version": "2.0.0",
+  "description": "Comprehensive improvements to ralph.sh focusing on resilience, observability, configuration, and developer experience",
+  "context": {
+    "currentState": "ralph.sh is a well-designed 981-line bash script that orchestrates autonomous Claude Code sessions. It has three modes (plan/build/product) with good CLI ergonomics but lacks resilience features, structured state management, and modern observability.",
+    "targetState": "A robust, production-ready automation tool with session resume, retry logic, structured logging, environment variable support, and improved developer experience.",
+    "constraints": [
+      "Maintain backward compatibility with existing CLI interface",
+      "Keep as single bash script (no external dependencies beyond jq, git, claude)",
+      "Preserve existing prompt files and template variable system",
+      "All changes must pass shellcheck"
+    ],
+    "testingApproach": "Manual verification + shellcheck. Bats test framework optional for automated testing.",
+    "verificationCommands": [
+      "shellcheck ralph.sh",
+      "./ralph.sh --help",
+      "./ralph.sh --dry-run",
+      "./ralph.sh -p 'echo test' --model haiku 1"
+    ]
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "name": "Resilience & Recovery",
+      "description": "Core reliability improvements to prevent data loss and enable recovery from failures",
+      "rationale": "These are the highest-value improvements - they prevent frustration and data loss during long-running sessions"
+    },
+    {
+      "id": "P2",
+      "name": "Configuration & Environment",
+      "description": "Flexible configuration via environment variables and safer config parsing",
+      "rationale": "Enables CI/CD integration and safer operation"
+    },
+    {
+      "id": "P3",
+      "name": "Observability",
+      "description": "Structured logging, metrics, and notifications for monitoring autonomous sessions",
+      "rationale": "Critical for long-running sessions where users can't watch terminal output"
+    },
+    {
+      "id": "P4",
+      "name": "Developer Experience",
+      "description": "Quality-of-life improvements for interactive development and debugging",
+      "rationale": "Makes ralph.sh easier to use and debug during development"
+    }
+  ],
+  "userStories": [
+    {
+      "id": "US-001",
+      "phase": "P1",
+      "title": "Pre-flight dependency checks",
+      "description": "As a user, I want ralph.sh to verify all dependencies are available before starting so I get clear error messages instead of cryptic failures mid-session.",
+      "acceptanceCriteria": [
+        "Check claude CLI is installed and in PATH",
+        "Check claude CLI is authenticated (claude --version or similar non-destructive check)",
+        "Check jq is installed for JSON parsing",
+        "Check git is installed and current directory is a git repo",
+        "Display clear error message with installation instructions if any check fails",
+        "Add --skip-checks flag to bypass for advanced users",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add preflight_checks() function after CONFIGURATION section",
+        "callSite": "Call before print_header in main flow",
+        "errorFormat": "Use existing color/symbol conventions for consistency"
+      },
+      "priority": 1,
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "phase": "P1",
+      "title": "Structured session state file",
+      "description": "As a developer, I want ralph.sh to maintain a structured JSON state file so session metadata is queryable and can support resume functionality.",
+      "acceptanceCriteria": [
+        "Create .ralph-session.json in project root during session",
+        "Include: session_id, start_time, mode, model, prompt_file, current_iteration, max_iterations, branch, status",
+        "Update after each iteration with: iteration number, duration, exit_code, files_modified count",
+        "Include iteration_history array with per-iteration metadata",
+        "Clean up or archive session file on normal completion",
+        "Preserve session file on error/interrupt for debugging",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add session state functions after CONFIGURATION section",
+        "functions": [
+          "init_session_state()",
+          "update_session_state()",
+          "finalize_session_state()"
+        ],
+        "format": "JSON using jq for manipulation"
+      },
+      "priority": 2,
+      "effort": "medium",
+      "passes": false,
+      "notes": "This is foundational for US-004 (session resume)"
+    },
+    {
+      "id": "US-003",
+      "phase": "P1",
+      "title": "Retry logic for transient failures",
+      "description": "As a user, I want ralph.sh to automatically retry on transient failures (API timeouts, rate limits) so sessions don't abort unnecessarily.",
+      "acceptanceCriteria": [
+        "Detect retryable errors: rate_limit, timeout, connection_error, 529 status",
+        "Implement exponential backoff: 5s, 15s, 45s (3 retries max)",
+        "Display retry countdown with reason",
+        "Log retry attempts to session state",
+        "Add --no-retry flag to disable for debugging",
+        "Add --max-retries N flag (default 3)",
+        "Distinguish fatal errors (bad prompt, auth failure) from transient",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Wrap claude invocation in retry loop",
+        "detection": "Parse JSON output for error types, check exit codes",
+        "backoff": "sleep with countdown display"
+      },
+      "priority": 3,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Depends on US-002 for logging retry attempts to session state"
+    },
+    {
+      "id": "US-004",
+      "phase": "P1",
+      "title": "Session resume capability",
+      "description": "As a user, I want to resume an interrupted session so I don't lose progress when my laptop sleeps or the network drops.",
+      "acceptanceCriteria": [
+        "Add --resume flag that reads .ralph-session.json",
+        "Restore: mode, model, prompt_file, iteration count, branch",
+        "Validate session file exists and is from same branch",
+        "Display resume summary before continuing",
+        "Add --list-sessions to show resumable sessions",
+        "Session files older than 24h should warn but allow resume",
+        "If session was completed, error with helpful message",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add resume logic in argument parsing section",
+        "validation": "Check branch matches, session not completed",
+        "stateRestore": "Override defaults with session values"
+      },
+      "priority": 4,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Depends on US-002 (structured session state)"
+    },
+    {
+      "id": "US-005",
+      "phase": "P1",
+      "title": "Persistent log directory",
+      "description": "As a user, I want logs saved to a configurable persistent location so they survive reboots and can be analyzed later.",
+      "acceptanceCriteria": [
+        "Default log directory: ~/.ralph/logs/ (create if not exists)",
+        "Add --log-dir PATH flag to override",
+        "Add RALPH_LOG_DIR environment variable support",
+        "Log filename format: {mode}_{branch}_{timestamp}.log",
+        "Add --log-file PATH flag for explicit file path",
+        "Symlink latest log to ~/.ralph/logs/latest.log",
+        "Display log path in session summary",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Update LOG_FILE assignment after config loading",
+        "precedence": "--log-file > --log-dir > RALPH_LOG_DIR > config > default"
+      },
+      "priority": 5,
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "phase": "P2",
+      "title": "Environment variable support",
+      "description": "As a CI/CD user, I want to configure ralph.sh via environment variables so I can run it in automated pipelines without CLI arguments.",
+      "acceptanceCriteria": [
+        "Support RALPH_MODEL (opus|sonnet|haiku)",
+        "Support RALPH_MAX_ITERATIONS (number)",
+        "Support RALPH_PUSH_ENABLED (true|false)",
+        "Support RALPH_SPEC_FILE, RALPH_PLAN_FILE, RALPH_PROGRESS_FILE",
+        "Support RALPH_LOG_DIR, RALPH_LOG_FORMAT",
+        "Support RALPH_NOTIFY_WEBHOOK",
+        "Precedence: CLI > env var > config file > defaults",
+        "Document all env vars in --help output",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add env var reading after defaults, before config file loading",
+        "pattern": "VARIABLE=${RALPH_X:-$VARIABLE}"
+      },
+      "priority": 6,
+      "effort": "small",
+      "passes": false,
+      "notes": "High value for CI/CD adoption"
+    },
+    {
+      "id": "US-007",
+      "phase": "P2",
+      "title": "Safe config file parsing",
+      "description": "As a security-conscious user, I want ralph.conf parsed safely so untrusted config files can't execute arbitrary code.",
+      "acceptanceCriteria": [
+        "Replace 'source ralph.conf' with safe key=value parser",
+        "Only allow known configuration keys (whitelist)",
+        "Validate value types (model must be opus|sonnet|haiku, etc.)",
+        "Reject config files with shell commands or variable expansion",
+        "Display warning if config file has unexpected keys",
+        "Log parsed config values in debug mode",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Replace load_ralph_config() function",
+        "approach": "Read line by line, regex match KEY=VALUE, validate against whitelist",
+        "whitelist": [
+          "SPEC_FILE",
+          "PLAN_FILE",
+          "PROGRESS_FILE",
+          "SOURCE_DIR",
+          "MODEL",
+          "MAX_ITERATIONS",
+          "PUSH_ENABLED",
+          "PRODUCT_CONTEXT_DIR",
+          "PRODUCT_OUTPUT_DIR",
+          "ARTIFACT_SPEC_FILE"
+        ]
+      },
+      "priority": 7,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Security improvement - current 'source' approach is risky"
+    },
+    {
+      "id": "US-008",
+      "phase": "P2",
+      "title": "Global config file support",
+      "description": "As a user with multiple projects, I want a global ~/.ralph/config file so I can set defaults once instead of per-project.",
+      "acceptanceCriteria": [
+        "Check ~/.ralph/config if it exists",
+        "Project ralph.conf overrides global config",
+        "CLI args override both",
+        "Create ~/.ralph/ directory on first run if it doesn't exist",
+        "Add --global-config PATH flag to specify alternate global config",
+        "Display which config files were loaded in --dry-run output",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Update config loading to check global first",
+        "precedence": "CLI > project ralph.conf > ~/.ralph/config > defaults"
+      },
+      "priority": 8,
+      "effort": "small",
+      "passes": false,
+      "notes": "Depends on US-007 (safe config parsing)"
+    },
+    {
+      "id": "US-009",
+      "phase": "P3",
+      "title": "Structured JSON logging option",
+      "description": "As an ops engineer, I want structured JSON logs so I can parse session data with standard log analysis tools.",
+      "acceptanceCriteria": [
+        "Add --log-format flag: text (default) | json",
+        "JSON log entries include: timestamp, level, event, iteration, details",
+        "Events: session_start, iteration_start, tool_call, iteration_end, error, session_end",
+        "Include session_id in all entries for correlation",
+        "Maintain human-readable terminal output regardless of log format",
+        "Support RALPH_LOG_FORMAT environment variable",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add log_event() function, update parse_claude_output()",
+        "format": "{\"timestamp\":\"...\",\"session_id\":\"...\",\"event\":\"...\",\"data\":{...}}"
+      },
+      "priority": 9,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Useful for log aggregation systems (ELK, Datadog, etc.)"
+    },
+    {
+      "id": "US-010",
+      "phase": "P3",
+      "title": "Webhook notifications",
+      "description": "As a user running long sessions, I want webhook notifications on completion/failure so I can monitor remotely.",
+      "acceptanceCriteria": [
+        "Add --notify-webhook URL flag",
+        "Support RALPH_NOTIFY_WEBHOOK environment variable",
+        "Send POST request on: session_complete, session_failed, session_interrupted",
+        "Payload includes: session_id, status, iterations, duration, branch, summary",
+        "Support basic auth via URL (https://user:pass@host/path)",
+        "Timeout webhook calls at 10s, don't block session on failure",
+        "Log webhook response status",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add send_webhook() function, call in cleanup() and session end",
+        "tool": "curl with timeout"
+      },
+      "priority": 10,
+      "effort": "small",
+      "passes": false,
+      "notes": "Enables Slack/Discord/custom integrations"
+    },
+    {
+      "id": "US-011",
+      "phase": "P3",
+      "title": "Session summary report",
+      "description": "As a user, I want a markdown summary report generated after each session so I can review what was accomplished.",
+      "acceptanceCriteria": [
+        "Generate {session_id}_summary.md in log directory after session",
+        "Include: session metadata, iteration summaries, files modified, commits made, errors encountered",
+        "Include timing breakdown per iteration",
+        "Link to full log file",
+        "Add --no-summary flag to disable",
+        "For failed sessions, include last error and suggested fixes",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add generate_summary() function, call in finalize_session_state()",
+        "format": "Markdown with sections for each iteration"
+      },
+      "priority": 11,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Depends on US-002 (session state) for iteration data"
+    },
+    {
+      "id": "US-012",
+      "phase": "P4",
+      "title": "Single iteration test mode",
+      "description": "As a developer testing prompts, I want a single-iteration mode so I can validate prompts work before committing to a full loop.",
+      "acceptanceCriteria": [
+        "Add --test or -1 flag that sets max_iterations=1 and disables push",
+        "Display 'TEST MODE' banner in header",
+        "Skip completion marker detection (always exit after 1 iteration)",
+        "Useful for prompt development and debugging",
+        "Can combine with --dry-run for config-only preview",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add to argument parsing, set MAX_ITERATIONS=1, PUSH_ENABLED=false",
+        "marker": "Add TEST_MODE flag for header display"
+      },
+      "priority": 12,
+      "effort": "small",
+      "passes": false,
+      "notes": "Quick win for prompt development workflow"
+    },
+    {
+      "id": "US-013",
+      "phase": "P4",
+      "title": "Interactive confirmation mode",
+      "description": "As a cautious user, I want to confirm before each iteration so I can review changes before continuing.",
+      "acceptanceCriteria": [
+        "Add --interactive or -i flag",
+        "After each iteration, prompt: 'Continue to next iteration? [Y/n/s]' (yes/no/show-diff)",
+        "'s' option shows git diff before asking again",
+        "Timeout after 5 minutes with configurable --interactive-timeout",
+        "Display iteration summary before prompt",
+        "In non-TTY environments, skip interactive (or error with helpful message)",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add confirmation logic after iteration end, before loop continue",
+        "ttyCheck": "[ -t 0 ] to detect interactive terminal"
+      },
+      "priority": 13,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Useful for learning/reviewing what ralph does"
+    },
+    {
+      "id": "US-014",
+      "phase": "P4",
+      "title": "Verbose mode with prompt preview",
+      "description": "As a developer debugging issues, I want verbose output showing the full prompt being sent to Claude.",
+      "acceptanceCriteria": [
+        "Add --verbose or -v flag (separate from Claude's --verbose)",
+        "Display resolved prompt content (after template substitution) before sending",
+        "Show config precedence (which value came from where)",
+        "Display session state updates",
+        "Show retry logic decisions",
+        "Verbose output should be clearly marked/indented to distinguish from normal output",
+        "shellcheck passes"
+      ],
+      "implementation": {
+        "location": "Add VERBOSE flag, wrap debug output in [ \"$VERBOSE\" = true ] checks",
+        "formatting": "Use DIM color and '  [verbose]' prefix"
+      },
+      "priority": 14,
+      "effort": "small",
+      "passes": false,
+      "notes": "Helpful for debugging configuration issues"
+    },
+    {
+      "id": "US-015",
+      "phase": "P4",
+      "title": "Shell completion scripts",
+      "description": "As a power user, I want tab completion for ralph.sh commands so I can work faster.",
+      "acceptanceCriteria": [
+        "Create completions/ralph.bash for bash completion",
+        "Create completions/ralph.zsh for zsh completion",
+        "Complete: presets (plan, build, product), flags, model names",
+        "Complete file paths for -f, -s, -l flags",
+        "Add installation instructions to --help or README",
+        "shellcheck passes on completion scripts"
+      ],
+      "implementation": {
+        "location": "New completions/ directory",
+        "installation": "source completions/ralph.bash in .bashrc"
+      },
+      "priority": 15,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Nice-to-have quality of life improvement"
+    },
+    {
+      "id": "US-016",
+      "phase": "P4",
+      "title": "Update documentation",
+      "description": "As a user, I want documentation updated to reflect all new features so I can learn how to use them.",
+      "acceptanceCriteria": [
+        "Update docs/RALPH_LOOP_REF.md with all new flags and features",
+        "Update --help output with new options",
+        "Add Environment Variables section to docs",
+        "Add Troubleshooting section for common issues",
+        "Update ralph.conf with commented examples of new options",
+        "Add examples for CI/CD usage",
+        "Verify all code examples in docs still work"
+      ],
+      "implementation": {
+        "location": "docs/RALPH_LOOP_REF.md, show_help(), ralph.conf"
+      },
+      "priority": 16,
+      "effort": "medium",
+      "passes": false,
+      "notes": "Should be done last after all features are implemented"
+    }
+  ],
+  "dependencies": {
+    "US-003": ["US-002"],
+    "US-004": ["US-002"],
+    "US-008": ["US-007"],
+    "US-011": ["US-002"],
+    "US-016": [
+      "US-001",
+      "US-002",
+      "US-003",
+      "US-004",
+      "US-005",
+      "US-006",
+      "US-007",
+      "US-008",
+      "US-009",
+      "US-010",
+      "US-011",
+      "US-012",
+      "US-013",
+      "US-014",
+      "US-015"
+    ]
+  },
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Resilience MVP",
+      "stories": ["US-001", "US-002", "US-003", "US-004", "US-005"],
+      "description": "Core reliability improvements - can resume sessions and retry on failures",
+      "tag": "v2.0.0-alpha"
+    },
+    {
+      "id": "M2",
+      "name": "CI/CD Ready",
+      "stories": ["US-006", "US-007", "US-008"],
+      "description": "Environment variable support and safe config for automated pipelines",
+      "tag": "v2.0.0-beta"
+    },
+    {
+      "id": "M3",
+      "name": "Observable",
+      "stories": ["US-009", "US-010", "US-011"],
+      "description": "Structured logging and notifications for remote monitoring",
+      "tag": "v2.0.0-rc1"
+    },
+    {
+      "id": "M4",
+      "name": "Developer Friendly",
+      "stories": ["US-012", "US-013", "US-014", "US-015", "US-016"],
+      "description": "Quality of life improvements for development and debugging",
+      "tag": "v2.0.0"
+    }
+  ],
+  "glossary": {
+    "session": "A single invocation of ralph.sh from start to completion/interruption",
+    "iteration": "One cycle of the ralph loop (one Claude invocation)",
+    "transient failure": "Temporary error that may succeed on retry (rate limit, timeout)",
+    "fatal error": "Unrecoverable error requiring user intervention (auth failure, bad prompt)",
+    "session state": "Structured JSON file tracking session progress (.ralph-session.json)",
+    "completion marker": "String '<ralph>COMPLETE</ralph>' that signals all tasks are done"
+  }
+}

@@ -23,6 +23,8 @@ The script is self-contained. Ensure you have:
 - `jq` for JSON parsing
 - `git` for version control operations
 
+Ralph automatically runs pre-flight checks to verify these dependencies. Use `--skip-checks` to bypass if needed.
+
 ## Usage
 
 ### Basic Commands
@@ -60,11 +62,22 @@ The script is self-contained. Ensure you have:
 
 ```bash
 # Use custom spec file (plan automatically derived)
-./ralph.sh -s ./specs/my-feature.md
+./ralph.sh -s ./specs/my-feature.json
 # → Plan: ./plans/my-feature_PLAN.md (auto-derived from spec name)
 
+# Also works with markdown specs
+./ralph.sh -s ./specs/my-feature.md
+# → Plan: ./plans/my-feature_PLAN.md
+
 # Override the derived plan if needed
-./ralph.sh -s ./specs/my-feature.md -l ./plans/custom_PLAN.md build 5
+./ralph.sh -s ./specs/my-feature.json -l ./plans/custom_PLAN.md build 5
+```
+
+### Pre-flight Checks
+
+```bash
+# Skip dependency checks (advanced users)
+./ralph.sh --skip-checks build
 ```
 
 ### Dry Run
@@ -500,7 +513,8 @@ This prevents confusion when working on multiple features and ensures iteration 
 project-root/
 ├── specs/
 │   ├── INDEX.md                    # Feature catalog
-│   └── {feature}.md                # Feature specs (the "what & why")
+│   ├── {feature}.json              # JSON specs (recommended)
+│   └── {feature}.md                # Markdown specs (alternative)
 ├── plans/
 │   ├── IMPLEMENTATION_PLAN.md      # Default active plan (the "how")
 │   └── {feature}_PLAN.md           # Feature-specific plans
@@ -508,11 +522,36 @@ project-root/
 │   ├── PROMPT_plan.md              # Planning mode instructions
 │   ├── PROMPT_build.md             # Build mode instructions
 │   └── PROMPT_product.md           # Product artifact generation
+├── .claude/
+│   └── skills/
+│       └── writing-ralph-specs/    # Skill for creating JSON specs
 ├── archive/                        # Auto-archived branch state on branch change
 ├── ralph.sh                        # The loop script
 ├── ralph.conf                      # Optional configuration file
 └── progress.txt                    # Iteration history
 ```
+
+## Spec → Plan → Build Workflow
+
+The recommended workflow for implementing features:
+
+```bash
+# 1. Create a JSON spec with user stories and acceptance criteria
+#    (use the writing-ralph-specs skill or create manually)
+#    → specs/my-feature.json
+
+# 2. Run plan mode to create implementation checklist
+./ralph.sh plan -s ./specs/my-feature.json
+#    → plans/my-feature_PLAN.md
+
+# 3. Run build mode to execute the plan
+./ralph.sh build -s ./specs/my-feature.json
+#    → Implementation complete, spec.passes updated
+```
+
+JSON specs provide structured user stories with acceptance criteria that plan mode uses to create detailed checklists. Build mode updates the `passes` field in each user story when all acceptance criteria are met, providing story-level completion tracking.
+
+See `specs/ralph-improvements.json` for a comprehensive example.
 
 ## Related Files
 

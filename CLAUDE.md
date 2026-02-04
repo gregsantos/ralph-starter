@@ -37,9 +37,13 @@ ralph-starter/
 │   └── PROMPT_product.md         # Product artifact generation
 ├── specs/
 │   ├── INDEX.md                  # Feature catalog
-│   └── {feature}.md              # Feature specs
+│   ├── {feature}.json            # JSON specs (recommended)
+│   └── {feature}.md              # Markdown specs (alternative)
 ├── plans/
 │   └── IMPLEMENTATION_PLAN.md    # Task checklist
+├── .claude/
+│   └── skills/
+│       └── writing-ralph-specs/  # Skill for creating JSON specs
 ├── product-input/                # Product context files
 ├── product-output/               # Generated artifacts
 ├── progress.txt                  # Iteration history
@@ -160,6 +164,58 @@ return Response.json({error: "Invalid request", details: "..."}, {status: 400})
 
 - Use `frontend-design` skill for creative aesthetics (typography choices, color palettes, animations, visual style)
 - Use `ui-quality` skill for implementation correctness (accessibility, performance, forms, loading states)
+- Use `writing-ralph-specs` skill for creating structured JSON specs for Ralph Loop (see `.claude/skills/`)
+
+# Spec → Plan → Build Workflow
+
+The recommended workflow for implementing features with Ralph:
+
+```
+1. Create Spec (JSON)     →  specs/{feature}.json     (the "what & why")
+2. Run Plan Mode          →  plans/{feature}_PLAN.md  (the "how")
+3. Run Build Mode         →  Implementation complete   (the code)
+```
+
+## Creating Specs
+
+Use the `writing-ralph-specs` skill or create JSON specs manually in `specs/`:
+
+```bash
+# Example spec structure
+specs/
+├── INDEX.md                    # Feature catalog (update this!)
+├── my-feature.json             # Your spec file
+└── ralph-improvements.json     # Example comprehensive spec
+```
+
+Key elements of a good spec:
+
+- **context**: Current state, target state, constraints
+- **userStories**: Atomic tasks with acceptance criteria and `passes` status
+- **dependencies**: What depends on what
+- **verificationCommands**: How to verify work
+
+The `passes` field in each user story starts as `false` and is set to `true` by build mode when all acceptance criteria are met.
+
+## Running the Workflow
+
+```bash
+# Step 1: Create spec (use skill or manually)
+# Step 2: Plan mode creates implementation checklist
+./ralph.sh plan -s ./specs/my-feature.json
+
+# Step 3: Build mode executes the plan
+./ralph.sh build -s ./specs/my-feature.json
+```
+
+## Spec vs Markdown
+
+| Format            | Use Case                                                                 |
+| ----------------- | ------------------------------------------------------------------------ |
+| **JSON spec**     | Structured features with user stories, acceptance criteria, dependencies |
+| **Markdown spec** | Prose requirements, architecture docs, less structured work              |
+
+Both work with Ralph. JSON specs provide more structure for plan mode to create better checklists, and track completion status via the `passes` field.
 
 # Ralph Loop
 
@@ -182,10 +238,10 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 
 ## Three Modes
 
-| Mode | Purpose | Command |
-|------|---------|---------|
-| **plan** | Analyze codebase, create task checklist | `./ralph.sh plan` |
-| **build** | Execute tasks one at a time | `./ralph.sh build` |
+| Mode        | Purpose                                       | Command              |
+| ----------- | --------------------------------------------- | -------------------- |
+| **plan**    | Analyze codebase, create task checklist       | `./ralph.sh plan`    |
+| **build**   | Execute tasks one at a time                   | `./ralph.sh build`   |
 | **product** | Generate product documentation (12 artifacts) | `./ralph.sh product` |
 
 ## Prompt Files

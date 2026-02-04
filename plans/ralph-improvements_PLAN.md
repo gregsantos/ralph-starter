@@ -200,17 +200,17 @@ US-016 (Documentation) ◄──────────────────
 #### Task 2.2: US-007 Safe Config File Parsing
 **Priority:** 7 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 2.2.1 Create whitelist of allowed config keys
-- [ ] 2.2.2 Create `safe_load_config()` function replacing `source ralph.conf`
-- [ ] 2.2.3 Read config file line by line
-- [ ] 2.2.4 Regex match `KEY=VALUE` pattern (no shell expansion)
-- [ ] 2.2.5 Validate key against whitelist
-- [ ] 2.2.6 Validate value types (model must be opus|sonnet|haiku, etc.)
-- [ ] 2.2.7 Reject lines with shell commands or variable expansion
-- [ ] 2.2.8 Display warning if config has unexpected keys
-- [ ] 2.2.9 Log parsed config values in verbose mode
-- [ ] 2.2.10 Replace `load_ralph_config()` with safe version
-- [ ] 2.2.11 Run `shellcheck ralph.sh` and fix any issues
+- [x] 2.2.1 Create whitelist of allowed config keys
+- [x] 2.2.2 Create `safe_load_config()` function replacing `source ralph.conf`
+- [x] 2.2.3 Read config file line by line
+- [x] 2.2.4 Regex match `KEY=VALUE` pattern (no shell expansion)
+- [x] 2.2.5 Validate key against whitelist
+- [x] 2.2.6 Validate value types (model must be opus|sonnet|haiku, etc.)
+- [x] 2.2.7 Reject lines with shell commands or variable expansion
+- [x] 2.2.8 Display warning if config has unexpected keys
+- [x] 2.2.9 Log parsed config values in verbose mode (deferred to US-014)
+- [x] 2.2.10 Replace `load_ralph_config()` with safe version
+- [x] 2.2.11 Run `shellcheck ralph.sh` and fix any issues
 
 **Whitelist:**
 ```

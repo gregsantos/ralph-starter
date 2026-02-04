@@ -1,7 +1,11 @@
 # Ralph Loop
 .ralph-last-branch
+.ralph-session.json
 archive/
-.claude/
+
+# Claude settings (but not skills)
+.claude/*
+!.claude/skills/
 
 # Dependencies
 node_modules/

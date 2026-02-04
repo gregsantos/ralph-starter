@@ -51,6 +51,10 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 ### 4. Document
 
 - Mark the completed item `[x]` in `{{PLAN_FILE}}`
+- **Update spec status** (if using JSON spec with user stories):
+  - When ALL acceptance criteria for a user story are met, set `"passes": true` for that story
+  - Only update when the story is fully complete, not partially
+  - Use precise JSON editing—change only the `passes` value
 - Append to `{{PROGRESS_FILE}}`:
   - Task completed and plan reference
   - Key decisions made and **why** (not just what)
@@ -78,6 +82,7 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 - **Keep CLAUDE.md operational only**—status/progress notes belong in `{{PLAN_FILE}}`
 - **Update CLAUDE.md with patterns**—add discovered conventions, gotchas, insights
 - **Keep plans current**—update `{{PLAN_FILE}}` with learnings after each task
+- **Update spec status**—set `"passes": true` in `{{SPEC_FILE}}` when user stories are complete
 - **Reference specs for context**—consult `{{SPEC_FILE}}` for the "why" behind requirements
 - **Capture the why**—tests and implementation reasoning matter
 - **Resolve or document bugs**—even if unrelated to current work
@@ -101,10 +106,11 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 Before outputting the completion marker, verify ALL of the following:
 
 1. **All checklist items** in `{{PLAN_FILE}}` are marked `[x]` (not just one - ALL of them)
-2. `pnpm test` passes
-3. `pnpm typecheck` passes
-4. All changes are committed and pushed
-5. `{{PROGRESS_FILE}}` documents all completed tasks
+2. **All user stories** in `{{SPEC_FILE}}` have `"passes": true` (if using JSON spec)
+3. `pnpm test` passes
+4. `pnpm typecheck` passes
+5. All changes are committed and pushed
+6. `{{PROGRESS_FILE}}` documents all completed tasks
 
 ### When to Signal Completion
 

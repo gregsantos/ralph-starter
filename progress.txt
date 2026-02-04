@@ -205,3 +205,41 @@
 - `RALPH_MODEL=sonnet ./ralph.sh --model haiku --dry-run` - CLI flag correctly overrides env var
 - `RALPH_LOG_DIR=/tmp/test-logs ./ralph.sh --dry-run` - Custom log directory from env var
 
+## Iteration 7 - 2026-02-03
+
+### Task Completed: US-007 Safe Config File Parsing (Task 2.2)
+
+**What was done:**
+- Replaced `source ralph.conf` with safe key=value parser to prevent arbitrary code execution
+- Created CONFIGURATION LOADING (SAFE) section with comprehensive security features:
+  - `ALLOWED_CONFIG_KEYS[]` - Whitelist of 13 valid config keys
+  - `is_allowed_config_key()` - Validates keys against whitelist
+  - `validate_config_value()` - Type-checks values based on key (MODEL must be opus/sonnet/haiku, MAX_ITERATIONS must be number, etc.)
+  - `safe_load_config()` - Reads config file line by line with regex matching
+- Security protections implemented:
+  - Only whitelisted keys accepted (SPEC_FILE, PLAN_FILE, PROGRESS_FILE, SOURCE_DIR, MODEL, MAX_ITERATIONS, PUSH_ENABLED, PRODUCT_CONTEXT_DIR, PRODUCT_OUTPUT_DIR, ARTIFACT_SPEC_FILE, LOG_DIR, LOG_FORMAT, NOTIFY_WEBHOOK)
+  - Shell command patterns rejected: $(), ``, ${}, ||, &&, ;, |
+  - Value type validation for MODEL, MAX_ITERATIONS, PUSH_ENABLED, LOG_FORMAT
+  - Clear warnings for unknown keys, invalid values, and suspicious patterns
+- Maintains proper precedence: CLI > env var > config file > defaults
+
+**Why:**
+- Previous `source ralph.conf` approach was a security risk - untrusted config files could execute arbitrary code
+- Type validation prevents misconfiguration (e.g., MODEL=typo would silently fail before)
+- Whitelist approach ensures only expected variables can be set from config
+- Shell pattern detection catches attempts to inject commands through config values
+- Warnings help users identify and fix config errors quickly
+
+**Files changed:**
+- `ralph.sh` - Replaced CONFIGURATION LOADING section with CONFIGURATION LOADING (SAFE), added 4 new functions (~130 lines)
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from safe config code)
+- `./ralph.sh --help` - Works correctly
+- `./ralph.sh --dry-run` - Config values loaded correctly from ralph.conf
+- Tested with malicious config file containing:
+  - Invalid MODEL value → Warning displayed, value rejected
+  - Invalid MAX_ITERATIONS → Warning displayed, value rejected
+  - Unknown keys → Warning displayed, keys ignored
+  - Shell injection attempts ($(), ``, ${}, ||, &&, ;) → All detected and rejected
+

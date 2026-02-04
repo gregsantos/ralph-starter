@@ -1154,52 +1154,216 @@ cleanup_temp() {
 trap cleanup_temp EXIT
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# CONFIGURATION LOADING
+# CONFIGURATION LOADING (SAFE)
+# Parses config files without using source to prevent arbitrary code execution
 # ═══════════════════════════════════════════════════════════════════════════════
 
+# Whitelist of allowed configuration keys
+# These are the only keys accepted from ralph.conf files
+ALLOWED_CONFIG_KEYS=(
+    "SPEC_FILE"
+    "PLAN_FILE"
+    "PROGRESS_FILE"
+    "SOURCE_DIR"
+    "MODEL"
+    "MAX_ITERATIONS"
+    "PUSH_ENABLED"
+    "PRODUCT_CONTEXT_DIR"
+    "PRODUCT_OUTPUT_DIR"
+    "ARTIFACT_SPEC_FILE"
+    "LOG_DIR"
+    "LOG_FORMAT"
+    "NOTIFY_WEBHOOK"
+)
+
+# Check if a key is in the allowed whitelist
+# Arguments: key_name
+# Returns: 0 if allowed, 1 if not allowed
+is_allowed_config_key() {
+    local key="$1"
+    for allowed in "${ALLOWED_CONFIG_KEYS[@]}"; do
+        if [ "$key" = "$allowed" ]; then
+            return 0
+        fi
+    done
+    return 1
+}
+
+# Validate config value based on key type
+# Arguments: key, value
+# Returns: 0 if valid, 1 if invalid (prints warning)
+validate_config_value() {
+    local key="$1"
+    local value="$2"
+
+    case "$key" in
+        MODEL)
+            # MODEL must be opus, sonnet, or haiku
+            case "$value" in
+                opus|sonnet|haiku) return 0 ;;
+                *)
+                    echo -e "${YELLOW}Warning: Invalid MODEL value '${value}' in config (expected: opus, sonnet, haiku)${RESET}" >&2
+                    return 1
+                    ;;
+            esac
+            ;;
+        MAX_ITERATIONS)
+            # MAX_ITERATIONS must be a positive integer
+            if [[ "$value" =~ ^[0-9]+$ ]]; then
+                return 0
+            else
+                echo -e "${YELLOW}Warning: Invalid MAX_ITERATIONS value '${value}' in config (expected: positive integer)${RESET}" >&2
+                return 1
+            fi
+            ;;
+        PUSH_ENABLED)
+            # PUSH_ENABLED must be true/false
+            case "$value" in
+                true|false|TRUE|FALSE|1|0|yes|no|YES|NO) return 0 ;;
+                *)
+                    echo -e "${YELLOW}Warning: Invalid PUSH_ENABLED value '${value}' in config (expected: true/false)${RESET}" >&2
+                    return 1
+                    ;;
+            esac
+            ;;
+        LOG_FORMAT)
+            # LOG_FORMAT must be text or json
+            case "$value" in
+                text|json|TEXT|JSON) return 0 ;;
+                *)
+                    echo -e "${YELLOW}Warning: Invalid LOG_FORMAT value '${value}' in config (expected: text, json)${RESET}" >&2
+                    return 1
+                    ;;
+            esac
+            ;;
+        *)
+            # Path-based config values - check for shell command patterns
+            # These are dangerous: $(...), `...`, ${...}, $((...)), ||, &&, ;, |
+            if [[ "$value" =~ \$\( ]] || \
+               [[ "$value" =~ \` ]] || \
+               [[ "$value" =~ \$\{ ]] || \
+               [[ "$value" =~ \|\| ]] || \
+               [[ "$value" =~ \&\& ]] || \
+               [[ "$value" =~ \; ]] || \
+               [[ "$value" =~ [^/]\|[^/] ]]; then
+                echo -e "${YELLOW}Warning: Suspicious shell pattern in config value for ${key}: '${value:0:30}...'${RESET}" >&2
+                return 1
+            fi
+            return 0
+            ;;
+    esac
+}
+
+# Safely parse a config file line by line
+# Arguments: config_file_path
+# Sets global variables based on config file contents
+safe_load_config() {
+    local config_file="$1"
+    local line_num=0
+    local warnings_shown=false
+
+    # Skip if file doesn't exist
+    [ ! -f "$config_file" ] && return 0
+
+    # Read file line by line
+    while IFS= read -r line || [ -n "$line" ]; do
+        line_num=$((line_num + 1))
+
+        # Skip empty lines and comments
+        [[ -z "$line" ]] && continue
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ "$line" =~ ^[[:space:]]*$ ]] && continue
+
+        # Remove leading/trailing whitespace
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+
+        # Match KEY=VALUE pattern (no spaces around =, value can be quoted or unquoted)
+        # Pattern: KEY=VALUE or KEY="VALUE" or KEY='VALUE'
+        if [[ "$line" =~ ^([A-Z_][A-Z0-9_]*)=(.*)$ ]]; then
+            local key="${BASH_REMATCH[1]}"
+            local value="${BASH_REMATCH[2]}"
+
+            # Remove surrounding quotes if present
+            if [[ "$value" =~ ^\"(.*)\"$ ]] || [[ "$value" =~ ^\'(.*)\'$ ]]; then
+                value="${BASH_REMATCH[1]}"
+            fi
+
+            # Check if key is in whitelist
+            if ! is_allowed_config_key "$key"; then
+                echo -e "${YELLOW}Warning: Unknown config key '${key}' at line ${line_num} (ignored)${RESET}" >&2
+                warnings_shown=true
+                continue
+            fi
+
+            # Validate value based on key type
+            if ! validate_config_value "$key" "$value"; then
+                warnings_shown=true
+                continue
+            fi
+
+            # Set the variable (only if not already set by CLI/env)
+            case "$key" in
+                SPEC_FILE)
+                    [ "$CLI_SPEC_SET" != "true" ] && [ -z "$SPEC_FILE" ] && SPEC_FILE="$value"
+                    ;;
+                PLAN_FILE)
+                    [ "$CLI_PLAN_SET" != "true" ] && [ -z "$PLAN_FILE" ] && PLAN_FILE="$value"
+                    ;;
+                PROGRESS_FILE)
+                    [ "$CLI_PROGRESS_SET" != "true" ] && [ -z "$PROGRESS_FILE" ] && PROGRESS_FILE="$value"
+                    ;;
+                SOURCE_DIR)
+                    [ -z "$SOURCE_DIR" ] && SOURCE_DIR="$value"
+                    ;;
+                MODEL)
+                    [ "$CLI_MODEL_SET" != "true" ] && [ -z "$MODEL_OVERRIDE" ] && MODEL_OVERRIDE="$value"
+                    ;;
+                MAX_ITERATIONS)
+                    [ "$CLI_MAX_SET" != "true" ] && [ "$UNLIMITED" != "true" ] && MAX_ITERATIONS="$value"
+                    ;;
+                PUSH_ENABLED)
+                    if [ "$CLI_PUSH_SET" != "true" ]; then
+                        case "$value" in
+                            true|TRUE|1|yes|YES) PUSH_ENABLED=true ;;
+                            false|FALSE|0|no|NO) PUSH_ENABLED=false ;;
+                        esac
+                    fi
+                    ;;
+                PRODUCT_CONTEXT_DIR)
+                    [ -z "$PRODUCT_CONTEXT_DIR" ] && PRODUCT_CONTEXT_DIR="$value"
+                    ;;
+                PRODUCT_OUTPUT_DIR)
+                    [ -z "$PRODUCT_OUTPUT_DIR" ] && PRODUCT_OUTPUT_DIR="$value"
+                    ;;
+                ARTIFACT_SPEC_FILE)
+                    [ -z "$ARTIFACT_SPEC_FILE" ] && ARTIFACT_SPEC_FILE="$value"
+                    ;;
+                LOG_DIR)
+                    [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "$LOG_DIR" ] && LOG_DIR="$value"
+                    ;;
+                LOG_FORMAT)
+                    [ -z "$LOG_FORMAT" ] || [ "$LOG_FORMAT" = "text" ] && LOG_FORMAT="$value"
+                    ;;
+                NOTIFY_WEBHOOK)
+                    [ -z "$NOTIFY_WEBHOOK" ] && NOTIFY_WEBHOOK="$value"
+                    ;;
+            esac
+        elif [[ ! "$line" =~ ^[[:space:]]*$ ]]; then
+            # Line doesn't match KEY=VALUE pattern and isn't empty/comment
+            echo -e "${YELLOW}Warning: Malformed config line ${line_num}: '${line:0:40}...'${RESET}" >&2
+            warnings_shown=true
+        fi
+    done < "$config_file"
+
+    # Add a blank line after warnings for readability
+    [ "$warnings_shown" = true ] && echo "" >&2
+}
+
+# Load config file safely (CLI args override config values)
 load_ralph_config() {
     local config_file="${SCRIPT_DIR}/ralph.conf"
-    if [ -f "$config_file" ]; then
-        # Temporarily save CLI/env values before sourcing config
-        # Precedence: CLI > env var > config file > defaults
-        local saved_spec="$SPEC_FILE"
-        local saved_plan="$PLAN_FILE"
-        local saved_progress="$PROGRESS_FILE"
-        local saved_source="$SOURCE_DIR"
-        local saved_model="$MODEL_OVERRIDE"
-        local saved_max="$MAX_ITERATIONS"
-        local saved_push="$PUSH_ENABLED"
-        local saved_unlimited="$UNLIMITED"
-        local saved_log_dir="$LOG_DIR"
-        local saved_log_format="$LOG_FORMAT"
-        local saved_notify_webhook="$NOTIFY_WEBHOOK"
-        # Product mode values
-        local saved_product_context="$PRODUCT_CONTEXT_DIR"
-        local saved_product_output="$PRODUCT_OUTPUT_DIR"
-        local saved_artifact_spec="$ARTIFACT_SPEC_FILE"
-
-        # Source config file (may set variables)
-        source "$config_file"
-
-        # Restore values that were set via CLI or env var (they take precedence)
-        # Using CLI_*_SET flags ensures CLI always wins
-        # Non-empty saved values from env vars also take precedence
-        [ "$CLI_SPEC_SET" = "true" ] || [ -n "$saved_spec" ] && SPEC_FILE="$saved_spec"
-        [ "$CLI_PLAN_SET" = "true" ] || [ -n "$saved_plan" ] && PLAN_FILE="$saved_plan"
-        [ "$CLI_PROGRESS_SET" = "true" ] || [ -n "$saved_progress" ] && PROGRESS_FILE="$saved_progress"
-        [ -n "$saved_source" ] && SOURCE_DIR="$saved_source"
-        [ "$CLI_MODEL_SET" = "true" ] || [ -n "$saved_model" ] && MODEL_OVERRIDE="$saved_model"
-        [ "$CLI_MAX_SET" = "true" ] && MAX_ITERATIONS="$saved_max"
-        [ "$saved_unlimited" = "true" ] && UNLIMITED=true  # CLI --unlimited always wins
-        [ "$CLI_PUSH_SET" = "true" ] && PUSH_ENABLED="$saved_push"
-        [ "$CLI_LOG_DIR_SET" = "true" ] || [ -n "$saved_log_dir" ] && LOG_DIR="$saved_log_dir"
-        [ -n "$saved_log_format" ] && LOG_FORMAT="$saved_log_format"
-        [ -n "$saved_notify_webhook" ] && NOTIFY_WEBHOOK="$saved_notify_webhook"
-        # Product mode CLI/env precedence
-        [ -n "$saved_product_context" ] && PRODUCT_CONTEXT_DIR="$saved_product_context"
-        [ -n "$saved_product_output" ] && PRODUCT_OUTPUT_DIR="$saved_product_output"
-        [ -n "$saved_artifact_spec" ] && ARTIFACT_SPEC_FILE="$saved_artifact_spec"
-    fi
+    safe_load_config "$config_file"
 }
 
 substitute_template() {
