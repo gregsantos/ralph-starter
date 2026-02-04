@@ -1,5 +1,7 @@
 #!/bin/bash
+# ═══════════════════════════════════════════════════════════════════════════════
 # Ralph Loop - Autonomous Claude Code runner
+# ═══════════════════════════════════════════════════════════════════════════════
 #
 # Usage: ./ralph.sh [preset|options] [max_iterations]
 #
@@ -9,32 +11,55 @@
 #   product           Use PROMPT_product.md for product artifact generation
 #
 # Options:
-#   -f, --file PATH   Use custom prompt file
-#   -p, --prompt STR  Use inline prompt string
-#   -m, --model MODEL Model: opus, sonnet, haiku (default varies by mode)
-#   -n, --max N       Max iterations (default: 10)
-#   --unlimited       Remove iteration limit (use with caution)
-#   --dry-run         Show config and exit without running Claude
-#   --push            Enable git push after iterations (default)
-#   --no-push         Disable git push
-#   -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
-#   -l, --plan PATH   Plan file (derived from spec, or ./plans/IMPLEMENTATION_PLAN.md)
-#   --progress PATH   Progress file (default: progress.txt)
-#   --source PATH     Source directory (default: src/*)
-#   --context PATH    Product context directory (product mode, default: ./product-input/)
-#   --output PATH     Product output directory (product mode, default: ./product-output/)
-#   --artifact-spec PATH  Artifact spec file (product mode, default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
-#   -h, --help        Show this help
+#   -f, --file PATH       Use custom prompt file
+#   -p, --prompt STR      Use inline prompt string
+#   -m, --model MODEL     Model: opus, sonnet, haiku (default varies by mode)
+#   -n, --max N           Max iterations (default: 10)
+#   --unlimited           Remove iteration limit (use with caution)
+#   --dry-run             Show config and exit without running Claude
+#   --test, -1            Test mode: single iteration, no push, ignore completion marker
+#   --interactive, -i     Prompt for confirmation between iterations
+#   --interactive-timeout N  Timeout for interactive prompt (default: 300s)
+#   --verbose, -v         Verbose mode: show prompt, config sources, session updates
+#   --push                Enable git push after iterations (default)
+#   --no-push             Disable git push
+#   --skip-checks         Skip pre-flight dependency checks
+#   --no-retry            Disable automatic retry on transient failures
+#   --max-retries N       Maximum retry attempts (default: 3)
+#   --resume              Resume interrupted session from .ralph-session.json
+#   --list-sessions       List all resumable sessions
+#   --log-dir PATH        Log directory (default: ~/.ralph/logs/)
+#   --log-file PATH       Explicit log file path (overrides --log-dir)
+#   --log-format FMT      Log format: text (default) or json for structured logging
+#   --notify-webhook URL  Webhook URL for session notifications
+#   --no-summary          Disable session summary report generation
+#   --global-config PATH  Global config file (default: ~/.ralph/config)
+#   -s, --spec PATH       Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)
+#   -l, --plan PATH       Plan file (derived from spec, or ./plans/IMPLEMENTATION_PLAN.md)
+#   --progress PATH       Progress file (default: progress.txt)
+#   --source PATH         Source directory (default: src/*)
+#   --context PATH        Product context directory (default: ./product-input/)
+#   --output PATH         Product output directory (default: ./product-output/)
+#   --artifact-spec PATH  Artifact spec file (default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
+#   -h, --help            Show this help
+#
+# Environment Variables:
+#   RALPH_MODEL, RALPH_MAX_ITERATIONS, RALPH_PUSH_ENABLED, RALPH_SPEC_FILE,
+#   RALPH_PLAN_FILE, RALPH_PROGRESS_FILE, RALPH_LOG_DIR, RALPH_LOG_FORMAT,
+#   RALPH_NOTIFY_WEBHOOK
+#   Precedence: CLI > env vars > config file > defaults
 #
 # Examples:
 #   ./ralph.sh                           # Build mode, 10 iterations
 #   ./ralph.sh plan 5                    # Plan mode, 5 iterations
 #   ./ralph.sh build --model sonnet      # Build with sonnet
 #   ./ralph.sh product                   # Product artifact generation
-#   ./ralph.sh product --context ./my-context/ --output ./my-output/
 #   ./ralph.sh -f ./prompts/review.md    # Custom prompt file
 #   ./ralph.sh -p "Fix lint errors" 3    # Inline prompt, 3 iterations
-#   ./ralph.sh --unlimited               # Unlimited (careful!)
+#   ./ralph.sh --test                    # Test mode: 1 iteration, no push
+#   ./ralph.sh --resume                  # Resume interrupted session
+#   ./ralph.sh --log-format json         # Structured JSON logging
+#   ./ralph.sh --unlimited               # Unlimited iterations (careful!)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CONFIGURATION
@@ -188,6 +213,9 @@ init_session_state() {
 
     # Log session start for structured logging
     log_session_start
+
+    # Verbose logging
+    verbose_session_update "init" "created ${SESSION_FILE} with id ${SESSION_ID}"
 }
 
 # Update session state after each iteration
@@ -250,6 +278,7 @@ update_session_state() {
         tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
         echo "$updated" > "$tmp_file"
         mv "$tmp_file" "$SESSION_FILE"
+        verbose_session_update "update" "iteration ${iteration}: ${duration}s, exit=${exit_code}, files=${files_modified}"
     else
         echo -e "${YELLOW}Warning: Failed to update session state${RESET}" >&2
     fi
@@ -288,6 +317,9 @@ finalize_session_state() {
         echo -e "${YELLOW}Warning: Failed to finalize session state${RESET}" >&2
     fi
 
+    # Generate session summary report (if not disabled)
+    generate_summary "$final_status"
+
     # Archive on successful completion, preserve on failure/interrupt for debugging
     if [ "$final_status" = "complete" ]; then
         # Create log directory if needed
@@ -300,9 +332,11 @@ finalize_session_state() {
         rm -f "$SESSION_FILE"
 
         echo -e "  ${DIM}Session archived:${RESET} ${archive_path}"
+        verbose_session_update "finalize" "archived to ${archive_path}"
     else
         # Keep session file for debugging/resume
         echo -e "  ${DIM}Session preserved:${RESET} ${SESSION_FILE}"
+        verbose_session_update "finalize" "preserved at ${SESSION_FILE} (status: ${final_status})"
     fi
 }
 
@@ -776,12 +810,14 @@ run_with_retry() {
         # Check if retry is disabled
         if [ "$RETRY_ENABLED" = false ]; then
             echo -e "  ${YELLOW}${SYM_DOT} Retry disabled (--no-retry)${RESET}"
+            verbose_retry_decision "skip" "retry disabled via --no-retry"
             return "$exit_code"
         fi
 
         # Check if we've exhausted retries
         if [ "$attempt" -gt "$MAX_RETRIES" ]; then
             echo -e "  ${RED}${SYM_CROSS} Max retries ($MAX_RETRIES) exhausted${RESET}"
+            verbose_retry_decision "give up" "max retries (${MAX_RETRIES}) exhausted"
             log_retry_attempt "$attempt" 0 "$LAST_ERROR_MSG" "false"
             return "$exit_code"
         fi
@@ -789,11 +825,14 @@ run_with_retry() {
         # Check if error is retryable
         if ! is_retryable_error "$LAST_ERROR_MSG" "$exit_code"; then
             echo -e "  ${RED}${SYM_CROSS} Fatal error (not retryable):${RESET} ${LAST_ERROR_MSG:0:60}"
+            verbose_retry_decision "abort" "fatal error pattern detected"
             return "$exit_code"
         fi
 
         # Calculate exponential backoff: 5s, 15s, 45s (base * 3^(attempt-1))
         delay=$((RETRY_BACKOFF_BASE * (3 ** (attempt - 1))))
+
+        verbose_retry_decision "retry" "transient error, attempt ${attempt}/${MAX_RETRIES}, backoff ${delay}s"
 
         # Log retry attempt to session state
         log_retry_attempt "$attempt" "$delay" "$LAST_ERROR_MSG" "false"
@@ -824,6 +863,10 @@ show_help() {
     echo "  -n, --max N       Max iterations (default: 10)"
     echo "  --unlimited       Remove iteration limit (use with caution)"
     echo "  --dry-run         Show config and exit without running Claude"
+    echo "  --test, -1        Test mode: single iteration, no push, ignore completion marker"
+    echo "  --interactive, -i Prompt for confirmation between iterations"
+    echo "  --interactive-timeout N  Timeout for interactive prompt (default: 300s)"
+    echo "  --verbose, -v     Verbose mode: show prompt content, config precedence, session updates"
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
     echo "  --skip-checks     Skip pre-flight dependency checks"
@@ -835,6 +878,7 @@ show_help() {
     echo "  --log-file PATH   Explicit log file path (overrides --log-dir)"
     echo "  --log-format FMT  Log format: text (default) or json"
     echo "  --notify-webhook URL  Webhook URL for session notifications"
+    echo "  --no-summary      Disable session summary report generation"
     echo "  --global-config PATH  Global config file (default: ~/.ralph/config)"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
@@ -857,6 +901,10 @@ show_help() {
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
+    echo "  ./ralph.sh --test                     # Test mode: 1 iteration, no push"
+    echo "  ./ralph.sh --interactive              # Interactive: confirm between iterations"
+    echo "  ./ralph.sh -i --interactive-timeout 60  # Interactive with 60s timeout"
+    echo "  ./ralph.sh --verbose                   # Verbose: show prompt, config sources"
     echo "  ./ralph.sh -s ./specs/feature.md -l ./plans/feature_PLAN.md  # Custom spec+plan"
     echo ""
     echo -e "${BOLD}Environment Variables:${RESET}"
@@ -877,6 +925,11 @@ show_help() {
     echo "  Iterations: 10 (prevents runaway sessions)"
     echo "  Model:      opus (plan/build/product), sonnet (inline)"
     echo "  Push:       enabled"
+    echo ""
+    echo -e "${BOLD}Shell Completion:${RESET}"
+    echo "  Bash: source completions/ralph.bash  # or copy to /etc/bash_completion.d/"
+    echo "  Zsh:  Add completions/ to fpath, then run compinit"
+    echo "  See completions/ralph.bash and completions/ralph.zsh for detailed instructions."
 }
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -896,6 +949,10 @@ PUSH_ENABLED=true
 MAX_ITERATIONS=10         # Default limit to prevent runaway sessions
 UNLIMITED=false           # Explicit flag for unlimited iterations
 DRY_RUN=false             # Show config without running Claude
+TEST_MODE=false           # Single iteration test mode (no push, ignore completion marker)
+INTERACTIVE_MODE=false    # Prompt for confirmation between iterations
+INTERACTIVE_TIMEOUT=300   # Timeout in seconds for interactive prompt (default: 5 minutes)
+VERBOSE=false             # Verbose mode: show prompt content, config precedence, and detailed logging
 TEMP_PROMPT_FILE=""
 
 # Template variable defaults (CLI args override, then config, then these)
@@ -970,6 +1027,27 @@ while [[ $# -gt 0 ]]; do
             DRY_RUN=true
             shift
             ;;
+        --test|-1)
+            TEST_MODE=true
+            shift
+            ;;
+        --interactive|-i)
+            INTERACTIVE_MODE=true
+            shift
+            ;;
+        --interactive-timeout)
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                INTERACTIVE_TIMEOUT="$2"
+            else
+                echo -e "${RED}${SYM_CROSS} Error: --interactive-timeout must be a positive integer (seconds)${RESET}"
+                exit 1
+            fi
+            shift 2
+            ;;
+        --verbose|-v)
+            VERBOSE=true
+            shift
+            ;;
         --skip-checks)
             SKIP_CHECKS=true
             shift
@@ -1018,6 +1096,10 @@ while [[ $# -gt 0 ]]; do
             NOTIFY_WEBHOOK="$2"
             CLI_WEBHOOK_SET=true
             shift 2
+            ;;
+        --no-summary)
+            GENERATE_SUMMARY=false
+            shift
             ;;
         -s|--spec)
             SPEC_FILE="$2"
@@ -1080,6 +1162,12 @@ done
 # Handle unlimited flag (overrides everything)
 if [ "$UNLIMITED" = true ]; then
     MAX_ITERATIONS=0
+fi
+
+# Handle test mode (single iteration, no push)
+if [ "$TEST_MODE" = true ]; then
+    MAX_ITERATIONS=1
+    PUSH_ENABLED=false
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1520,6 +1608,428 @@ send_webhook() {
     sleep 0.1 2>/dev/null || true
 }
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# SESSION SUMMARY REPORT
+# Generates markdown summary after each session
+# ═══════════════════════════════════════════════════════════════════════════════
+
+GENERATE_SUMMARY=true
+
+# Generate session summary report
+# Arguments: final_status (complete|failed|interrupted|max_iterations)
+# Outputs: {session_id}_summary.md in log directory
+generate_summary() {
+    local final_status="$1"
+
+    # Skip if disabled
+    [ "$GENERATE_SUMMARY" != true ] && return 0
+
+    # Skip if no session file exists
+    [ ! -f "$SESSION_FILE" ] && return 0
+
+    # Determine log directory
+    local log_dir
+    log_dir=$(dirname "${LOG_FILE:-${DEFAULT_LOG_DIR}/session.log}")
+    mkdir -p "$log_dir" 2>/dev/null || log_dir="$DEFAULT_LOG_DIR"
+
+    local summary_file="${log_dir}/${SESSION_ID}_summary.md"
+
+    # Calculate total duration
+    local total_duration=$(($(date +%s) - START_TIME))
+    local duration_min=$((total_duration / 60))
+    local duration_sec=$((total_duration % 60))
+
+    # Get session data from session file
+    local mode model branch start_time iter_count max_iter
+    mode=$(jq -r '.mode // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    model=$(jq -r '.model // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    branch=$(jq -r '.branch // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    start_time=$(jq -r '.start_time // "unknown"' "$SESSION_FILE" 2>/dev/null)
+    iter_count=$(jq -r '.current_iteration // 0' "$SESSION_FILE" 2>/dev/null)
+    max_iter=$(jq -r '.max_iterations // 0' "$SESSION_FILE" 2>/dev/null)
+
+    # Get spec and plan files
+    local spec_file plan_file progress_file
+    spec_file=$(jq -r '.spec_file // ""' "$SESSION_FILE" 2>/dev/null)
+    plan_file=$(jq -r '.plan_file // ""' "$SESSION_FILE" 2>/dev/null)
+    progress_file=$(jq -r '.progress_file // ""' "$SESSION_FILE" 2>/dev/null)
+
+    # Determine status emoji and text
+    local status_emoji status_text
+    case "$final_status" in
+        complete)
+            status_emoji="✅"
+            status_text="Complete"
+            ;;
+        failed)
+            status_emoji="❌"
+            status_text="Failed"
+            ;;
+        interrupted)
+            status_emoji="⚠️"
+            status_text="Interrupted"
+            ;;
+        max_iterations)
+            status_emoji="🔄"
+            status_text="Max Iterations Reached"
+            ;;
+        *)
+            status_emoji="❓"
+            status_text="Unknown ($final_status)"
+            ;;
+    esac
+
+    # Start writing summary
+    {
+        echo "# Ralph Session Summary"
+        echo ""
+        echo "## Session Overview"
+        echo ""
+        echo "| Property | Value |"
+        echo "|----------|-------|"
+        echo "| **Status** | ${status_emoji} ${status_text} |"
+        echo "| **Session ID** | \`${SESSION_ID}\` |"
+        echo "| **Mode** | ${mode} |"
+        echo "| **Model** | ${model} |"
+        echo "| **Branch** | \`${branch}\` |"
+        echo "| **Started** | ${start_time} |"
+        echo "| **Duration** | ${duration_min}m ${duration_sec}s |"
+        echo "| **Iterations** | ${iter_count}/${max_iter} |"
+        echo ""
+
+        # Configuration section
+        echo "## Configuration"
+        echo ""
+        echo "| File | Path |"
+        echo "|------|------|"
+        [ -n "$spec_file" ] && echo "| Spec | \`${spec_file}\` |"
+        [ -n "$plan_file" ] && echo "| Plan | \`${plan_file}\` |"
+        [ -n "$progress_file" ] && echo "| Progress | \`${progress_file}\` |"
+        echo "| Log | \`${LOG_FILE:-N/A}\` |"
+        echo ""
+
+        # Iteration Details section
+        echo "## Iteration Details"
+        echo ""
+
+        local iteration_count
+        iteration_count=$(jq '.iteration_history | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+
+        if [ "$iteration_count" -gt 0 ]; then
+            echo "| # | Duration | Exit | Files | Commit |"
+            echo "|---|----------|------|-------|--------|"
+
+            # Use jq to format iteration history
+            jq -r '.iteration_history[] | "| \(.iteration) | \(.duration)s | \(.exit_code) | \(.files_modified) | \(.commit_message // "-")[0:50] |"' "$SESSION_FILE" 2>/dev/null
+            echo ""
+
+            # Timing breakdown
+            echo "### Timing Breakdown"
+            echo ""
+            local total_iter_time avg_iter_time
+            total_iter_time=$(jq '[.iteration_history[].duration] | add // 0' "$SESSION_FILE" 2>/dev/null)
+            if [ "$iteration_count" -gt 0 ]; then
+                avg_iter_time=$((total_iter_time / iteration_count))
+            else
+                avg_iter_time=0
+            fi
+            echo "- **Total iteration time:** ${total_iter_time}s"
+            echo "- **Average per iteration:** ${avg_iter_time}s"
+            echo "- **Overhead:** $((total_duration - total_iter_time))s"
+            echo ""
+        else
+            echo "*No iterations completed*"
+            echo ""
+        fi
+
+        # Files Modified section
+        echo "## Files Modified"
+        echo ""
+        local files_modified
+        files_modified=$(git diff --name-only HEAD~"${iter_count}" HEAD 2>/dev/null | head -30)
+        if [ -n "$files_modified" ]; then
+            echo '```'
+            echo "$files_modified"
+            echo '```'
+            local file_count
+            file_count=$(echo "$files_modified" | wc -l | tr -d ' ')
+            if [ "$file_count" -ge 30 ]; then
+                echo "*... and possibly more (showing first 30)*"
+            fi
+        else
+            echo "*No file changes detected or unable to determine*"
+        fi
+        echo ""
+
+        # Commits Made section
+        echo "## Commits Made"
+        echo ""
+        local commits
+        commits=$(git log --oneline HEAD~"${iter_count}"..HEAD 2>/dev/null | head -20)
+        if [ -n "$commits" ]; then
+            echo '```'
+            echo "$commits"
+            echo '```'
+        else
+            echo "*No commits detected or unable to determine*"
+        fi
+        echo ""
+
+        # Errors section (for failed/interrupted sessions)
+        if [ "$final_status" = "failed" ] || [ "$final_status" = "interrupted" ]; then
+            echo "## Troubleshooting"
+            echo ""
+
+            # Check for failed iterations
+            local failed_iters
+            failed_iters=$(jq '[.iteration_history[] | select(.exit_code != 0)] | length' "$SESSION_FILE" 2>/dev/null || echo "0")
+
+            if [ "$failed_iters" -gt 0 ]; then
+                echo "### Failed Iterations"
+                echo ""
+                jq -r '.iteration_history[] | select(.exit_code != 0) | "- **Iteration \(.iteration):** exit code \(.exit_code)"' "$SESSION_FILE" 2>/dev/null
+                echo ""
+            fi
+
+            echo "### Suggested Actions"
+            echo ""
+            case "$final_status" in
+                failed)
+                    echo "1. Check the log file for detailed error messages:"
+                    echo "   \`\`\`"
+                    echo "   tail -100 ${LOG_FILE:-'~/.ralph/logs/latest.log'}"
+                    echo "   \`\`\`"
+                    echo "2. Review the last iteration output for specific errors"
+                    echo "3. Check if API rate limits were exceeded"
+                    echo "4. Verify the spec/plan files are valid"
+                    ;;
+                interrupted)
+                    echo "1. Resume the session with: \`./ralph.sh --resume\`"
+                    echo "2. Check \`.ralph-session.json\` for session state"
+                    echo "3. Review progress.txt for completed work"
+                    ;;
+            esac
+            echo ""
+        fi
+
+        # Links section
+        echo "## Related Files"
+        echo ""
+        echo "- **Full Log:** [\`${LOG_FILE:-N/A}\`](${LOG_FILE:-})"
+        echo "- **Session State:** [\`.ralph-session.json\`](.ralph-session.json) (if preserved)"
+        [ -n "$progress_file" ] && echo "- **Progress:** [\`${progress_file}\`](${progress_file})"
+        [ -n "$plan_file" ] && echo "- **Plan:** [\`${plan_file}\`](${plan_file})"
+        echo ""
+
+        # Footer
+        echo "---"
+        echo "*Generated by ralph.sh at $(date -u +%Y-%m-%dT%H:%M:%SZ)*"
+
+    } > "$summary_file"
+
+    echo -e "  ${DIM}Summary:${RESET} ${summary_file}"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# INTERACTIVE CONFIRMATION MODE
+# Prompts user for confirmation between iterations
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Display iteration summary before interactive prompt
+# Arguments: iteration_number, duration, exit_code
+show_iteration_summary() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+
+    echo -e "\n${CYAN}${BOLD}┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${CYAN}${BOLD}│${RESET}      ${BOLD}Iteration $iteration Summary${RESET}               ${CYAN}${BOLD}│${RESET}"
+    echo -e "${CYAN}${BOLD}├─────────────────────────────────────────┤${RESET}"
+    echo -e "${CYAN}${BOLD}│${RESET}  Duration: ${duration}s                          ${CYAN}${BOLD}│${RESET}"
+
+    if [ "$exit_code" -eq 0 ]; then
+        echo -e "${CYAN}${BOLD}│${RESET}  Status:   ${GREEN}${SYM_CHECK} Success${RESET}                      ${CYAN}${BOLD}│${RESET}"
+    else
+        echo -e "${CYAN}${BOLD}│${RESET}  Status:   ${RED}${SYM_CROSS} Had errors${RESET}                   ${CYAN}${BOLD}│${RESET}"
+    fi
+
+    # Show files changed
+    local files_changed=0
+    files_changed=$(git status --porcelain 2>/dev/null | wc -l | tr -d ' ' || echo "0")
+    echo -e "${CYAN}${BOLD}│${RESET}  Files:    ${files_changed} changed                        ${CYAN}${BOLD}│${RESET}"
+
+    echo -e "${CYAN}${BOLD}└─────────────────────────────────────────┘${RESET}"
+}
+
+# Prompt user to continue to next iteration
+# Returns: 0 to continue, 1 to stop, 2 to show diff then prompt again
+# Arguments: timeout_seconds
+prompt_continue() {
+    local timeout="$1"
+
+    # Check if running in a TTY
+    if [ ! -t 0 ]; then
+        echo -e "${YELLOW}Warning: Interactive mode requires a TTY. Continuing automatically...${RESET}"
+        return 0
+    fi
+
+    echo -e "\n${YELLOW}${BOLD}Continue to next iteration?${RESET} [${GREEN}Y${RESET}/n/s] (timeout: ${timeout}s)"
+    echo -e "  ${DIM}Y = continue, n = stop, s = show git diff${RESET}"
+    echo -n "> "
+
+    local response
+    if read -r -t "$timeout" response; then
+        case "${response,,}" in  # Convert to lowercase
+            ""|y|yes)
+                return 0  # Continue
+                ;;
+            n|no)
+                return 1  # Stop
+                ;;
+            s|show|diff)
+                return 2  # Show diff
+                ;;
+            *)
+                echo -e "${YELLOW}Unknown option '${response}'. Continuing...${RESET}"
+                return 0
+                ;;
+        esac
+    else
+        # Timeout - continue by default
+        echo -e "\n${DIM}Timeout reached. Continuing to next iteration...${RESET}"
+        return 0
+    fi
+}
+
+# Handle interactive confirmation between iterations
+# Arguments: iteration_number, duration, exit_code
+# Returns: 0 to continue, 1 to stop
+handle_interactive_confirmation() {
+    local iteration="$1"
+    local duration="$2"
+    local exit_code="$3"
+
+    # Show iteration summary first
+    show_iteration_summary "$iteration" "$duration" "$exit_code"
+
+    while true; do
+        prompt_continue "$INTERACTIVE_TIMEOUT"
+        local result=$?
+
+        case $result in
+            0)  # Continue
+                return 0
+                ;;
+            1)  # Stop
+                echo -e "\n${YELLOW}${SYM_DOT} User requested stop. Ending session...${RESET}"
+                return 1
+                ;;
+            2)  # Show diff
+                echo -e "\n${CYAN}${BOLD}Git Diff:${RESET}"
+                echo -e "${DIM}───────────────────────────────────────${RESET}"
+                git diff --stat 2>/dev/null || echo "  (no changes)"
+                echo -e "${DIM}───────────────────────────────────────${RESET}"
+                echo ""
+                # Loop back to prompt again
+                ;;
+        esac
+    done
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# VERBOSE MODE
+# Detailed logging for debugging configuration and prompt issues
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Log a verbose message (only shown when --verbose is set)
+# Arguments: message
+# Prefix: [verbose] in DIM color, clearly indented
+verbose_log() {
+    [ "$VERBOSE" != true ] && return 0
+    local message="$1"
+    echo -e "${DIM}  [verbose] ${message}${RESET}"
+}
+
+# Log verbose message with label and value
+# Arguments: label, value
+verbose_log_kv() {
+    [ "$VERBOSE" != true ] && return 0
+    local label="$1"
+    local value="$2"
+    echo -e "${DIM}  [verbose] ${label}: ${RESET}${value}"
+}
+
+# Show where a config value came from (for debugging precedence)
+# Arguments: variable_name, value, source (cli|env|config|default)
+verbose_log_source() {
+    [ "$VERBOSE" != true ] && return 0
+    local var_name="$1"
+    local value="$2"
+    local source="$3"
+    local source_color=""
+
+    case "$source" in
+        cli)     source_color="${GREEN}" ;;
+        env)     source_color="${CYAN}" ;;
+        config)  source_color="${YELLOW}" ;;
+        default) source_color="${DIM}" ;;
+        *)       source_color="${DIM}" ;;
+    esac
+
+    echo -e "${DIM}  [verbose] ${var_name} = ${RESET}${value} ${source_color}(${source})${RESET}"
+}
+
+# Show resolved prompt content (first N lines + total line count)
+# Arguments: prompt_content, max_lines (default: 20)
+verbose_show_prompt() {
+    [ "$VERBOSE" != true ] && return 0
+    local prompt_content="$1"
+    local max_lines="${2:-20}"
+
+    echo -e "\n${DIM}  [verbose] ┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${DIM}  [verbose] │ Resolved Prompt Content                 │${RESET}"
+    echo -e "${DIM}  [verbose] └─────────────────────────────────────────┘${RESET}"
+
+    local line_count
+    line_count=$(echo "$prompt_content" | wc -l | tr -d ' ')
+
+    echo -e "${DIM}  [verbose] Total lines: ${line_count}${RESET}"
+    echo -e "${DIM}  [verbose] First ${max_lines} lines:${RESET}"
+    echo -e "${DIM}  [verbose] ────────────────────────────────────────${RESET}"
+
+    echo "$prompt_content" | head -n "$max_lines" | while IFS= read -r line; do
+        # Truncate long lines for readability
+        if [ ${#line} -gt 80 ]; then
+            echo -e "${DIM}  │ ${line:0:77}...${RESET}"
+        else
+            echo -e "${DIM}  │ ${line}${RESET}"
+        fi
+    done
+
+    if [ "$line_count" -gt "$max_lines" ]; then
+        echo -e "${DIM}  │ ... (${line_count} total lines)${RESET}"
+    fi
+    echo -e "${DIM}  [verbose] ────────────────────────────────────────${RESET}"
+}
+
+# Show session state update in verbose mode
+# Arguments: operation (init|update|finalize), details
+verbose_session_update() {
+    [ "$VERBOSE" != true ] && return 0
+    local operation="$1"
+    local details="$2"
+    echo -e "${DIM}  [verbose] Session ${operation}: ${details}${RESET}"
+}
+
+# Show retry decision in verbose mode
+# Arguments: decision, reason
+verbose_retry_decision() {
+    [ "$VERBOSE" != true ] && return 0
+    local decision="$1"
+    local reason="$2"
+    echo -e "${DIM}  [verbose] Retry decision: ${decision} - ${reason}${RESET}"
+}
+
 # Cleanup temp files on exit
 cleanup_temp() {
     [ -n "$TEMP_PROMPT_FILE" ] && [ -f "$TEMP_PROMPT_FILE" ] && rm -f "$TEMP_PROMPT_FILE"
@@ -1816,6 +2326,76 @@ else
     PLAN_FILE="${PLAN_FILE:-./plans/IMPLEMENTATION_PLAN.md}"
 fi
 
+# Show config precedence in verbose mode
+# This function displays where each config value came from
+show_config_precedence() {
+    [ "$VERBOSE" != true ] && return 0
+
+    echo -e "\n${DIM}  [verbose] ┌─────────────────────────────────────────┐${RESET}"
+    echo -e "${DIM}  [verbose] │ Configuration Precedence                │${RESET}"
+    echo -e "${DIM}  [verbose] │ (cli > env > config > default)          │${RESET}"
+    echo -e "${DIM}  [verbose] └─────────────────────────────────────────┘${RESET}"
+
+    # Determine source for each key variable
+    local model_source="default"
+    [ -n "${RALPH_MODEL:-}" ] && model_source="env"
+    [ "$CLI_MODEL_SET" = "true" ] && model_source="cli"
+
+    local max_source="default"
+    [ -n "${RALPH_MAX_ITERATIONS:-}" ] && max_source="env"
+    [ "$CLI_MAX_SET" = "true" ] && max_source="cli"
+    [ "$UNLIMITED" = true ] && max_source="cli"
+    [ "$TEST_MODE" = true ] && max_source="cli (test mode)"
+
+    local push_source="default"
+    [ -n "${RALPH_PUSH_ENABLED:-}" ] && push_source="env"
+    [ "$CLI_PUSH_SET" = "true" ] && push_source="cli"
+    [ "$TEST_MODE" = true ] && push_source="cli (test mode)"
+
+    local spec_source="default"
+    [ -n "${RALPH_SPEC_FILE:-}" ] && spec_source="env"
+    [ "$CLI_SPEC_SET" = "true" ] && spec_source="cli"
+
+    local plan_source="default"
+    [ -n "${RALPH_PLAN_FILE:-}" ] && plan_source="env"
+    [ "$CLI_PLAN_SET" = "true" ] && plan_source="cli"
+    [ "$CLI_SPEC_SET" = "true" ] && [ "$CLI_PLAN_SET" != "true" ] && plan_source="derived from spec"
+
+    local log_dir_source="default"
+    [ -n "${RALPH_LOG_DIR:-}" ] && log_dir_source="env"
+    [ "$CLI_LOG_DIR_SET" = "true" ] && log_dir_source="cli"
+    [ "$CLI_LOG_FILE_SET" = "true" ] && log_dir_source="cli (--log-file)"
+
+    local log_format_source="default"
+    [ -n "${RALPH_LOG_FORMAT:-}" ] && log_format_source="env"
+    [ "$CLI_LOG_FORMAT_SET" = "true" ] && log_format_source="cli"
+
+    local webhook_source="none"
+    [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ] && webhook_source="env"
+    [ "$CLI_WEBHOOK_SET" = "true" ] && webhook_source="cli"
+    [ -z "${NOTIFY_WEBHOOK:-}" ] && webhook_source="(not set)"
+
+    verbose_log_source "MODEL" "$MODEL" "$model_source"
+    verbose_log_source "MAX_ITERATIONS" "$MAX_ITERATIONS" "$max_source"
+    verbose_log_source "PUSH_ENABLED" "$PUSH_ENABLED" "$push_source"
+    verbose_log_source "SPEC_FILE" "$SPEC_FILE" "$spec_source"
+    verbose_log_source "PLAN_FILE" "$PLAN_FILE" "$plan_source"
+    verbose_log_source "LOG_DIR" "${LOG_DIR:-$DEFAULT_LOG_DIR}" "$log_dir_source"
+    verbose_log_source "LOG_FORMAT" "$LOG_FORMAT" "$log_format_source"
+    [ -n "${NOTIFY_WEBHOOK:-}" ] && verbose_log_source "WEBHOOK" "${NOTIFY_WEBHOOK:0:30}..." "$webhook_source"
+
+    # Show loaded config files
+    if [ ${#LOADED_CONFIG_FILES[@]} -gt 0 ]; then
+        echo -e "${DIM}  [verbose] Config files loaded:${RESET}"
+        for config_file in "${LOADED_CONFIG_FILES[@]}"; do
+            echo -e "${DIM}  [verbose]   • ${config_file}${RESET}"
+        done
+    else
+        echo -e "${DIM}  [verbose] No config files loaded${RESET}"
+    fi
+    echo ""
+}
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # BRANCH-CHANGE ARCHIVING
 # Archives previous branch's specs and progress when switching branches
@@ -1895,7 +2475,15 @@ check_branch_change
 
 print_header() {
     echo -e "\n${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
-    echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}                 ${YELLOW}${BOLD}⚠ TEST MODE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
+    elif [ "$INTERACTIVE_MODE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}⚡ INTERACTIVE${RESET} ${BOLD}RALPH LOOP${RESET}                     ${CYAN}${BOLD}║${RESET}"
+    elif [ "$VERBOSE" = true ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}                ${CYAN}${BOLD}🔍 VERBOSE${RESET} ${BOLD}RALPH LOOP${RESET}                       ${CYAN}${BOLD}║${RESET}"
+    else
+        echo -e "${CYAN}${BOLD}║${RESET}                      ${BOLD}RALPH LOOP${RESET}                              ${CYAN}${BOLD}║${RESET}"
+    fi
     echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}\n"
 }
 
@@ -1921,6 +2509,15 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${RED}unlimited${RESET}"
     else
         echo -e "${DIM}│${RESET} ${BOLD}Max${RESET}      ${SYM_ARROW} ${YELLOW}$MAX_ITERATIONS iterations${RESET}"
+    fi
+    if [ "$TEST_MODE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Test${RESET}     ${SYM_ARROW} ${YELLOW}enabled${RESET} (1 iter, no push, no marker check)"
+    fi
+    if [ "$INTERACTIVE_MODE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Interact${RESET} ${SYM_ARROW} ${YELLOW}enabled${RESET} (prompt between iters, timeout ${INTERACTIVE_TIMEOUT}s)"
+    fi
+    if [ "$VERBOSE" = true ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Verbose${RESET}  ${SYM_ARROW} ${CYAN}enabled${RESET} (prompt preview, config sources)"
     fi
     echo -e "${DIM}│${RESET} ${BOLD}Push${RESET}     ${SYM_ARROW} ${DIM}$( [ "$PUSH_ENABLED" = true ] && echo "enabled" || echo "disabled" )${RESET}"
     if [ "$RETRY_ENABLED" = true ]; then
@@ -2340,6 +2937,8 @@ if [ "$RESUME_SESSION" = true ]; then
 else
     print_header
     print_config
+    # Show config precedence in verbose mode
+    show_config_precedence
 fi
 
 # Show inline prompt preview if applicable
@@ -2385,6 +2984,10 @@ while true; do
     # --verbose is required for stream-json, parser filters the noise
     # substitute_template replaces {{SPEC_FILE}}, {{PROGRESS_FILE}}, {{SOURCE_DIR}}
     prompt_content=$(substitute_template "$(cat "$PROMPT_FILE")")
+
+    # Show resolved prompt content in verbose mode
+    verbose_show_prompt "$prompt_content"
+
     run_with_retry "$prompt_content"
     claude_exit_code=$?
 
@@ -2439,13 +3042,23 @@ while true; do
     # Log iteration end for structured logging
     log_iteration_end "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code" "$iter_status"
 
-    # Check for completion marker
-    if [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
+    # Check for completion marker (skip in test mode - always exit after 1 iteration)
+    if [ "$TEST_MODE" != true ] && [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
         echo -e "\n${GREEN}${BOLD}${SYM_CHECK} All tasks complete!${RESET}"
         EXIT_STATUS=0
         EXIT_REASON="complete"
         ITERATION=$((ITERATION + 1))
         break
+    fi
+
+    # Interactive confirmation mode - prompt before next iteration
+    if [ "$INTERACTIVE_MODE" = true ]; then
+        if ! handle_interactive_confirmation "$((ITERATION + 1))" "$iter_duration" "$iter_exit_code"; then
+            EXIT_STATUS=0
+            EXIT_REASON="user_stopped"
+            ITERATION=$((ITERATION + 1))
+            break
+        fi
     fi
 
     ITERATION=$((ITERATION + 1))
@@ -2478,21 +3091,33 @@ total_duration=$((end_time - START_TIME))
 log_session_end "$EXIT_REASON" "$total_duration" "$ITERATION" "$FAILED_ITERATIONS"
 
 # Send webhook notification based on exit reason
-if [ "$EXIT_REASON" = "complete" ]; then
-    send_webhook "session_complete"
-else
-    send_webhook "session_max_iterations"
-fi
+case "$EXIT_REASON" in
+    complete)
+        send_webhook "session_complete"
+        ;;
+    user_stopped)
+        send_webhook "session_user_stopped"
+        ;;
+    *)
+        send_webhook "session_max_iterations"
+        ;;
+esac
 
 minutes=$((total_duration / 60))
 seconds=$((total_duration % 60))
 
 echo -e "\n${CYAN}${BOLD}╔════════════════════════════════════════════════════════════════╗${RESET}"
-if [ "$EXIT_REASON" = "complete" ]; then
-    echo -e "${CYAN}${BOLD}║${RESET}              ${GREEN}${BOLD}${SYM_CHECK} ALL TASKS COMPLETE${RESET}                        ${CYAN}${BOLD}║${RESET}"
-else
-    echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} MAX ITERATIONS REACHED${RESET}                     ${CYAN}${BOLD}║${RESET}"
-fi
+case "$EXIT_REASON" in
+    complete)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${GREEN}${BOLD}${SYM_CHECK} ALL TASKS COMPLETE${RESET}                        ${CYAN}${BOLD}║${RESET}"
+        ;;
+    user_stopped)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} STOPPED BY USER${RESET}                           ${CYAN}${BOLD}║${RESET}"
+        ;;
+    *)
+        echo -e "${CYAN}${BOLD}║${RESET}              ${YELLOW}${BOLD}${SYM_DOT} MAX ITERATIONS REACHED${RESET}                     ${CYAN}${BOLD}║${RESET}"
+        ;;
+esac
 echo -e "${CYAN}${BOLD}╠════════════════════════════════════════════════════════════════╣${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}                                                                ${CYAN}${BOLD}║${RESET}"
 if [ "$EXIT_STATUS" -eq 0 ]; then

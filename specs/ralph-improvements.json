@@ -323,7 +323,7 @@
       },
       "priority": 11,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Depends on US-002 (session state) for iteration data"
     },
     {
@@ -345,7 +345,7 @@
       },
       "priority": 12,
       "effort": "small",
-      "passes": false,
+      "passes": true,
       "notes": "Quick win for prompt development workflow"
     },
     {
@@ -368,7 +368,7 @@
       },
       "priority": 13,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Useful for learning/reviewing what ralph does"
     },
     {
@@ -391,7 +391,7 @@
       },
       "priority": 14,
       "effort": "small",
-      "passes": false,
+      "passes": true,
       "notes": "Helpful for debugging configuration issues"
     },
     {
@@ -413,7 +413,7 @@
       },
       "priority": 15,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Nice-to-have quality of life improvement"
     },
     {
@@ -435,7 +435,7 @@
       },
       "priority": 16,
       "effort": "medium",
-      "passes": false,
+      "passes": true,
       "notes": "Should be done last after all features are implemented"
     }
   ],

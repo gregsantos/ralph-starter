@@ -301,19 +301,19 @@ NOTIFY_WEBHOOK
 #### Task 3.3: US-011 Session Summary Report
 **Priority:** 11 | **Effort:** Medium | **Depends on:** US-002
 
-- [ ] 3.3.1 Create `generate_summary()` function
-- [ ] 3.3.2 Generate `{session_id}_summary.md` in log directory
-- [ ] 3.3.3 Include session metadata (mode, model, branch, duration)
-- [ ] 3.3.4 Include iteration summaries from session state
-- [ ] 3.3.5 Include files modified list
-- [ ] 3.3.6 Include commits made list
-- [ ] 3.3.7 Include errors encountered
-- [ ] 3.3.8 Include timing breakdown per iteration
-- [ ] 3.3.9 Link to full log file
-- [ ] 3.3.10 Add `--no-summary` flag to disable
-- [ ] 3.3.11 For failed sessions: include last error and suggested fixes
-- [ ] 3.3.12 Call generate_summary in finalize_session_state()
-- [ ] 3.3.13 Run `shellcheck ralph.sh` and fix any issues
+- [x] 3.3.1 Create `generate_summary()` function
+- [x] 3.3.2 Generate `{session_id}_summary.md` in log directory
+- [x] 3.3.3 Include session metadata (mode, model, branch, duration)
+- [x] 3.3.4 Include iteration summaries from session state
+- [x] 3.3.5 Include files modified list
+- [x] 3.3.6 Include commits made list
+- [x] 3.3.7 Include errors encountered
+- [x] 3.3.8 Include timing breakdown per iteration
+- [x] 3.3.9 Link to full log file
+- [x] 3.3.10 Add `--no-summary` flag to disable
+- [x] 3.3.11 For failed sessions: include last error and suggested fixes
+- [x] 3.3.12 Call generate_summary in finalize_session_state()
+- [x] 3.3.13 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - Markdown summary generated after session
@@ -329,13 +329,13 @@ NOTIFY_WEBHOOK
 #### Task 4.1: US-012 Single Iteration Test Mode
 **Priority:** 12 | **Effort:** Small | **Depends on:** None
 
-- [ ] 4.1.1 Add `--test` or `-1` flag to argument parsing
-- [ ] 4.1.2 When set: MAX_ITERATIONS=1, PUSH_ENABLED=false
-- [ ] 4.1.3 Add TEST_MODE variable for display
-- [ ] 4.1.4 Display 'TEST MODE' banner in print_header()
-- [ ] 4.1.5 Skip completion marker detection (always exit after 1 iteration)
-- [ ] 4.1.6 Can combine with --dry-run for config-only preview
-- [ ] 4.1.7 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.1.1 Add `--test` or `-1` flag to argument parsing
+- [x] 4.1.2 When set: MAX_ITERATIONS=1, PUSH_ENABLED=false
+- [x] 4.1.3 Add TEST_MODE variable for display
+- [x] 4.1.4 Display 'TEST MODE' banner in print_header()
+- [x] 4.1.5 Skip completion marker detection (always exit after 1 iteration)
+- [x] 4.1.6 Can combine with --dry-run for config-only preview
+- [x] 4.1.7 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --test runs single iteration without push
@@ -348,15 +348,15 @@ NOTIFY_WEBHOOK
 #### Task 4.2: US-013 Interactive Confirmation Mode
 **Priority:** 13 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 4.2.1 Add `--interactive` or `-i` flag to argument parsing
-- [ ] 4.2.2 Add `--interactive-timeout N` flag (default 300 seconds)
-- [ ] 4.2.3 Create `prompt_continue()` function
-- [ ] 4.2.4 After each iteration, prompt: 'Continue to next iteration? [Y/n/s]'
-- [ ] 4.2.5 'Y' continues, 'n' exits, 's' shows git diff then asks again
-- [ ] 4.2.6 Add timeout with read -t
-- [ ] 4.2.7 Display iteration summary before prompt
-- [ ] 4.2.8 Check for TTY: `[ -t 0 ]` - if non-TTY, skip interactive or error
-- [ ] 4.2.9 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.2.1 Add `--interactive` or `-i` flag to argument parsing
+- [x] 4.2.2 Add `--interactive-timeout N` flag (default 300 seconds)
+- [x] 4.2.3 Create `prompt_continue()` function
+- [x] 4.2.4 After each iteration, prompt: 'Continue to next iteration? [Y/n/s]'
+- [x] 4.2.5 'Y' continues, 'n' exits, 's' shows git diff then asks again
+- [x] 4.2.6 Add timeout with read -t
+- [x] 4.2.7 Display iteration summary before prompt
+- [x] 4.2.8 Check for TTY: `[ -t 0 ]` - if non-TTY, skip interactive or error
+- [x] 4.2.9 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - --interactive prompts between iterations
@@ -370,15 +370,15 @@ NOTIFY_WEBHOOK
 #### Task 4.3: US-014 Verbose Mode with Prompt Preview
 **Priority:** 14 | **Effort:** Small | **Depends on:** None
 
-- [ ] 4.3.1 Add `--verbose` or `-v` flag (distinct from Claude's --verbose)
-- [ ] 4.3.2 Add VERBOSE variable
-- [ ] 4.3.3 Create `verbose_log()` function with DIM color and '[verbose]' prefix
-- [ ] 4.3.4 Display resolved prompt content (after template substitution) before sending
-- [ ] 4.3.5 Show config precedence (which value came from where)
-- [ ] 4.3.6 Display session state updates
-- [ ] 4.3.7 Show retry logic decisions
-- [ ] 4.3.8 Verbose output clearly marked/indented
-- [ ] 4.3.9 Run `shellcheck ralph.sh` and fix any issues
+- [x] 4.3.1 Add `--verbose` or `-v` flag (distinct from Claude's --verbose)
+- [x] 4.3.2 Add VERBOSE variable
+- [x] 4.3.3 Create `verbose_log()` function with DIM color and '[verbose]' prefix
+- [x] 4.3.4 Display resolved prompt content (after template substitution) before sending
+- [x] 4.3.5 Show config precedence (which value came from where)
+- [x] 4.3.6 Display session state updates
+- [x] 4.3.7 Show retry logic decisions
+- [x] 4.3.8 Verbose output clearly marked/indented
+- [x] 4.3.9 Run `shellcheck ralph.sh` and fix any issues
 
 **Acceptance criteria:**
 - -v shows prompt content before send
@@ -392,15 +392,15 @@ NOTIFY_WEBHOOK
 #### Task 4.4: US-015 Shell Completion Scripts
 **Priority:** 15 | **Effort:** Medium | **Depends on:** None
 
-- [ ] 4.4.1 Create `completions/` directory
-- [ ] 4.4.2 Create `completions/ralph.bash` for bash completion
-- [ ] 4.4.3 Create `completions/ralph.zsh` for zsh completion
-- [ ] 4.4.4 Complete presets: plan, build, product
-- [ ] 4.4.5 Complete all flags: --model, --file, --prompt, etc.
-- [ ] 4.4.6 Complete model names: opus, sonnet, haiku
-- [ ] 4.4.7 Complete file paths for -f, -s, -l flags
-- [ ] 4.4.8 Add installation instructions to show_help() or docs
-- [ ] 4.4.9 Run `shellcheck completions/ralph.bash` and fix any issues
+- [x] 4.4.1 Create `completions/` directory
+- [x] 4.4.2 Create `completions/ralph.bash` for bash completion
+- [x] 4.4.3 Create `completions/ralph.zsh` for zsh completion
+- [x] 4.4.4 Complete presets: plan, build, product
+- [x] 4.4.5 Complete all flags: --model, --file, --prompt, etc.
+- [x] 4.4.6 Complete model names: opus, sonnet, haiku
+- [x] 4.4.7 Complete file paths for -f, -s, -l flags
+- [x] 4.4.8 Add installation instructions to show_help() or docs
+- [x] 4.4.9 Run `shellcheck completions/ralph.bash` and fix any issues
 
 **Acceptance criteria:**
 - Tab completion for bash and zsh
@@ -414,18 +414,18 @@ NOTIFY_WEBHOOK
 #### Task 4.5: US-016 Update Documentation
 **Priority:** 16 | **Effort:** Medium | **Depends on:** All above
 
-- [ ] 4.5.1 Update docs/RALPH_LOOP_REF.md with all new flags
-- [ ] 4.5.2 Add "Environment Variables" section to docs
-- [ ] 4.5.3 Add "Session Resume" section to docs
-- [ ] 4.5.4 Add "Retry Logic" section to docs
-- [ ] 4.5.5 Add "Webhooks" section to docs
-- [ ] 4.5.6 Add "Structured Logging" section to docs
-- [ ] 4.5.7 Add "Troubleshooting" section for common issues
-- [ ] 4.5.8 Update show_help() output with new options
-- [ ] 4.5.9 Update ralph.conf with commented examples of new options
-- [ ] 4.5.10 Add examples for CI/CD usage
-- [ ] 4.5.11 Verify all code examples in docs still work
-- [ ] 4.5.12 Update header comments in ralph.sh
+- [x] 4.5.1 Update docs/RALPH_LOOP_REF.md with all new flags
+- [x] 4.5.2 Add "Environment Variables" section to docs
+- [x] 4.5.3 Add "Session Resume" section to docs
+- [x] 4.5.4 Add "Retry Logic" section to docs
+- [x] 4.5.5 Add "Webhooks" section to docs
+- [x] 4.5.6 Add "Structured Logging" section to docs
+- [x] 4.5.7 Add "Troubleshooting" section for common issues
+- [x] 4.5.8 Update show_help() output with new options
+- [x] 4.5.9 Update ralph.conf with commented examples of new options
+- [x] 4.5.10 Add examples for CI/CD usage
+- [x] 4.5.11 Verify all code examples in docs still work
+- [x] 4.5.12 Update header comments in ralph.sh
 
 **Acceptance criteria:**
 - All new features documented

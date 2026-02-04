@@ -371,3 +371,279 @@
 - `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --notify-webhook "https://cli.example.com" --dry-run` - CLI overrides env
 - `./ralph.sh --dry-run --notify-webhook "https://user:pass@example.com/webhook"` - Basic auth redacted in display
 
+## Iteration 11 - 2026-02-04
+
+### Task Completed: US-011 Session Summary Report (Task 3.3)
+
+**What was done:**
+- Added SESSION SUMMARY REPORT section after WEBHOOK NOTIFICATIONS with:
+  - `generate_summary()` function - Generates comprehensive markdown summary report
+  - `GENERATE_SUMMARY` variable for controlling summary generation (default: true)
+- Summary report includes:
+  - Session Overview table: status (with emoji), session_id, mode, model, branch, start time, duration, iterations
+  - Configuration section: spec, plan, progress, and log file paths
+  - Iteration Details table: per-iteration duration, exit code, files modified, commit message
+  - Timing Breakdown: total iteration time, average per iteration, overhead
+  - Files Modified: git diff list of all changed files
+  - Commits Made: git log of commits during session
+  - Troubleshooting section (for failed/interrupted sessions): failed iteration details, suggested actions
+  - Related Files: links to log, session state, progress, and plan files
+- Added `--no-summary` CLI flag to disable summary generation
+- Integrated `generate_summary()` call into `finalize_session_state()` before archive/cleanup
+- Output file location: `{log_directory}/{session_id}_summary.md`
+- Updated `show_help()` with --no-summary flag documentation
+- Updated `docs/RALPH_LOOP_REF.md` with comprehensive Session Summary Reports section
+- Updated user files documentation to include summary files
+
+**Why:**
+- Summary reports provide post-session visibility into what was accomplished
+- Useful for team visibility when running autonomous sessions
+- Troubleshooting section helps diagnose failed/interrupted sessions
+- Iteration timing breakdown enables efficiency analysis
+- Markdown format integrates well with documentation workflows
+- --no-summary flag allows disabling for minimal overhead
+
+**Files changed:**
+- `ralph.sh` - Added SESSION SUMMARY REPORT section (~170 lines), generate_summary() function, --no-summary flag, integration into finalize_session_state()
+- `docs/RALPH_LOOP_REF.md` - Added Session Summary Reports section, updated User Files structure, added --no-summary to quick reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 3.3 complete
+- `specs/ralph-improvements.json` - Updated US-011 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from summary code)
+- `./ralph.sh --help` - Shows new --no-summary flag
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --no-summary --dry-run` - Flag accepted without error
+
+## Iteration 12 - 2026-02-04
+
+### Task Completed: US-012 Single Iteration Test Mode (Task 4.1)
+
+**What was done:**
+- Added `--test` and `-1` CLI flags for single iteration test mode
+- Added `TEST_MODE` variable in CONFIGURATION section
+- Test mode sets: MAX_ITERATIONS=1, PUSH_ENABLED=false
+- Updated `print_header()` to display "⚠ TEST MODE RALPH LOOP" banner when active
+- Updated `print_config()` to show "Test → enabled (1 iter, no push, no marker check)"
+- Modified completion marker check in main loop to skip when TEST_MODE is true
+- Updated header comment in ralph.sh with new flag
+- Updated `show_help()` with --test/-1 flag and example
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New Test Mode section in usage documentation
+  - Test mode commands in Quick Reference
+
+**Why:**
+- Test mode enables quick prompt validation without committing to full loops
+- Ideal for debugging configuration or prompt issues
+- Single iteration prevents wasted time on bad prompts
+- No push keeps remote branches clean during testing
+- Ignoring completion marker ensures the iteration always completes (no early exit)
+- -1 shorthand is intuitive (run 1 iteration)
+
+**Files changed:**
+- `ralph.sh` - Added TEST_MODE variable, --test/-1 flag parsing, test mode handling, print_header() banner, print_config() indicator, completion marker skip logic
+- `docs/RALPH_LOOP_REF.md` - Added Test Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.1 complete
+- `specs/ralph-improvements.json` - Updated US-012 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `./ralph.sh --help` - Shows new --test/-1 flag and example
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --test --dry-run` - Shows TEST MODE banner, 1 iteration, push disabled
+- `./ralph.sh -1 --dry-run` - Same as --test
+
+## Iteration 13 - 2026-02-04
+
+### Task Completed: US-013 Interactive Confirmation Mode (Task 4.2)
+
+**What was done:**
+- Added INTERACTIVE CONFIRMATION MODE section after SESSION SUMMARY REPORT with:
+  - `INTERACTIVE_MODE` variable (default: false)
+  - `INTERACTIVE_TIMEOUT` variable (default: 300 seconds / 5 minutes)
+  - `show_iteration_summary()` - Displays iteration summary (duration, status, files changed)
+  - `prompt_continue()` - Prompts user with Y/n/s options and timeout
+  - `handle_interactive_confirmation()` - Orchestrates summary + prompt + diff loop
+- Added `--interactive` and `-i` CLI flags for enabling interactive mode
+- Added `--interactive-timeout N` flag for custom timeout (with validation)
+- Integrated into main loop after completion marker check
+- Added TTY detection: in non-TTY environments, warns and continues automatically
+- Options implemented:
+  - `Y` or Enter: Continue to next iteration
+  - `n`: Stop session gracefully (exit_reason=user_stopped)
+  - `s`: Show git diff --stat then prompt again
+- Added `user_stopped` exit reason with proper webhook and summary handling
+- Updated `print_header()` to show "⚡ INTERACTIVE RALPH LOOP" banner
+- Updated `print_config()` to show interactive mode status and timeout
+- Updated `show_help()` with new flags and examples
+- Updated header comment in ralph.sh with new flags
+- Updated `docs/RALPH_LOOP_REF.md` with Interactive Mode section and Quick Reference
+
+**Why:**
+- Interactive mode provides control for cautious users who want to review changes between iterations
+- Useful for learning how Ralph works by watching each iteration
+- Enables periodic check-ins during long-running sessions
+- The 's' option allows reviewing changes before deciding to continue
+- TTY detection prevents hanging in non-interactive environments (CI/CD, cron, piped input)
+- Timeout default of 5 minutes provides reasonable wait without indefinite blocking
+
+**Files changed:**
+- `ralph.sh` - Added INTERACTIVE CONFIRMATION MODE section (~100 lines), INTERACTIVE_MODE/INTERACTIVE_TIMEOUT variables, --interactive/-i and --interactive-timeout flags, main loop integration, print_header()/print_config() updates, user_stopped handling
+- `docs/RALPH_LOOP_REF.md` - Added Interactive Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.2 complete
+- `specs/ralph-improvements.json` - Updated US-013 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from interactive code)
+- `./ralph.sh --help` - Shows new --interactive/-i and --interactive-timeout flags
+- `./ralph.sh --dry-run` - Works correctly
+- `./ralph.sh --interactive --dry-run` - Shows INTERACTIVE banner and "Interact → enabled (prompt between iters, timeout 300s)"
+- `./ralph.sh -i --interactive-timeout 60 --dry-run` - Shows custom timeout of 60s
+- `./ralph.sh --interactive-timeout abc` - Proper validation error
+
+## Iteration 14 - 2026-02-04
+
+### Task Completed: US-014 Verbose Mode with Prompt Preview (Task 4.3)
+
+**What was done:**
+- Added VERBOSE MODE section after INTERACTIVE CONFIRMATION MODE with:
+  - `VERBOSE` variable (default: false)
+  - `verbose_log()` - Log single verbose message with [verbose] prefix
+  - `verbose_log_kv()` - Log key-value pairs with [verbose] prefix
+  - `verbose_log_source()` - Log config value with source attribution (cli/env/config/default)
+  - `verbose_show_prompt()` - Display resolved prompt content (first 20 lines with line count)
+  - `verbose_session_update()` - Log session state changes
+  - `verbose_retry_decision()` - Log retry logic decisions
+- Added `--verbose` and `-v` CLI flags for enabling verbose mode
+- Created `show_config_precedence()` function to display where each config value came from:
+  - Shows MODEL, MAX_ITERATIONS, PUSH_ENABLED, SPEC_FILE, PLAN_FILE, LOG_DIR, LOG_FORMAT, WEBHOOK with source labels
+  - Color-coded by source: green (cli), cyan (env), yellow (config), dim (default)
+  - Lists loaded config files
+- Updated `print_header()` to show "🔍 VERBOSE RALPH LOOP" banner when active
+- Updated `print_config()` to show "Verbose → enabled (prompt preview, config sources)"
+- Integrated verbose calls throughout codebase:
+  - `init_session_state()` - Logs session creation
+  - `update_session_state()` - Logs iteration metrics
+  - `finalize_session_state()` - Logs archive/preserve actions
+  - `run_with_retry()` - Logs retry decisions (skip, give up, abort, retry)
+  - Main loop - Shows resolved prompt content before sending to Claude
+- Updated `show_help()` with new --verbose/-v flag and example
+- Updated header comment in ralph.sh with new flag
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New Verbose Mode section with usage examples and output examples
+  - Updated Quick Reference with verbose mode commands
+
+**Why:**
+- Verbose mode is essential for debugging configuration issues in complex setups
+- Config precedence display clarifies which value came from where (CLI vs env vs config vs default)
+- Prompt preview allows verification of template substitution before execution
+- Session state logging helps debug state management issues
+- Retry decision logging helps understand failure classification
+- Clear [verbose] prefix distinguishes debug output from normal output
+
+**Files changed:**
+- `ralph.sh` - Added VERBOSE variable, --verbose/-v flag parsing, VERBOSE MODE section (~90 lines), show_config_precedence() function (~55 lines), integrated verbose calls in session state functions, retry logic, and main loop
+- `docs/RALPH_LOOP_REF.md` - Added Verbose Mode section, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.3 complete
+- `specs/ralph-improvements.json` - Updated US-014 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from verbose code)
+- `./ralph.sh --help` - Shows new --verbose/-v flag and example
+- `./ralph.sh --dry-run` - Works correctly (no verbose output when not requested)
+- `./ralph.sh -v --dry-run` - Shows VERBOSE banner, config precedence with sources
+- `RALPH_MODEL=sonnet ./ralph.sh -v --dry-run -s ./specs/ralph-improvements.json` - Correctly shows env/cli sources
+- `./ralph.sh --verbose --dry-run` - Same as -v
+
+## Iteration 15 - 2026-02-04
+
+### Task Completed: US-015 Shell Completion Scripts (Task 4.4)
+
+**What was done:**
+- Created `completions/` directory for shell completion scripts
+- Created `completions/ralph.bash` - Comprehensive bash completion script:
+  - Completes presets: plan, build, product
+  - Completes all 30+ flags: --model, --file, --spec, --log-format, etc.
+  - Completes model names: opus, sonnet, haiku
+  - Completes log formats: text, json
+  - Completes file paths for flags: -f, --file, -s, --spec, -l, --plan, --progress, --log-file, --global-config, --artifact-spec
+  - Completes directory paths for flags: --log-dir, --source, --context, --output
+  - Uses shellcheck-compliant mapfile approach for array population
+  - Includes 3 installation options with clear instructions
+- Created `completions/ralph.zsh` - Comprehensive zsh completion script:
+  - Full _arguments completion spec with descriptions for each flag
+  - Descriptive preset/model/format completions (e.g., "opus:Most capable model")
+  - Proper file and directory completion with _files
+  - 3 installation options for different user preferences
+- Updated `show_help()` in ralph.sh with new "Shell Completion" section pointing to completion scripts
+- Updated `docs/RALPH_LOOP_REF.md` with:
+  - New "Shell Completion" section under Installation with detailed setup instructions for bash and zsh
+  - Added shell completion examples to Quick Reference section
+
+**Why:**
+- Tab completion significantly improves CLI usability for power users
+- Reduces need to check --help or docs for flag names
+- Prevents typos in commonly used flags and values
+- Model/format completion reduces cognitive load (no need to remember exact values)
+- File/directory completion for path flags saves typing and prevents errors
+- Both major shells (bash/zsh) supported for broad compatibility
+
+**Files changed:**
+- `completions/ralph.bash` - New bash completion script (~130 lines)
+- `completions/ralph.zsh` - New zsh completion script (~80 lines)
+- `ralph.sh` - Added Shell Completion section to show_help()
+- `docs/RALPH_LOOP_REF.md` - Added Shell Completion section under Installation, updated Quick Reference
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.4 complete
+- `specs/ralph-improvements.json` - Updated US-015 passes: true
+
+**Verification:**
+- `shellcheck completions/ralph.bash` - Passes with no warnings or errors
+- `./ralph.sh --help` - Shows new Shell Completion section at end of help output
+- `ls completions/` - Both ralph.bash and ralph.zsh present
+- Bash completion tested: presets, flags, --model values, --log-format values, file paths all complete correctly
+
+## Iteration 16 - 2026-02-04
+
+### Task Completed: US-016 Update Documentation (Task 4.5)
+
+**What was done:**
+- Verified docs/RALPH_LOOP_REF.md already has comprehensive documentation for all features (added during previous iterations)
+- Verified show_help() already includes all new flags (added during previous iterations)
+- Updated ralph.conf with comprehensive commented examples:
+  - Added configuration precedence documentation header
+  - Added section headers for organization (Path, Execution, Logging, Notifications)
+  - Added detailed comments for each setting with examples
+  - Added product mode path configuration
+  - Added webhook examples (Slack, Discord, custom with auth)
+- Updated ralph.sh header comments with all new flags:
+  - Added --skip-checks, --no-retry, --max-retries N
+  - Added --resume, --list-sessions
+  - Added --log-dir, --log-file, --log-format
+  - Added --notify-webhook, --no-summary, --global-config
+  - Added Environment Variables summary section
+  - Added more example commands
+- Verified all code examples in docs work:
+  - --help, --dry-run, --test, -1, --interactive, -i
+  - --interactive-timeout, --verbose, -v, --list-sessions
+  - --no-retry, --max-retries, --log-format json
+  - --skip-checks, --no-summary, --notify-webhook, --log-dir
+  - plan, build presets, -s spec flag, environment variables
+
+**Why:**
+- Documentation is critical for user adoption and maintainability
+- Comprehensive ralph.conf comments enable self-discovery of configuration options
+- Header comments serve as quick reference for developers reading the script
+- Verified examples prevent documentation drift from implementation
+
+**Files changed:**
+- `ralph.sh` - Updated header comments with all new flags and environment variables section
+- `ralph.conf` - Comprehensive rewrite with sections, detailed comments, and examples
+- `plans/ralph-improvements_PLAN.md` - Marked task 4.5 complete
+- `specs/ralph-improvements.json` - Updated US-016 passes: true
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
+- `shellcheck completions/ralph.bash` - Passes with no issues
+- All code examples tested and verified working
+- `./ralph.sh --help` shows all new flags documented
+

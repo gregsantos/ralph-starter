@@ -30,6 +30,50 @@ The script is self-contained. Ensure you have:
 
 Ralph automatically runs pre-flight checks to verify these dependencies. Use `--skip-checks` to bypass if needed.
 
+### Shell Completion
+
+Tab completion is available for bash and zsh shells.
+
+**Bash:**
+
+```bash
+# Option 1: Source directly in your shell config
+echo 'source /path/to/ralph-starter/completions/ralph.bash' >> ~/.bashrc
+
+# Option 2: Copy to system completions directory
+sudo cp completions/ralph.bash /etc/bash_completion.d/ralph
+
+# Option 3: Copy to user completions directory
+mkdir -p ~/.local/share/bash-completion/completions
+cp completions/ralph.bash ~/.local/share/bash-completion/completions/ralph.sh
+```
+
+**Zsh:**
+
+```bash
+# Option 1: Add completions directory to fpath (BEFORE compinit in ~/.zshrc)
+fpath=(/path/to/ralph-starter/completions $fpath)
+autoload -Uz compinit && compinit
+
+# Option 2: Copy to a directory already in fpath
+cp completions/ralph.zsh ~/.zsh/completions/_ralph
+compinit
+
+# Option 3: Copy to system completions (requires sudo)
+sudo cp completions/ralph.zsh /usr/local/share/zsh/site-functions/_ralph
+```
+
+After installation, restart your shell or run `source ~/.bashrc` (bash) or `source ~/.zshrc` (zsh).
+
+**What's Completed:**
+
+- Presets: `plan`, `build`, `product`
+- All flags: `--model`, `--file`, `--spec`, `--log-format`, etc.
+- Model names: `opus`, `sonnet`, `haiku`
+- Log formats: `text`, `json`
+- File paths for flags that accept them (`-f`, `-s`, `-l`, `--log-file`, etc.)
+- Directory paths for flags that accept them (`--log-dir`, `--source`, `--context`, `--output`)
+
 ## Usage
 
 ### Basic Commands
@@ -138,6 +182,104 @@ Default global config: `~/.ralph/config` (loaded before project `ralph.conf`)
 # Preview config without running Claude
 ./ralph.sh -s ./specs/my-feature.md --dry-run
 ```
+
+### Test Mode
+
+```bash
+# Single iteration, no push, ignore completion marker
+./ralph.sh --test
+./ralph.sh -1                    # Short flag
+
+# Combine with other options
+./ralph.sh --test --model haiku  # Test with haiku
+./ralph.sh --test --dry-run      # Preview test config
+```
+
+Test mode is ideal for:
+- Validating prompts before committing to full loops
+- Debugging configuration issues
+- Quick one-off tasks without affecting remote branches
+
+### Interactive Mode
+
+```bash
+# Prompt for confirmation between iterations
+./ralph.sh --interactive
+./ralph.sh -i                    # Short flag
+
+# Set custom timeout (default: 300 seconds / 5 minutes)
+./ralph.sh -i --interactive-timeout 60
+
+# Combine with other options
+./ralph.sh -i --model sonnet     # Interactive with sonnet
+./ralph.sh -i --test             # Effectively same as --test (1 iteration)
+```
+
+When interactive mode is enabled, after each iteration Ralph will:
+1. Display an iteration summary (duration, status, files changed)
+2. Prompt: `Continue to next iteration? [Y/n/s]`
+   - **Y** (or Enter): Continue to next iteration
+   - **n**: Stop the session gracefully
+   - **s**: Show git diff, then prompt again
+3. Auto-continue after timeout (default 5 minutes)
+
+Interactive mode is ideal for:
+- Learning how Ralph works by watching each iteration
+- Reviewing changes before continuing
+- Cautious sessions where you want control between iterations
+- Long-running sessions where you want periodic check-ins
+
+**Non-TTY environments**: If Ralph detects it's not running in an interactive terminal (e.g., CI/CD, cron, piped input), the interactive prompt is skipped with a warning and iterations continue automatically.
+
+### Verbose Mode
+
+```bash
+# Enable verbose output for debugging
+./ralph.sh --verbose
+./ralph.sh -v                    # Short flag
+
+# Combine with other options
+./ralph.sh -v --dry-run          # Preview config with precedence details
+./ralph.sh -v --test             # Verbose test mode
+```
+
+When verbose mode is enabled, Ralph provides detailed debugging information:
+
+1. **Configuration Precedence**: Shows where each config value came from
+   - `(cli)` - Set via command line flag
+   - `(env)` - Set via environment variable
+   - `(config)` - Set via config file
+   - `(default)` - Using built-in default
+   - `(derived from spec)` - Computed from another value
+
+2. **Prompt Preview**: Shows the resolved prompt content (first 20 lines) before sending to Claude, including all template variable substitutions
+
+3. **Session State Updates**: Logs session initialization, iteration updates, and finalization
+
+4. **Retry Logic Decisions**: Shows when retries are attempted, skipped, or exhausted
+
+**Example verbose output:**
+
+```
+  [verbose] ┌─────────────────────────────────────────┐
+  [verbose] │ Configuration Precedence                │
+  [verbose] │ (cli > env > config > default)          │
+  [verbose] └─────────────────────────────────────────┘
+  [verbose] MODEL = sonnet (env)
+  [verbose] MAX_ITERATIONS = 10 (default)
+  [verbose] PUSH_ENABLED = false (cli)
+  [verbose] SPEC_FILE = ./specs/feature.json (cli)
+  [verbose] PLAN_FILE = ./plans/feature_PLAN.md (derived from spec)
+  [verbose] Config files loaded:
+  [verbose]   • ~/.ralph/config
+  [verbose]   • ./ralph.conf
+```
+
+Verbose mode is ideal for:
+- Debugging configuration issues
+- Understanding where settings come from
+- Verifying prompt content before execution
+- Troubleshooting retry behavior
 
 ### Product Mode
 
@@ -392,6 +534,75 @@ Webhooks send a JSON POST request with:
 ./ralph.sh --notify-webhook "https://api:secret@monitoring.example.com/ralph" build
 ```
 
+### Session Summary Reports
+
+After each session, Ralph generates a markdown summary report with detailed information about what was accomplished.
+
+```bash
+# Summary reports are generated by default
+./ralph.sh build
+
+# Disable summary generation
+./ralph.sh --no-summary build
+```
+
+**Location:** `~/.ralph/logs/{session_id}_summary.md`
+
+**Contents:**
+
+The summary report includes:
+
+| Section | Description |
+|---------|-------------|
+| **Session Overview** | Status, session ID, mode, model, branch, duration, iterations |
+| **Configuration** | Spec, plan, progress, and log file paths |
+| **Iteration Details** | Per-iteration table with duration, exit code, files modified, commit message |
+| **Timing Breakdown** | Total time, average per iteration, overhead |
+| **Files Modified** | List of all files changed during the session |
+| **Commits Made** | Git log of commits made during the session |
+| **Troubleshooting** | For failed/interrupted sessions: error details and suggested actions |
+| **Related Files** | Links to log file, session state, progress, and plan |
+
+**Example output:**
+
+```markdown
+# Ralph Session Summary
+
+## Session Overview
+
+| Property | Value |
+|----------|-------|
+| **Status** | ✅ Complete |
+| **Session ID** | `20260204_143000_12345` |
+| **Mode** | build |
+| **Model** | opus |
+| **Branch** | `feature/auth` |
+| **Started** | 2026-02-04T14:30:00Z |
+| **Duration** | 5m 30s |
+| **Iterations** | 3/10 |
+
+## Iteration Details
+
+| # | Duration | Exit | Files | Commit |
+|---|----------|------|-------|--------|
+| 1 | 95s | 0 | 2 | Add user authentication module |
+| 2 | 110s | 0 | 3 | Implement login flow |
+| 3 | 125s | 0 | 1 | Add unit tests for auth |
+
+### Timing Breakdown
+
+- **Total iteration time:** 330s
+- **Average per iteration:** 110s
+- **Overhead:** 0s
+```
+
+**Use cases:**
+
+- Post-session review of what was accomplished
+- Debugging failed sessions (troubleshooting section)
+- Documentation of autonomous work for team visibility
+- Comparing session efficiency across runs
+
 ## Architecture
 
 ```
@@ -548,10 +759,33 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh --log-file /path/to/session.log   # Explicit log file
 ./ralph.sh --log-format json                 # Structured JSON logging
 
+# Test mode (single iteration, no push, ignore completion marker)
+./ralph.sh --test                            # Test mode
+./ralph.sh -1                                # Short flag for test mode
+./ralph.sh --test --dry-run                  # Preview test mode config
+
+# Interactive mode (prompt between iterations)
+./ralph.sh --interactive                     # Enable interactive mode
+./ralph.sh -i                                # Short flag
+./ralph.sh -i --interactive-timeout 60       # Custom timeout (default: 300s)
+
+# Verbose mode (debugging output)
+./ralph.sh --verbose                         # Enable verbose mode
+./ralph.sh -v                                # Short flag
+./ralph.sh -v --dry-run                      # Verbose dry run (config sources)
+
 # Configuration
 ./ralph.sh --global-config ~/.config/ralph   # Custom global config
 ./ralph.sh --skip-checks                     # Skip pre-flight checks
 ./ralph.sh --dry-run                         # Preview config, don't run
+./ralph.sh --no-summary                      # Disable summary report generation
+
+# Shell completion (see Installation section for setup)
+ralph<TAB>                                   # Complete presets and options
+./ralph.sh --m<TAB>                          # Complete to --model, --max, etc.
+./ralph.sh --model <TAB>                     # Complete opus, sonnet, haiku
+./ralph.sh --log-format <TAB>                # Complete text, json
+./ralph.sh -s <TAB>                          # Complete file paths
 
 # Combined examples
 ./ralph.sh build --model sonnet --no-push 3
@@ -776,6 +1010,7 @@ project-root/
 └── logs/
     ├── latest.log                  # Symlink to current session
     ├── {session_id}_session.json   # Archived session states
+    ├── {session_id}_summary.md     # Session summary reports
     └── {mode}_{branch}_{ts}.log    # Session logs
 ```
 
