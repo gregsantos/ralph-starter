@@ -682,6 +682,8 @@ clear_retry_attempts() {
     # Only write if jq succeeded and output is non-empty (prevents data loss)
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
         echo "$updated" > "$SESSION_FILE"
+    else
+        echo -e "${YELLOW}Warning: Failed to clear retry attempts from session${RESET}" >&2
     fi
 }
 
@@ -707,17 +709,32 @@ run_with_retry() {
         # Run claude and capture output
         : > "$RETRY_OUTPUT_FILE"  # Clear output file
 
-        set -o pipefail
+        # Run pipeline - parse_claude_output writes status to ITERATION_STATUS_FILE
         echo "$prompt_content" | claude -p \
             --dangerously-skip-permissions \
             --output-format=stream-json \
             --model "$MODEL" \
             --verbose \
             2>&1 | tee "$RETRY_OUTPUT_FILE" | parse_claude_output
-        # Use $? with pipefail to capture first non-zero exit from pipeline
-        # PIPESTATUS: [0]=echo, [1]=claude, [2]=tee, [3]=parse_claude_output
-        exit_code=$?
-        set +o pipefail
+        
+        # Capture PIPESTATUS immediately (it's overwritten by next command)
+        # PIPESTATUS array: [0]=echo, [1]=claude, [2]=tee, [3]=parse_claude_output
+        local pipeline_status=("${PIPESTATUS[@]}")
+        local claude_exit="${pipeline_status[1]}"
+        
+        # Determine exit code from two separate concerns:
+        # 1. Claude CLI failure (network, auth, rate limit at CLI level) - infrastructure
+        # 2. Detected errors in output (tool errors, session errors) - application
+        if [ "$claude_exit" -ne 0 ]; then
+            # Claude CLI itself failed - use its exit code for retry classification
+            exit_code="$claude_exit"
+        elif [ "$(cat "$ITERATION_STATUS_FILE" 2>/dev/null)" = "failed" ]; then
+            # Claude completed but parse_claude_output detected errors in the JSON stream
+            # Use exit code 1 to indicate failure (error details in LAST_ERROR_MSG)
+            exit_code=1
+        else
+            exit_code=0
+        fi
 
         # Success - no retry needed
         if [ "$exit_code" -eq 0 ]; then
@@ -2225,21 +2242,15 @@ parse_claude_output() {
         echo -e "\n  ${DIM}Session ended - more work remains${RESET}"
     fi
 
-    # Return non-zero if errors occurred to trigger retry logic
-    # This is critical: with pipefail, $? captures the first non-zero exit
-    # If we always return 0, retry logic is bypassed entirely
-    #
-    # Check both explicit failure status AND error_count as fallback
+    # Ensure error_count is reflected in status file (fallback for unrecognized patterns)
     # This catches cases where errors were detected but status wasn't explicitly set
-    if [ "$(cat "$ITERATION_STATUS_FILE" 2>/dev/null)" = "failed" ]; then
-        return 1
-    fi
-    # Fallback: if any errors were counted, treat as failure
-    # This prevents unrecognized error patterns from being treated as success
-    if [ "$error_count" -gt 0 ]; then
+    if [ "$error_count" -gt 0 ] && [ "$(cat "$ITERATION_STATUS_FILE" 2>/dev/null)" != "failed" ]; then
         echo "failed" > "$ITERATION_STATUS_FILE"
-        return 1
     fi
+    
+    # Always return 0 - this function's job is to parse and write status to files.
+    # The caller (run_with_retry) checks ITERATION_STATUS_FILE for detected errors
+    # and PIPESTATUS for claude CLI failures - these are separate concerns.
     return 0
 }
 
