@@ -244,8 +244,12 @@ update_session_state() {
         "$SESSION_FILE" 2>/dev/null)
 
     # Only write if jq succeeded and output is non-empty (prevents data loss)
+    # Use atomic write (temp file + rename) to prevent corruption on interrupt
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
-        echo "$updated" > "$SESSION_FILE"
+        local tmp_file
+        tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$SESSION_FILE"
     else
         echo -e "${YELLOW}Warning: Failed to update session state${RESET}" >&2
     fi
@@ -274,8 +278,12 @@ finalize_session_state() {
         "$SESSION_FILE" 2>/dev/null)
 
     # Only write if jq succeeded and output is non-empty (prevents data loss)
+    # Use atomic write (temp file + rename) to prevent corruption on interrupt
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
-        echo "$updated" > "$SESSION_FILE"
+        local tmp_file
+        tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$SESSION_FILE"
     else
         echo -e "${YELLOW}Warning: Failed to finalize session state${RESET}" >&2
     fi
@@ -344,10 +352,9 @@ list_sessions() {
     # Check for interrupted sessions in log directory
     local log_dir="${HOME}/.ralph/logs"
     if [ -d "$log_dir" ]; then
-        local session_files
-        session_files=$(find "$log_dir" -name "*_session.json" -type f 2>/dev/null | head -10)
-
-        for file in $session_files; do
+        # Use while read to handle filenames with spaces correctly
+        while IFS= read -r file; do
+            [ -z "$file" ] && continue
             local status
             status=$(jq -r '.status // "unknown"' "$file" 2>/dev/null)
 
@@ -369,7 +376,7 @@ list_sessions() {
                 echo -e "   ${BOLD}Status:${RESET}   ${RED}${status}${RESET}"
                 echo ""
             fi
-        done
+        done < <(find "$log_dir" -name "*_session.json" -type f 2>/dev/null | head -10)
     fi
 
     if [ "$found_any" = false ]; then
@@ -413,7 +420,15 @@ validate_session() {
     local current_branch
     current_branch=$(git branch --show-current 2>/dev/null)
 
-    if [ -n "$session_branch" ] && [ "$session_branch" != "$current_branch" ]; then
+    # Validate session has branch information
+    if [ -z "$session_branch" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Session file missing branch information${RESET}"
+        echo -e "  ${DIM}The session file may be corrupted. Delete it to start fresh:${RESET}"
+        echo -e "    rm ${session_file}"
+        return 1
+    fi
+
+    if [ "$session_branch" != "$current_branch" ]; then
         echo -e "${RED}${SYM_CROSS} Error: Branch mismatch${RESET}"
         echo -e "  ${BOLD}Session branch:${RESET} ${session_branch}"
         echo -e "  ${BOLD}Current branch:${RESET} ${current_branch}"
@@ -525,8 +540,12 @@ restore_session() {
     updated=$(jq '.status = "in_progress"' "$session_file" 2>/dev/null)
     
     # Only write if jq succeeded and output is non-empty (prevents data loss)
+    # Use atomic write (temp file + rename) to prevent corruption on interrupt
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
-        echo "$updated" > "$session_file"
+        local tmp_file
+        tmp_file=$(mktemp "${session_file}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$session_file"
     else
         echo -e "${YELLOW}Warning: Failed to update session status${RESET}" >&2
     fi
@@ -667,8 +686,12 @@ log_retry_attempt() {
         "$SESSION_FILE" 2>/dev/null)
 
     # Only write if jq succeeded and output is non-empty (prevents data loss)
+    # Use atomic write (temp file + rename) to prevent corruption on interrupt
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
-        echo "$updated" > "$SESSION_FILE"
+        local tmp_file
+        tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$SESSION_FILE"
     fi
 }
 
@@ -680,8 +703,12 @@ clear_retry_attempts() {
     updated=$(jq 'del(.current_retry_attempts)' "$SESSION_FILE" 2>/dev/null)
     
     # Only write if jq succeeded and output is non-empty (prevents data loss)
+    # Use atomic write (temp file + rename) to prevent corruption on interrupt
     if [ -n "$updated" ] && [ "$updated" != "null" ]; then
-        echo "$updated" > "$SESSION_FILE"
+        local tmp_file
+        tmp_file=$(mktemp "${SESSION_FILE}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$SESSION_FILE"
     else
         echo -e "${YELLOW}Warning: Failed to clear retry attempts from session${RESET}" >&2
     fi
@@ -952,7 +979,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --max-retries)
-            MAX_RETRIES="$2"
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                MAX_RETRIES="$2"
+            else
+                echo -e "${RED}${SYM_CROSS} Error: --max-retries must be a positive integer${RESET}"
+                exit 1
+            fi
             shift 2
             ;;
         --resume)
@@ -1231,12 +1263,11 @@ setup_log_file() {
     # Create/update latest.log symlink in ~/.ralph/logs/
     if [ -d "$DEFAULT_LOG_DIR" ] || mkdir -p "$DEFAULT_LOG_DIR"; then
         local latest_link="${DEFAULT_LOG_DIR}/latest.log"
-        # Remove old symlink if exists, then create new one
-        rm -f "$latest_link"
         # Convert to absolute path to ensure symlink works from any location
         local abs_log_file
         abs_log_file=$(cd "$(dirname "$LOG_FILE")" && pwd)/$(basename "$LOG_FILE")
-        ln -s "$abs_log_file" "$latest_link"
+        # Use ln -sf for atomic symlink replacement (avoids race condition)
+        ln -sf "$abs_log_file" "$latest_link"
     fi
 }
 
