@@ -51,6 +51,7 @@ Perform rigorous comparison of specs vs actual implementation:
 - Document reasoning for priorities
 - Note any ambiguities or blockers
 - Each item should be atomic and verifiable
+- **Include documentation tasks** for user-facing changes (CLI flags, workflow changes, config options)
 
 ### 4. Document
 
@@ -87,6 +88,7 @@ If complete: Proceed to Completion Protocol below.
 - **Keep CLAUDE.md operational only**—status/progress notes belong in specs
 - **Update CLAUDE.md with patterns**—add discovered conventions, gotchas, insights
 - **Plans are disposable**—regenerate rather than patch a bad plan
+- **Plan documentation updates**—include doc tasks for user-facing features (README.md, RALPH_LOOP_REF.md, --help)
 - **Never signal completion early**—only output `<ralph>COMPLETE</ralph>` when plan is fully ready for build
 
 ## Completion Protocol

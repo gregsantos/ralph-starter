@@ -10,6 +10,8 @@ Ralph Loop breaks complex software development into small, context-independent t
 - **Quality gates**: Every iteration must pass tests and type checks before proceeding
 - **Knowledge preservation**: Learnings persist in files, not AI memory
 - **Hands-off execution**: Start a session, walk away, return to completed work
+- **Resilient sessions**: Automatic retry on transient failures, resume interrupted sessions
+- **Flexible configuration**: Environment variables, global config, and project config
 
 ## Quick Start
 
@@ -55,9 +57,13 @@ ralph-starter/
 │   └── PROMPT_product.md         # Product artifact generation
 ├── specs/
 │   ├── INDEX.md                  # Feature catalog
-│   └── {feature}.md              # Feature specs (the "what & why")
+│   ├── {feature}.json            # JSON specs (recommended)
+│   └── {feature}.md              # Markdown specs (alternative)
 ├── plans/
 │   └── IMPLEMENTATION_PLAN.md    # Task checklist (the "how")
+├── .claude/
+│   └── skills/
+│       └── writing-ralph-specs/  # Skill for creating JSON specs
 ├── product-input/                # Product context files (product mode)
 ├── product-output/               # Generated artifacts (product mode)
 ├── progress.txt                  # Iteration history (auto-created)
@@ -72,11 +78,11 @@ ralph-starter/
 
 ### Three Modes
 
-| Mode        | Purpose                                   | Command              |
-| ----------- | ----------------------------------------- | -------------------- |
-| **Plan**    | Analyze codebase, create task checklist   | `./ralph.sh plan`    |
-| **Build**   | Execute tasks one at a time               | `./ralph.sh build`   |
-| **Product** | Generate product documentation artifacts  | `./ralph.sh product` |
+| Mode        | Purpose                                  | Command              |
+| ----------- | ---------------------------------------- | -------------------- |
+| **Plan**    | Analyze codebase, create task checklist  | `./ralph.sh plan`    |
+| **Build**   | Execute tasks one at a time              | `./ralph.sh build`   |
+| **Product** | Generate product documentation artifacts | `./ralph.sh product` |
 
 ### Specs vs Plans
 
@@ -127,9 +133,101 @@ This tells the loop to exit successfully.
 ./ralph.sh --unlimited           # Remove iteration limit (careful!)
 ./ralph.sh --dry-run             # Preview config without running
 ./ralph.sh -s ./specs/feature.md # Custom spec (plan auto-derived)
+
+# Session management
+./ralph.sh --resume              # Resume interrupted session
+./ralph.sh --list-sessions       # List resumable sessions
+
+# Resilience
+./ralph.sh --no-retry            # Disable automatic retry on errors
+./ralph.sh --max-retries 5       # Custom retry limit (default: 3)
 ```
 
-## Workflow
+See [docs/RALPH_LOOP_REF.md](docs/RALPH_LOOP_REF.md) for the full CLI reference including environment variables, global config, and all options.
+
+## Complete Workflow
+
+The full workflow for implementing features with Ralph:
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│           PRODUCT (optional) → SPEC → PLAN → BUILD                          │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
+│  │ Product  │ -> │  Create  │ -> │   Plan   │ -> │  Build   │              │
+│  │   Mode   │    │   Spec   │    │   Mode   │    │   Mode   │              │
+│  │(discover)│    │  (JSON)  │    │ (analyze)│    │ (execute)│              │
+│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
+│       │               │               │               │                     │
+│  product-output/  specs/*.json   plans/*_PLAN.md   Code changes            │
+│  12 artifacts     "what & why"    "how"           Implementation           │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Step 0: Product Discovery (Optional)
+
+For new projects, start with product mode to generate foundational artifacts:
+
+```bash
+# 1. Add context files to product-input/
+#    - vision.md, research.md, requirements.md, etc.
+
+# 2. Run product mode to generate 12 artifacts
+./ralph.sh product
+#    → product-output/1_executive_summary.md
+#    → product-output/7_prd.md
+#    → ... (12 total artifacts)
+
+# 3. Use the PRD (7_prd.md) to inform your spec
+```
+
+See `docs/PRODUCT_ARTIFACT_SPEC.md` for the full artifact specification.
+
+### Step 1: Create a Spec
+
+Create a JSON spec file in `specs/` with user stories and acceptance criteria:
+
+```bash
+# specs/my-feature.json
+{
+  "project": "My Feature",
+  "branchName": "feature/my-feature",
+  "description": "What this feature does",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "First task",
+      "acceptanceCriteria": ["Criterion 1", "Criterion 2"],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+```
+
+The `passes` field starts as `false` and is set to `true` by build mode when all acceptance criteria are met.
+
+See `specs/ralph-improvements.json` for a comprehensive example.
+
+### Step 2: Run Plan Mode
+
+Plan mode analyzes the spec and codebase, then creates a task checklist:
+
+```bash
+./ralph.sh plan -s ./specs/my-feature.json
+# Creates: plans/my-feature_PLAN.md
+```
+
+### Step 3: Run Build Mode
+
+Build mode executes the plan one task at a time:
+
+```bash
+./ralph.sh build -s ./specs/my-feature.json
+# Implements each task, runs tests, commits
+```
+
+## Loop Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────┐
@@ -152,7 +250,7 @@ This tells the loop to exit successfully.
 2. **Search First**: Verify functionality doesn't already exist
 3. **Implement**: Complete exactly ONE task
 4. **Verify**: Run tests and type checks (backpressure)
-5. **Document**: Mark `[x]`, update progress
+5. **Document**: Mark `[x]` in plan, update `passes` in spec (if story complete), update progress
 6. **Commit**: Push changes to remote
 7. **Check**: All done? Signal completion. Otherwise, loop continues.
 
@@ -189,12 +287,12 @@ Prompts support these placeholders:
 
 **Product Mode:**
 
-| Variable                  | Default                           | Description               |
-| ------------------------- | --------------------------------- | ------------------------- |
-| `{{PRODUCT_CONTEXT_DIR}}` | `./product-input/`                | Product context files     |
-| `{{PRODUCT_OUTPUT_DIR}}`  | `./product-output/`               | Generated artifacts       |
-| `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specifications   |
-| `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history         |
+| Variable                  | Default                           | Description             |
+| ------------------------- | --------------------------------- | ----------------------- |
+| `{{PRODUCT_CONTEXT_DIR}}` | `./product-input/`                | Product context files   |
+| `{{PRODUCT_OUTPUT_DIR}}`  | `./product-output/`               | Generated artifacts     |
+| `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specifications |
+| `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history       |
 
 ## Customizing for Your Project
 
@@ -220,8 +318,44 @@ npm run build # Build project
 
 ### 2. Create Your First Spec
 
+**Option A: JSON Spec (Recommended)**
+
+JSON specs provide structured user stories with acceptance criteria:
+
 ```bash
-# Create a feature spec
+cat > specs/my-feature.json << 'EOF'
+{
+  "project": "My Feature",
+  "branchName": "feature/my-feature",
+  "description": "What this feature does and why",
+  "context": {
+    "currentState": "Current situation",
+    "targetState": "Desired outcome",
+    "verificationCommands": ["pnpm test", "pnpm typecheck"]
+  },
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "First task",
+      "description": "As a user, I want X so that Y.",
+      "acceptanceCriteria": [
+        "Specific criterion 1",
+        "Specific criterion 2",
+        "pnpm typecheck passes"
+      ],
+      "priority": 1,
+      "passes": false
+    }
+  ]
+}
+EOF
+```
+
+**Option B: Markdown Spec (Simpler)**
+
+For less structured work:
+
+```bash
 cat > specs/my-feature.md << 'EOF'
 # My Feature
 
@@ -240,6 +374,10 @@ EOF
 ### 3. Run Planning
 
 ```bash
+# For JSON spec
+./ralph.sh plan -s ./specs/my-feature.json
+
+# For markdown spec
 ./ralph.sh plan -s ./specs/my-feature.md
 ```
 
@@ -248,7 +386,7 @@ This creates `plans/my-feature_PLAN.md` with a task checklist.
 ### 4. Run Build
 
 ```bash
-./ralph.sh build -s ./specs/my-feature.md
+./ralph.sh build -s ./specs/my-feature.json
 ```
 
 ## Best Practices

@@ -51,6 +51,10 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 ### 4. Document
 
 - Mark the completed item `[x]` in `{{PLAN_FILE}}`
+- **Update spec status** (if using JSON spec with user stories):
+  - When ALL acceptance criteria for a user story are met, set `"passes": true` for that story
+  - Only update when the story is fully complete, not partially
+  - Use precise JSON editing—change only the `passes` value
 - Append to `{{PROGRESS_FILE}}`:
   - Task completed and plan reference
   - Key decisions made and **why** (not just what)
@@ -58,6 +62,11 @@ Tests and types are your rejection mechanism. They push back on bad changes:
   - Any blockers or notes for next iteration
 - Keep entries concise
 - **Update CLAUDE.md** with discovered patterns, gotchas, or codebase conventions
+- **Update user-facing docs** if this task adds or changes:
+  - CLI flags/options → update `--help` text and `docs/RALPH_LOOP_REF.md`
+  - Workflow or behavior → update `README.md`
+  - Configuration options → update `ralph.conf` comments and reference docs
+  - Project structure → update directory trees in docs
 
 ### 5. Commit
 
@@ -78,7 +87,9 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 - **Keep CLAUDE.md operational only**—status/progress notes belong in `{{PLAN_FILE}}`
 - **Update CLAUDE.md with patterns**—add discovered conventions, gotchas, insights
 - **Keep plans current**—update `{{PLAN_FILE}}` with learnings after each task
+- **Update spec status**—set `"passes": true` in `{{SPEC_FILE}}` when user stories are complete
 - **Reference specs for context**—consult `{{SPEC_FILE}}` for the "why" behind requirements
+- **Keep docs aligned**—update README.md, RALPH_LOOP_REF.md when adding user-facing features
 - **Capture the why**—tests and implementation reasoning matter
 - **Resolve or document bugs**—even if unrelated to current work
 - **Tag on clean builds**—create git tag when no build/test errors (start at 0.0.0, increment patch)
@@ -101,10 +112,12 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 Before outputting the completion marker, verify ALL of the following:
 
 1. **All checklist items** in `{{PLAN_FILE}}` are marked `[x]` (not just one - ALL of them)
-2. `pnpm test` passes
-3. `pnpm typecheck` passes
-4. All changes are committed and pushed
-5. `{{PROGRESS_FILE}}` documents all completed tasks
+2. **All user stories** in `{{SPEC_FILE}}` have `"passes": true` (if using JSON spec)
+3. **Documentation aligned**—new flags/features documented in `--help`, README.md, RALPH_LOOP_REF.md
+4. `pnpm test` passes
+5. `pnpm typecheck` passes
+6. All changes are committed and pushed
+7. `{{PROGRESS_FILE}}` documents all completed tasks
 
 ### When to Signal Completion
 
