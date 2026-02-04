@@ -1,0 +1,29 @@
+# Progress for branch: ralph/resilience-and-dx
+# Started: 2026-02-03 22:07:34
+
+## Iteration 1 - 2026-02-03
+
+### Task Completed: US-001 Pre-flight Dependency Checks (Task 1.1)
+
+**What was done:**
+- Created `preflight_checks()` function after CONFIGURATION section
+- Checks for: claude CLI (with auth validation), jq, git (and git repo status)
+- Each check provides clear error messages with installation instructions
+- Uses existing color/symbol conventions (RED, SYM_CROSS) for consistency
+- Added `--skip-checks` flag to bypass validation for advanced users
+- Integrated preflight checks into main flow before `print_header`
+
+**Why:**
+- Pre-flight checks prevent cryptic mid-session failures by verifying dependencies upfront
+- Auth check catches unauthenticated claude CLI before wasting time
+- Installation instructions reduce friction for new users
+- `--skip-checks` flag allows advanced users to bypass when needed (e.g., offline testing)
+
+**Files changed:**
+- `ralph.sh` - Added preflight_checks() function, SKIP_CHECKS variable, --skip-checks flag parsing, help text update, main flow integration
+
+**Verification:**
+- `shellcheck ralph.sh` - Passes (only pre-existing warnings)
+- `./ralph.sh --help` - Shows new --skip-checks flag
+- `./ralph.sh --dry-run` - Pre-flight checks run successfully
+

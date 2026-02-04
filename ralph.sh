@@ -74,6 +74,57 @@ ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
 ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# PRE-FLIGHT CHECKS
+# Verify all dependencies are available before starting
+# ═══════════════════════════════════════════════════════════════════════════════
+
+SKIP_CHECKS=false
+
+preflight_checks() {
+    local has_errors=false
+
+    # Check for claude CLI
+    if ! command -v claude >/dev/null 2>&1; then
+        echo -e "${RED}${SYM_CROSS} Error: claude CLI not found${RESET}"
+        echo -e "  ${DIM}Install:${RESET} npm install -g @anthropic-ai/claude-code"
+        echo -e "  ${DIM}Or visit:${RESET} https://docs.anthropic.com/claude-code"
+        has_errors=true
+    else
+        # Check if claude is authenticated (non-destructive check)
+        if ! claude --version >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: claude CLI not authenticated or misconfigured${RESET}"
+            echo -e "  ${DIM}Run:${RESET} claude auth login"
+            has_errors=true
+        fi
+    fi
+
+    # Check for jq
+    if ! command -v jq >/dev/null 2>&1; then
+        echo -e "${RED}${SYM_CROSS} Error: jq not found${RESET}"
+        echo -e "  ${DIM}Install (macOS):${RESET} brew install jq"
+        echo -e "  ${DIM}Install (Ubuntu):${RESET} apt-get install jq"
+        echo -e "  ${DIM}Install (other):${RESET} https://jqlang.github.io/jq/download/"
+        has_errors=true
+    fi
+
+    # Check for git and that we're in a git repository
+    if ! command -v git >/dev/null 2>&1; then
+        echo -e "${RED}${SYM_CROSS} Error: git not found${RESET}"
+        echo -e "  ${DIM}Install:${RESET} https://git-scm.com/downloads"
+        has_errors=true
+    elif ! git rev-parse --git-dir >/dev/null 2>&1; then
+        echo -e "${RED}${SYM_CROSS} Error: not a git repository${RESET}"
+        echo -e "  ${DIM}Run:${RESET} git init"
+        has_errors=true
+    fi
+
+    if [ "$has_errors" = true ]; then
+        echo -e "\n${YELLOW}${SYM_DOT} Use --skip-checks to bypass pre-flight validation${RESET}"
+        exit 1
+    fi
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # HELP
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -96,6 +147,7 @@ show_help() {
     echo "  --dry-run         Show config and exit without running Claude"
     echo "  --push            Enable git push after iterations (default)"
     echo "  --no-push         Disable git push"
+    echo "  --skip-checks     Skip pre-flight dependency checks"
     echo "  -s, --spec PATH   Spec file (default: ./specs/IMPLEMENTATION_PLAN.md)"
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
@@ -200,6 +252,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --dry-run)
             DRY_RUN=true
+            shift
+            ;;
+        --skip-checks)
+            SKIP_CHECKS=true
             shift
             ;;
         -s|--spec)
@@ -382,8 +438,11 @@ ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
 
 # Derive plan file from spec file if spec was set via CLI but plan wasn't
 # e.g., ./specs/feature.md → ./plans/feature_PLAN.md
+# e.g., ./specs/feature.json → ./plans/feature_PLAN.md
 if [ "$CLI_SPEC_SET" = "true" ] && [ "$CLI_PLAN_SET" != "true" ]; then
-    spec_basename=$(basename "$SPEC_FILE" .md)
+    spec_basename=$(basename "$SPEC_FILE")
+    spec_basename="${spec_basename%.md}"    # Strip .md if present
+    spec_basename="${spec_basename%.json}"  # Strip .json if present
     PLAN_FILE="./plans/${spec_basename}_PLAN.md"
 else
     PLAN_FILE="${PLAN_FILE:-./plans/IMPLEMENTATION_PLAN.md}"
@@ -832,6 +891,11 @@ trap cleanup INT TERM
 # ═══════════════════════════════════════════════════════════════════════════════
 # MAIN LOOP
 # ═══════════════════════════════════════════════════════════════════════════════
+
+# Run pre-flight checks (unless skipped)
+if [ "$SKIP_CHECKS" = false ]; then
+    preflight_checks
+fi
 
 print_header
 print_config
