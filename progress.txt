@@ -342,3 +342,39 @@ Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
 
 **Next:** T-011, T-012, T-016, T-017 are now unblocked (T-012 depends on T-010 which is now complete)
 
+## Iteration 11 - T-011: Update plan mode as derived artifact generator
+
+**Completed:** Task 3.4 (T-011) - Update plan mode as derived artifact generator
+
+**Changes:**
+- Updated prompts/PROMPT_plan.md with dual-mode workflow:
+  - Added "Spec Format Detection" section at top to determine which workflow to use
+  - Added "Derived Plan from Tasks" section (lines 31-98) for specs with tasks array:
+    - Generated plan format with warning banner: "This is a derived view. Edit the spec, not this file."
+    - Markdown checklist structure grouped by phase
+    - Progress summary showing completed/in-progress/blocked/ready tasks
+    - Single-iteration workflow for simple transformation
+  - Preserved "Traditional Planning" section (lines 102-231) for legacy userStories format
+- PROMPT_build.md already enforces plan as read-only (line 92: "Do NOT update plan file")
+
+**Files modified:**
+- prompts/PROMPT_plan.md
+- specs/unified-spec-workflow.json (updated T-011 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Kept traditional planning as default for backwards compatibility
+- Derived plan includes explicit warning that build mode works from spec, not plan
+- Single-iteration workflow for derived plans (straightforward transformation)
+
+**Verification of acceptance criteria:**
+1. ✅ Plan mode still works as before for specs without tasks - Traditional Planning section preserved
+2. ✅ For specs with tasks, plan mode generates Markdown checklist view - Derived Plan format documented
+3. ✅ Generated plan includes note: 'This is a derived view...' - Lines 44-45 in template
+4. ✅ Plan is read-only reference, build mode does not update it - PROMPT_build.md line 92
+
+**Milestone M3 (Build Mode Integration) Complete:**
+Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly from spec tasks.
+
+**Next:** T-012, T-013, T-014, T-015, T-016, T-017 remain (Phase 4: Documentation & Polish)
+

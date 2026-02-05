@@ -241,10 +241,10 @@
         "Plan is read-only reference, build mode does not update it"
       ],
       "dependsOn": ["T-006"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated PROMPT_plan.md with: Spec Format Detection section at top, Derived Plan from Tasks workflow for specs with tasks array, generated plan format with warning banner, Traditional Planning section preserving original behavior. PROMPT_build.md already enforces plan as read-only (line 92: Do NOT update plan file)."
     },
     {
       "id": "T-012",
