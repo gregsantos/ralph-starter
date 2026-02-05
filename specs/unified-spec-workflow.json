@@ -60,10 +60,10 @@
         "shellcheck passes"
       ],
       "dependsOn": [],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added 'spec' to preset case statement at line 1135, updated show_help() with spec mode in presets, examples, and defaults sections"
     },
     {
       "id": "T-002",

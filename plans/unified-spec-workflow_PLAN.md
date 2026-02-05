@@ -38,11 +38,11 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 1.1: T-001 Add spec mode argument parsing
 **Effort:** Small | **Depends on:** None
 
-- [ ] 1.1.1 Add "spec" to the list of recognized presets in argument parsing (~line 580)
-- [ ] 1.1.2 Set default model for spec mode to opus
-- [ ] 1.1.3 Set default prompt file to prompts/PROMPT_spec.md
-- [ ] 1.1.4 Add spec mode to show_help() output
-- [ ] 1.1.5 Run shellcheck ralph.sh
+- [x] 1.1.1 Add "spec" to the list of recognized presets in argument parsing (~line 580)
+- [x] 1.1.2 Set default model for spec mode to opus
+- [x] 1.1.3 Set default prompt file to prompts/PROMPT_spec.md
+- [x] 1.1.4 Add spec mode to show_help() output
+- [x] 1.1.5 Run shellcheck ralph.sh
 
 **Acceptance criteria:**
 - `./ralph.sh spec` recognized as valid mode

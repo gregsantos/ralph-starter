@@ -854,6 +854,7 @@ show_help() {
     echo -e "${BOLD}Presets:${RESET}"
     echo "  plan              Use PROMPT_plan.md (default model: opus)"
     echo "  build             Use PROMPT_build.md (default model: opus)"
+    echo "  spec              Use PROMPT_spec.md for spec generation (default model: opus)"
     echo "  product           Use PROMPT_product.md for product artifact generation"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
@@ -896,6 +897,7 @@ show_help() {
     echo "  ./ralph.sh                           # Build mode, 10 iterations (default)"
     echo "  ./ralph.sh plan 5                    # Plan mode, 5 iterations"
     echo "  ./ralph.sh build --model sonnet      # Build with sonnet, 10 iterations"
+    echo "  ./ralph.sh spec                      # Spec generation mode"
     echo "  ./ralph.sh product                   # Product artifact generation"
     echo "  ./ralph.sh product --context ./ctx/ --output ./out/  # Custom product paths"
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
@@ -923,7 +925,7 @@ show_help() {
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
-    echo "  Model:      opus (plan/build/product), sonnet (inline)"
+    echo "  Model:      opus (plan/build/spec/product), sonnet (inline)"
     echo "  Push:       enabled"
     echo ""
     echo -e "${BOLD}Shell Completion:${RESET}"
@@ -1132,7 +1134,7 @@ while [[ $# -gt 0 ]]; do
             ARTIFACT_SPEC_FILE="$2"
             shift 2
             ;;
-        plan|build|product)
+        plan|build|product|spec)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
             shift
