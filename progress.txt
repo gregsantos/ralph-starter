@@ -278,3 +278,42 @@ Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
 
 **Next:** T-009 (Update build mode to update task status) - depends on T-008
 
+## Iteration 9 - T-009: Update build mode to update task status
+
+**Completed:** Task 3.2 (T-009) - Update build mode to update task status
+
+**Changes:**
+- Updated prompts/PROMPT_build.md Section 5 (Commit):
+  - Added task ID format in commit messages: `feat(T-001): description`
+  - Added examples showing feat/fix/docs with task IDs
+  - Updated commit steps to reference task ID placeholder
+- Updated Section 4 (Document) legacy/fallback:
+  - Clarified userStories.passes handling for legacy format
+  - Noted that user stories don't have status field
+  - Added note that tasks array doesn't exist in legacy format
+- Updated Pre-Completion Checklist:
+  - Made tasks-first with spec tasks checking passes and status
+  - Plan file checking as legacy/fallback path
+- Updated When to Signal Completion:
+  - Added tasks-first criteria (passes: false check)
+  - Plan file checking as fallback
+
+**Files modified:**
+- prompts/PROMPT_build.md
+- specs/unified-spec-workflow.json (T-009 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Commit message format uses conventional commits with task ID scope: `feat(T-XXX): description`
+- Legacy userStories.passes handling preserved but explicitly documented
+- Pre-completion and completion sections now prioritize tasks-first workflow
+
+**Verification of acceptance criteria:**
+1. ✅ After task completion, set passes=true and status='complete' - Lines 88-91
+2. ✅ notes field updated with implementation summary - Line 91
+3. ✅ No longer updates separate plan file - Line 92
+4. ✅ Commit message includes task ID - Lines 117-127
+5. ✅ userStories.passes still updated if using legacy format - Lines 94-99
+
+**Next:** T-010 (Update build mode completion detection) - depends on T-009
+

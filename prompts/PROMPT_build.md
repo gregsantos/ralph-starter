@@ -93,7 +93,10 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 
 **When using plan file** (legacy/fallback):
 - Mark the completed item `[x]` in `{{PLAN_FILE}}`
-- If using JSON spec with userStories, also set `"passes": true` for completed stories
+- If using JSON spec with userStories (legacy format):
+  - Set `"passes": true` for the completed user story
+  - User stories don't have `status` field - only update `passes`
+  - Do NOT update tasks array (it doesn't exist in legacy format)
 
 **Always:**
 - Append to `{{PROGRESS_FILE}}`:
@@ -111,8 +114,16 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 
 ### 5. Commit
 
+**When using spec tasks:**
+- Include task ID in commit message: `feat(T-001): description`
+- Examples:
+  - `feat(T-005): wire spec mode in main loop`
+  - `fix(T-012): correct template variable substitution`
+  - `docs(T-014): update CLAUDE.md with new workflow`
+
+**Commit steps:**
 - `git add -A`
-- `git commit -m "feat/fix/docs: description"`
+- `git commit -m "feat(T-XXX): description"` (replace T-XXX with actual task ID)
 - `git push`
 
 ### 6. Check If All Done
@@ -159,8 +170,15 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 
 Before outputting the completion marker, verify ALL of the following:
 
+**When using spec tasks:**
+1. **All tasks** in `{{SPEC_FILE}}` have `"passes": true`
+2. **All tasks** have `"status": "complete"`
+
+**When using plan file (legacy):**
 1. **All checklist items** in `{{PLAN_FILE}}` are marked `[x]` (not just one - ALL of them)
-2. **All user stories** in `{{SPEC_FILE}}` have `"passes": true` (if using JSON spec)
+2. **All user stories** in `{{SPEC_FILE}}` have `"passes": true` (if using JSON spec with userStories)
+
+**Always:**
 3. **Documentation aligned**—new flags/features documented in `--help`, README.md, RALPH_LOOP_REF.md
 4. `pnpm test` passes
 5. `pnpm typecheck` passes
@@ -171,13 +189,15 @@ Before outputting the completion marker, verify ALL of the following:
 
 **DO NOT output the marker if:**
 
-- You just finished one task (more remain in the checklist)
-- Any `[ ]` items remain in `{{PLAN_FILE}}`
+- You just finished one task (more remain)
+- Any tasks have `passes: false` (when using spec tasks)
+- Any `[ ]` items remain in `{{PLAN_FILE}}` (when using plan file)
 - Tests or typecheck fail
 
 **ONLY output the marker if:**
 
-- ALL checklist items are marked `[x]`
+- ALL tasks have `passes: true` (when using spec tasks)
+- ALL checklist items marked `[x]` (when using plan file)
 - Tests and typecheck pass
 - All changes committed and pushed
 

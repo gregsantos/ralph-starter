@@ -208,10 +208,10 @@
         "userStories.passes still updated if using legacy format"
       ],
       "dependsOn": ["T-008"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated PROMPT_build.md Section 5 (Commit) with task ID format examples: feat(T-XXX): description. Updated Section 4 (Document) legacy/fallback section to clarify userStories.passes handling. Updated Pre-Completion Checklist and When to Signal Completion sections to be tasks-first with plan file as fallback."
     },
     {
       "id": "T-010",
