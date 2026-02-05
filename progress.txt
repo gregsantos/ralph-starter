@@ -549,3 +549,34 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-017 (Add shell completion for spec mode)
 
+## Iteration 17 - T-017: Add shell completion for spec mode
+
+**Completed:** Task 4.6 (T-017) - Add shell completion for spec mode
+
+**Changes:**
+- Updated completions/ralph.bash:
+  - Added 'spec' to presets list (now: spec plan build product)
+  - Added spec mode flags to opts list: --from-product, -o, --spec-output, --force
+  - Added case statement handlers for -o/--spec-output (file completion) and --from-product/--force (no args)
+  - Updated preset detection case to include 'spec'
+- Updated completions/ralph.zsh:
+  - Added 'spec' preset with description: 'Use PROMPT_spec.md for generating JSON specs from input'
+  - Added three new argument definitions: --from-product, -o/--spec-output (with file completion), --force
+
+**Files modified:**
+- completions/ralph.bash
+- completions/ralph.zsh
+- specs/unified-spec-workflow.json (T-017 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ completions/ralph.bash updated with spec preset - Line 22: presets="spec plan build product"
+2. ✅ completions/ralph.zsh updated with spec preset - Line 22: 'spec:Use PROMPT_spec.md...'
+3. ✅ --from-product flag completed - Both scripts include the flag
+4. ✅ shellcheck passes on completion scripts - Verified: no errors
+
+**Milestone M4 (Documentation Complete) Complete:**
+All tasks T-012 through T-017 are done. Documentation updated, examples created, completions updated.
+
+**All tasks complete.** Proceeding to final verification.
+

@@ -343,10 +343,10 @@
         "shellcheck passes on completion scripts"
       ],
       "dependsOn": ["T-005"],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added 'spec' preset to both completion scripts. Added --from-product, -o/--spec-output, and --force flags. Bash: updated presets list, opts list, case statement for -o completion, and has_preset check. Zsh: updated presets array with description, added three new argument definitions. shellcheck passes on bash script."
     }
   ],
   "dependencies": {
