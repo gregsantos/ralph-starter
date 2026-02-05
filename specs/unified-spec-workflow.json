@@ -309,10 +309,10 @@
         "Template variables updated"
       ],
       "dependsOn": ["T-012"],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added workflow diagram showing spec→build→(optional)plan flow, tasks vs userStories comparison table with JSON examples, updated template variables with INPUT_SOURCE and OUTPUT_FILE for spec mode, updated file organization showing PROMPT_spec.md, updated plan files section noting derived view nature."
     },
     {
       "id": "T-016",

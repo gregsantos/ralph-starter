@@ -487,3 +487,34 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-015, T-016, T-017 remain
 
+## Iteration 15 - T-015: Update specs/INDEX.md
+
+**Completed:** Task 4.4 (T-015) - Update specs/INDEX.md
+
+**Changes:**
+- Added workflow diagram showing simplified spec→build→(optional)plan flow
+- Added "Spec Formats: Tasks vs userStories" section with:
+  - Comparison table (Format, Primary Use, Build Mode Workflow, Recommended)
+  - JSON example for tasks format with all fields
+  - JSON example for userStories format (legacy)
+- Updated Spec Files section to emphasize tasks as single source of truth
+- Updated Plan Files section to note plans are optional/derived views
+- Updated "When to Create Separate Files" table for spec-first workflow
+- Updated Template Variables table with:
+  - Added Mode(s) column
+  - Added {{INPUT_SOURCE}} for spec mode
+  - Added {{OUTPUT_FILE}} for spec mode
+- Updated File Organization to show PROMPT_spec.md and updated descriptions
+
+**Files modified:**
+- specs/INDEX.md
+- specs/unified-spec-workflow.json (T-015 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ Tasks vs userStories conventions documented - Comparison table with JSON examples
+2. ✅ Workflow diagram updated - ASCII diagram showing spec→build→(optional)plan
+3. ✅ Template variables updated - Added INPUT_SOURCE, OUTPUT_FILE with Mode(s) column
+
+**Next:** T-016, T-017 remain
+
