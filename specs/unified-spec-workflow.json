@@ -1,0 +1,406 @@
+{
+  "project": "Unified Spec Workflow",
+  "branchName": "ralph/unified-spec-workflow",
+  "version": "1.0.0",
+  "description": "Simplify ralph workflow from product→spec→plan→build to product→spec→build by making specs self-sufficient with embedded tasks",
+  "context": {
+    "currentState": "Ralph has three modes (plan/build/product). Specs contain user stories with acceptance criteria, and plan mode transforms these into a separate checklist file. Build mode must update both the plan ([x] marks) and spec (passes: true), creating divergence risk and maintenance burden.",
+    "targetState": "Specs become the single source of truth with embedded tasks. New 'spec' mode generates specs from user input or product artifacts. Build mode works directly from specs. Plan mode becomes optional for generating human-readable derived plans.",
+    "constraints": [
+      "Maintain backward compatibility with existing spec format (userStories still work)",
+      "Keep ralph.sh as single bash script",
+      "Spec mode must use writing-ralph-specs skill",
+      "Plan mode remains available for derived human-readable plans",
+      "All changes must pass shellcheck"
+    ],
+    "verificationCommands": [
+      "shellcheck ralph.sh",
+      "./ralph.sh --help",
+      "./ralph.sh --dry-run",
+      "./ralph.sh spec --help",
+      "./ralph.sh spec -p 'Add dark mode' --dry-run"
+    ]
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "name": "Spec Mode Foundation",
+      "description": "Add spec mode to ralph.sh with prompt and skill integration",
+      "rationale": "Core capability - enables automated spec generation from various inputs"
+    },
+    {
+      "id": "P2",
+      "name": "Enhanced Spec Format",
+      "description": "Extend spec format with tasks array and update build mode to use it",
+      "rationale": "Eliminates divergence between spec and plan, single source of truth"
+    },
+    {
+      "id": "P3",
+      "name": "Build Mode Integration",
+      "description": "Update build mode to work with tasks directly, update status in spec",
+      "rationale": "Complete the unified workflow"
+    },
+    {
+      "id": "P4",
+      "name": "Documentation & Polish",
+      "description": "Update all docs, README, skill file, and add examples",
+      "rationale": "Ensure users can adopt the new workflow"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "phase": "P1",
+      "title": "Add spec mode argument parsing",
+      "description": "Add 'spec' as a recognized mode/preset in ralph.sh argument parsing",
+      "acceptanceCriteria": [
+        "./ralph.sh spec recognized as valid mode",
+        "./ralph.sh spec --help shows spec-specific options",
+        "Default model for spec mode is opus",
+        "shellcheck passes"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-002",
+      "phase": "P1",
+      "title": "Add spec mode input flags",
+      "description": "Add flags for spec mode input sources: --from-product, -p/--prompt, -f/--file",
+      "acceptanceCriteria": [
+        "-p/--prompt 'description' works for inline feature description",
+        "-f/--file PATH works for requirements file input",
+        "--from-product flag reads product-output/ artifacts (especially 7_prd.md)",
+        "Flags are mutually exclusive (error if multiple specified)",
+        "At least one input source required for spec mode",
+        "shellcheck passes"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-003",
+      "phase": "P1",
+      "title": "Add spec mode output flag",
+      "description": "Add --output/-o flag to specify output spec file path",
+      "acceptanceCriteria": [
+        "-o/--output PATH specifies where to write the generated spec",
+        "Default output: specs/{feature-slug}.json derived from project name",
+        "Creates specs/ directory if it doesn't exist",
+        "Warns if output file already exists (--force to overwrite)",
+        "shellcheck passes"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-004",
+      "phase": "P1",
+      "title": "Create PROMPT_spec.md",
+      "description": "Create spec mode prompt that instructs Claude to use the writing-ralph-specs skill",
+      "acceptanceCriteria": [
+        "prompts/PROMPT_spec.md exists",
+        "Prompt instructs Claude to read .claude/skills/writing-ralph-specs/SKILL.md first",
+        "Prompt includes template variables: {{INPUT_SOURCE}}, {{OUTPUT_FILE}}, {{PROGRESS_FILE}}",
+        "Prompt describes input sources (user prompt, file, product artifacts)",
+        "Prompt instructs output as JSON spec with tasks array",
+        "Includes research phase to understand codebase before spec creation"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-005",
+      "phase": "P1",
+      "title": "Wire spec mode in main loop",
+      "description": "Connect spec mode to PROMPT_spec.md and handle template variable substitution",
+      "acceptanceCriteria": [
+        "spec mode uses prompts/PROMPT_spec.md",
+        "Template variables substituted correctly",
+        "{{INPUT_SOURCE}} populated from -p, -f, or --from-product",
+        "{{OUTPUT_FILE}} populated from -o or derived default",
+        "Spec mode runs Claude and generates spec file",
+        "shellcheck passes"
+      ],
+      "dependsOn": ["T-002", "T-003", "T-004"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-006",
+      "phase": "P2",
+      "title": "Define enhanced spec schema with tasks",
+      "description": "Document the new spec schema that includes tasks array alongside userStories",
+      "acceptanceCriteria": [
+        "tasks array defined with: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes",
+        "status field supports: pending, in_progress, complete, blocked",
+        "passes field is boolean for completion tracking (aligns with build mode)",
+        "dependsOn is array of task IDs",
+        "Backward compatible: userStories still supported (legacy)",
+        "Schema documented in writing-ralph-specs skill"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-007",
+      "phase": "P2",
+      "title": "Update writing-ralph-specs skill",
+      "description": "Update the skill to document tasks array as primary format, userStories as legacy",
+      "acceptanceCriteria": [
+        ".claude/skills/writing-ralph-specs/SKILL.md updated",
+        "tasks array documented as recommended format",
+        "userStories marked as legacy/backward-compatible",
+        "Examples show tasks format with passes field",
+        "Guidance on task granularity (1-2 iterations per task)",
+        "dependsOn usage documented"
+      ],
+      "dependsOn": ["T-006"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-008",
+      "phase": "P3",
+      "title": "Update build mode to find next task",
+      "description": "Modify PROMPT_build.md to read tasks array and find next pending task respecting dependencies",
+      "acceptanceCriteria": [
+        "Build mode reads spec's tasks array (falls back to plan file if no tasks)",
+        "Finds first task where passes=false and all dependsOn tasks have passes=true",
+        "Sets task status to in_progress before starting work",
+        "One task per iteration rule preserved"
+      ],
+      "dependsOn": ["T-006"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-009",
+      "phase": "P3",
+      "title": "Update build mode to update task status",
+      "description": "Modify PROMPT_build.md to update task status and passes in spec file when complete",
+      "acceptanceCriteria": [
+        "After task completion, set passes=true and status='complete' in spec JSON",
+        "notes field updated with implementation summary",
+        "No longer updates separate plan file (unless plan file is the spec)",
+        "Commit message includes task ID: 'feat(T-001): description'",
+        "userStories.passes still updated if using legacy format"
+      ],
+      "dependsOn": ["T-008"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-010",
+      "phase": "P3",
+      "title": "Update build mode completion detection",
+      "description": "Modify completion detection to check all tasks have passes=true",
+      "acceptanceCriteria": [
+        "Completion signaled when all tasks have passes=true",
+        "Falls back to plan checklist if no tasks array",
+        "Pre-completion checklist updated in prompt"
+      ],
+      "dependsOn": ["T-009"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-011",
+      "phase": "P3",
+      "title": "Update plan mode as derived artifact generator",
+      "description": "Modify plan mode to generate human-readable plan from spec (optional, not required for build)",
+      "acceptanceCriteria": [
+        "Plan mode still works as before for specs without tasks",
+        "For specs with tasks, plan mode generates Markdown checklist view",
+        "Generated plan includes note: 'This is a derived view. Edit the spec, not this file.'",
+        "Plan is read-only reference, build mode does not update it"
+      ],
+      "dependsOn": ["T-006"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-012",
+      "phase": "P4",
+      "title": "Update docs/RALPH_LOOP_REF.md",
+      "description": "Add spec mode documentation to the CLI reference",
+      "acceptanceCriteria": [
+        "Spec mode documented with all flags",
+        "Examples for all input sources (-p, -f, --from-product)",
+        "New workflow diagram: product→spec→build",
+        "Tasks format documented",
+        "Migration notes for existing specs"
+      ],
+      "dependsOn": ["T-005", "T-010"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-013",
+      "phase": "P4",
+      "title": "Update README.md",
+      "description": "Update README with new simplified workflow",
+      "acceptanceCriteria": [
+        "Workflow diagram updated to show spec mode",
+        "Quick start includes spec mode example",
+        "Three modes table updated to four modes",
+        "'Specs vs Plans' section updated to explain tasks vs legacy userStories"
+      ],
+      "dependsOn": ["T-012"],
+      "status": "pending",
+      "effort": "medium",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-014",
+      "phase": "P4",
+      "title": "Update CLAUDE.md",
+      "description": "Update project context with new workflow",
+      "acceptanceCriteria": [
+        "Spec → Build Workflow section updated",
+        "Tasks format documented as primary",
+        "Plan mode noted as optional",
+        "Skill usage documented"
+      ],
+      "dependsOn": ["T-012"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-015",
+      "phase": "P4",
+      "title": "Update specs/INDEX.md",
+      "description": "Update the spec index with new conventions",
+      "acceptanceCriteria": [
+        "Tasks vs userStories conventions documented",
+        "Workflow diagram updated",
+        "Template variables updated"
+      ],
+      "dependsOn": ["T-012"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-016",
+      "phase": "P4",
+      "title": "Create example spec with tasks",
+      "description": "Create an example spec demonstrating the tasks format",
+      "acceptanceCriteria": [
+        "specs/example-tasks.json created with tasks array",
+        "Shows all task fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes",
+        "Includes dependency example",
+        "Referenced from skill and INDEX.md"
+      ],
+      "dependsOn": ["T-007"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "T-017",
+      "phase": "P4",
+      "title": "Add shell completion for spec mode",
+      "description": "Update bash/zsh completions to include spec mode",
+      "acceptanceCriteria": [
+        "completions/ralph.bash updated with spec preset",
+        "completions/ralph.zsh updated with spec preset",
+        "--from-product flag completed",
+        "shellcheck passes on completion scripts"
+      ],
+      "dependsOn": ["T-005"],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    }
+  ],
+  "dependencies": {
+    "T-002": ["T-001"],
+    "T-003": ["T-001"],
+    "T-004": ["T-001"],
+    "T-005": ["T-002", "T-003", "T-004"],
+    "T-007": ["T-006"],
+    "T-008": ["T-006"],
+    "T-009": ["T-008"],
+    "T-010": ["T-009"],
+    "T-011": ["T-006"],
+    "T-012": ["T-005", "T-010"],
+    "T-013": ["T-012"],
+    "T-014": ["T-012"],
+    "T-015": ["T-012"],
+    "T-016": ["T-007"],
+    "T-017": ["T-005"]
+  },
+  "milestones": [
+    {
+      "id": "M1",
+      "name": "Spec Mode MVP",
+      "tasks": ["T-001", "T-002", "T-003", "T-004", "T-005"],
+      "description": "Can generate specs from user input, file, or product artifacts",
+      "tag": "v2.1.0-alpha"
+    },
+    {
+      "id": "M2",
+      "name": "Unified Spec Format",
+      "tasks": ["T-006", "T-007"],
+      "description": "Tasks array defined and documented",
+      "tag": "v2.1.0-beta"
+    },
+    {
+      "id": "M3",
+      "name": "Build Mode Integration",
+      "tasks": ["T-008", "T-009", "T-010", "T-011"],
+      "description": "Build mode works directly from spec tasks",
+      "tag": "v2.1.0-rc1"
+    },
+    {
+      "id": "M4",
+      "name": "Documentation Complete",
+      "tasks": ["T-012", "T-013", "T-014", "T-015", "T-016", "T-017"],
+      "description": "All docs updated, examples created, completions updated",
+      "tag": "v2.1.0"
+    }
+  ],
+  "glossary": {
+    "spec": "JSON file containing project requirements and tasks (single source of truth)",
+    "task": "Atomic unit of work with acceptance criteria, dependencies, and status tracking",
+    "userStories": "Legacy format for requirements (still supported for backward compatibility)",
+    "plan": "Optional human-readable Markdown view derived from spec tasks",
+    "spec mode": "New ralph mode that generates specs from various inputs"
+  }
+}

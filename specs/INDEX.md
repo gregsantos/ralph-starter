@@ -10,9 +10,9 @@ Source of truth for all system capabilities and planned features.
 
 ## Active Development
 
-| Feature | Spec | Status | Plan | Description |
-| ------- | ---- | ------ | ---- | ----------- |
-|         |      |        |      |             |
+| Feature               | Spec                                                             | Status      | Plan                                                                    | Description                                                |
+| --------------------- | ---------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Unified Spec Workflow | [unified-spec-workflow.json](./unified-spec-workflow.json)       | In Progress | [unified-spec-workflow_PLAN.md](../plans/unified-spec-workflow_PLAN.md) | Add spec mode, eliminate plan requirement, tasks in specs  |
 
 ## Planned
 
