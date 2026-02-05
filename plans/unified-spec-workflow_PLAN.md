@@ -131,12 +131,12 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 2.1: T-006 Define enhanced spec schema with tasks
 **Effort:** Small | **Depends on:** None
 
-- [ ] 2.1.1 Document tasks array schema in code comments or separate schema file
-- [ ] 2.1.2 Define task fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes, phase (optional)
-- [ ] 2.1.3 Define status values: pending, in_progress, complete, blocked
-- [ ] 2.1.4 Define passes as boolean for completion tracking (aligns with build mode expectations)
-- [ ] 2.1.5 Define dependsOn as array of task IDs
-- [ ] 2.1.6 Document backward compatibility: userStories array still supported
+- [x] 2.1.1 Document tasks array schema in code comments or separate schema file
+- [x] 2.1.2 Define task fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes, phase (optional)
+- [x] 2.1.3 Define status values: pending, in_progress, complete, blocked
+- [x] 2.1.4 Define passes as boolean for completion tracking (aligns with build mode expectations)
+- [x] 2.1.5 Define dependsOn as array of task IDs
+- [x] 2.1.6 Document backward compatibility: userStories array still supported
 
 **Acceptance criteria:**
 - Schema fully documented

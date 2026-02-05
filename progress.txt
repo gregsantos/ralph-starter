@@ -176,3 +176,39 @@ Spec mode can now generate specs from user input, file, or product artifacts.
 
 **Next:** T-006 (Define enhanced spec schema with tasks) - Phase 2 begins
 
+## Iteration 6 - T-006: Define enhanced spec schema with tasks
+
+**Completed:** Task 2.1 (T-006) - Define enhanced spec schema with tasks
+
+**Changes:**
+- Updated .claude/skills/writing-ralph-specs/SKILL.md with comprehensive tasks array schema
+- Added "Tasks Array Schema (Recommended)" section with:
+  - Task Fields table documenting all fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes, phase
+  - Type information for each field (string, string[], boolean)
+  - Required vs optional field designation
+- Added "Status Values" section: pending, in_progress, complete, blocked
+- Added "Example Spec with Tasks" showing full task structure
+- Added "Legacy: userStories Array" section for backward compatibility
+- Updated workflow section to show: spec mode → (optional) plan mode → build mode
+- Updated tips section with tasks terminology (atomic tasks vs atomic stories)
+- Changed reference from ralph-improvements.json to unified-spec-workflow.json
+
+**Files modified:**
+- .claude/skills/writing-ralph-specs/SKILL.md
+
+**Decisions:**
+- Documented schema directly in the writing-ralph-specs skill (not a separate schema file) since Claude reads this skill when creating specs
+- Made tasks the recommended format, userStories as legacy
+- Included status field alongside passes for workflow visibility (status = human-readable state, passes = boolean for automation)
+- dependsOn uses array of task IDs (not dependencies map) for simpler task-level declarations
+
+**Verification:**
+- Schema fully documented with all fields and types
+- Status values defined: pending, in_progress, complete, blocked
+- passes field documented as boolean for completion tracking
+- dependsOn documented as array of task IDs
+- Backward compatibility section explains userStories still works
+- Skill file updated and ready for use
+
+**Next:** T-007 (Update writing-ralph-specs skill) - depends on T-006
+

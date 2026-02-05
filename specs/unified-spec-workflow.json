@@ -154,10 +154,10 @@
         "Schema documented in writing-ralph-specs skill"
       ],
       "dependsOn": [],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated .claude/skills/writing-ralph-specs/SKILL.md with: Task Fields table documenting all fields with types and required/optional status, Status Values section, Example Spec with Tasks, Legacy section for userStories backward compatibility. Updated workflow to show spec → build with plan as optional."
     },
     {
       "id": "T-007",
