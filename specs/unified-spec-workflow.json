@@ -135,10 +135,10 @@
         "shellcheck passes"
       ],
       "dependsOn": ["T-002", "T-003", "T-004"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added SPEC_MODE_INPUT_SOURCE and SPEC_MODE_OUTPUT_FILE variables. Populated from input type: prompt (inline content), file (file contents), or product (concatenated product artifacts with priority order). Added template substitution for {{INPUT_SOURCE}} and {{OUTPUT_FILE}}. Product mode concatenates files in priority order: 7_prd.md, 9_technical_requirements.md, 4_personas.md, 6_user_journey_map.md, 8_feature_specifications.md. PROMPT_FILE was already correctly set by existing preset logic."
     },
     {
       "id": "T-006",

@@ -2423,6 +2423,9 @@ substitute_template() {
     content="${content//\{\{PRODUCT_CONTEXT_DIR\}\}/$PRODUCT_CONTEXT_DIR}"
     content="${content//\{\{PRODUCT_OUTPUT_DIR\}\}/$PRODUCT_OUTPUT_DIR}"
     content="${content//\{\{ARTIFACT_SPEC_FILE\}\}/$ARTIFACT_SPEC_FILE}"
+    # Spec mode variables
+    content="${content//\{\{INPUT_SOURCE\}\}/$SPEC_MODE_INPUT_SOURCE}"
+    content="${content//\{\{OUTPUT_FILE\}\}/$SPEC_MODE_OUTPUT_FILE}"
     echo "$content"
 }
 
@@ -2442,6 +2445,65 @@ SOURCE_DIR="${SOURCE_DIR:-src/*}"
 PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
 PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
 ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
+
+# Spec mode variables (for template substitution)
+# These are populated from the input flags parsed earlier
+SPEC_MODE_INPUT_SOURCE=""
+SPEC_MODE_OUTPUT_FILE=""
+
+if [ "$PRESET_NAME" = "spec" ]; then
+    # Set OUTPUT_FILE from SPEC_OUTPUT_FILE (already validated/defaulted)
+    SPEC_MODE_OUTPUT_FILE="$SPEC_OUTPUT_FILE"
+
+    # Populate INPUT_SOURCE based on input type
+    case "$SPEC_INPUT_TYPE" in
+        prompt)
+            # Inline prompt: use the content directly
+            SPEC_MODE_INPUT_SOURCE="$SPEC_INPUT_CONTENT"
+            ;;
+        file)
+            # File input: read and include the file contents
+            if [ -f "$SPEC_INPUT_CONTENT" ]; then
+                SPEC_MODE_INPUT_SOURCE="$(cat "$SPEC_INPUT_CONTENT")"
+            else
+                echo -e "${RED}${SYM_CROSS} Error: Cannot read input file: $SPEC_INPUT_CONTENT${RESET}"
+                exit 1
+            fi
+            ;;
+        product)
+            # Product artifacts: concatenate relevant product-output/ files
+            # Prioritize PRD (7_prd.md) and other key artifacts
+            EFFECTIVE_PRODUCT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output}"
+            product_content=""
+
+            # Read files in priority order if they exist
+            for artifact in "7_prd.md" "9_technical_requirements.md" "4_personas.md" \
+                            "6_user_journey_map.md" "8_feature_specifications.md"; do
+                artifact_path="${EFFECTIVE_PRODUCT_DIR}/${artifact}"
+                if [ -f "$artifact_path" ]; then
+                    product_content+="
+=== ${artifact} ===
+$(cat "$artifact_path")
+"
+                fi
+            done
+
+            # If no prioritized files found, read all .md files
+            if [ -z "$product_content" ]; then
+                for md_file in "$EFFECTIVE_PRODUCT_DIR"/*.md; do
+                    if [ -f "$md_file" ]; then
+                        product_content+="
+=== $(basename "$md_file") ===
+$(cat "$md_file")
+"
+                    fi
+                done
+            fi
+
+            SPEC_MODE_INPUT_SOURCE="$product_content"
+            ;;
+    esac
+fi
 
 # Derive plan file from spec file if spec was set via CLI but plan wasn't
 # e.g., ./specs/feature.md → ./plans/feature_PLAN.md

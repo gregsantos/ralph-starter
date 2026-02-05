@@ -110,13 +110,13 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 1.5: T-005 Wire spec mode in main loop
 **Effort:** Medium | **Depends on:** T-002, T-003, T-004
 
-- [ ] 1.5.1 Set PROMPT_FILE to prompts/PROMPT_spec.md when mode=spec
-- [ ] 1.5.2 Populate INPUT_SOURCE variable from input flags
-- [ ] 1.5.3 Populate OUTPUT_FILE variable from -o flag or default
-- [ ] 1.5.4 Add {{INPUT_SOURCE}} and {{OUTPUT_FILE}} to template substitution
-- [ ] 1.5.5 For --from-product, read and concatenate relevant files (7_prd.md, etc.)
-- [ ] 1.5.6 Run spec mode through main loop (typically 1-3 iterations)
-- [ ] 1.5.7 Run shellcheck ralph.sh
+- [x] 1.5.1 Set PROMPT_FILE to prompts/PROMPT_spec.md when mode=spec
+- [x] 1.5.2 Populate INPUT_SOURCE variable from input flags
+- [x] 1.5.3 Populate OUTPUT_FILE variable from -o flag or default
+- [x] 1.5.4 Add {{INPUT_SOURCE}} and {{OUTPUT_FILE}} to template substitution
+- [x] 1.5.5 For --from-product, read and concatenate relevant files (7_prd.md, etc.)
+- [x] 1.5.6 Run spec mode through main loop (typically 1-3 iterations)
+- [x] 1.5.7 Run shellcheck ralph.sh
 
 **Acceptance criteria:**
 - Template variables substituted correctly

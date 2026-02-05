@@ -130,3 +130,49 @@
 
 **Next:** T-005 (Wire spec mode in main loop) - now that T-002, T-003, T-004 are complete
 
+## Iteration 5 - T-005: Wire spec mode in main loop
+
+**Completed:** Task 1.5 (T-005) - Wire spec mode in main loop
+
+**Changes:**
+- Added SPEC_MODE_INPUT_SOURCE and SPEC_MODE_OUTPUT_FILE variables to ralph.sh
+- Added spec mode variable population section (after product mode defaults)
+- Updated substitute_template() function to include {{INPUT_SOURCE}} and {{OUTPUT_FILE}}
+- INPUT_SOURCE populated based on input type:
+  - prompt: uses inline content directly
+  - file: reads and includes file contents via `cat`
+  - product: concatenates product artifacts in priority order
+
+**Product artifact priority order:**
+1. 7_prd.md (PRD - primary source)
+2. 9_technical_requirements.md
+3. 4_personas.md
+4. 6_user_journey_map.md
+5. 8_feature_specifications.md
+- Falls back to all .md files if none of the priority files exist
+
+**Files modified:**
+- ralph.sh (substitute_template function, spec mode variable section)
+- plans/unified-spec-workflow_PLAN.md (marked T-005 items complete)
+- specs/unified-spec-workflow.json (updated T-005 status, passes, notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Used SPEC_MODE_* prefix for template variables to avoid name collisions
+- PROMPT_FILE was already correctly set by existing preset logic at line 1379
+- Product artifacts concatenated with "=== filename ===" headers for clarity
+- Priority order for product files based on typical importance for spec generation
+
+**Verification:**
+- `./ralph.sh spec -p "Add dark mode" --dry-run` runs successfully
+- `./ralph.sh spec -p "Add dark mode" -v --dry-run` shows verbose config
+- `./ralph.sh --help` shows spec mode documentation
+- shellcheck passes (no new warnings in added code)
+- Template substitution logic verified with inline bash test
+
+**Milestone M1 (Spec Mode MVP) Complete:**
+Tasks T-001, T-002, T-003, T-004, T-005 are all complete.
+Spec mode can now generate specs from user input, file, or product artifacts.
+
+**Next:** T-006 (Define enhanced spec schema with tasks) - Phase 2 begins
+
