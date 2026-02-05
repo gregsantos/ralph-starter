@@ -518,3 +518,34 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-016, T-017 remain
 
+## Iteration 16 - T-016: Create example spec with tasks
+
+**Completed:** Task 4.5 (T-016) - Create example spec with tasks
+
+**Changes:**
+- Created specs/example-tasks.json demonstrating the tasks format
+- Example uses "User Preferences API" as realistic feature
+- Shows all task fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes
+- Includes dependency examples:
+  - T-001 and T-002 have no dependencies (can run in parallel)
+  - T-003 depends on both T-001 and T-002
+  - T-004 depends on T-003
+  - T-005 depends on T-004
+- Updated SKILL.md Reference section with link to example
+- Added Examples section to INDEX.md with reference to example-tasks.json
+
+**Files modified:**
+- specs/example-tasks.json (new file)
+- .claude/skills/writing-ralph-specs/SKILL.md (updated Reference section)
+- specs/INDEX.md (added Examples section)
+- specs/unified-spec-workflow.json (T-016 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ specs/example-tasks.json created with tasks array - File created with 5 tasks
+2. ✅ Shows all task fields - All required fields present in each task
+3. ✅ Includes dependency example - T-003 depends on [T-001, T-002], T-004 depends on [T-003], T-005 depends on [T-004]
+4. ✅ Referenced from skill and INDEX.md - Both files updated with references
+
+**Next:** T-017 (Add shell completion for spec mode)
+

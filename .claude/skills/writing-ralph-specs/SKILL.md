@@ -206,4 +206,5 @@ The `userStories` format is still supported for backward compatibility. New spec
 
 ## Reference
 
-See `specs/unified-spec-workflow.json` for a comprehensive multi-phase example with phases, milestones, and task dependencies.
+- `specs/example-tasks.json` - Simple example showing all task fields and dependencies
+- `specs/unified-spec-workflow.json` - Comprehensive multi-phase example with phases, milestones, and task dependencies

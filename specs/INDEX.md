@@ -8,6 +8,12 @@ Source of truth for all system capabilities and planned features.
 | --------------- | ---------------------------------------------------- | -------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
 | Ralph Loop v2.0 | [ralph-improvements.json](./ralph-improvements.json) | Complete | [ralph-improvements_PLAN.md](../plans/ralph-improvements_PLAN.md) | Resilience, observability, config, and DX improvements |
 
+## Examples
+
+| Feature              | Spec                                         | Description                                              |
+| -------------------- | -------------------------------------------- | -------------------------------------------------------- |
+| Example Tasks Format | [example-tasks.json](./example-tasks.json)   | Reference example showing all task fields and dependencies |
+
 ## Active Development
 
 | Feature               | Spec                                                             | Status      | Plan                                                                    | Description                                                |
