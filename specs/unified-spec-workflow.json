@@ -116,10 +116,10 @@
         "Includes research phase to understand codebase before spec creation"
       ],
       "dependsOn": ["T-001"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created prompts/PROMPT_spec.md with: Critical section requiring skill read first, all template variables (INPUT_SOURCE, OUTPUT_FILE, PROGRESS_FILE, SOURCE_DIR), input handling for -p, -f, and --from-product, codebase research phase, tasks-based JSON output format with example, validation checklist, and completion protocol."
     },
     {
       "id": "T-005",

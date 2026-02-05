@@ -91,13 +91,13 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 1.4: T-004 Create PROMPT_spec.md
 **Effort:** Medium | **Depends on:** T-001
 
-- [ ] 1.4.1 Create prompts/PROMPT_spec.md
-- [ ] 1.4.2 Add instruction to read .claude/skills/writing-ralph-specs/SKILL.md FIRST
-- [ ] 1.4.3 Add template variables: {{INPUT_SOURCE}}, {{OUTPUT_FILE}}, {{PROGRESS_FILE}}
-- [ ] 1.4.4 Describe input handling (prompt, file, product artifacts)
-- [ ] 1.4.5 Instruct to research codebase before generating spec
-- [ ] 1.4.6 Instruct to output JSON with tasks array
-- [ ] 1.4.7 Include completion protocol (when spec is ready)
+- [x] 1.4.1 Create prompts/PROMPT_spec.md
+- [x] 1.4.2 Add instruction to read .claude/skills/writing-ralph-specs/SKILL.md FIRST
+- [x] 1.4.3 Add template variables: {{INPUT_SOURCE}}, {{OUTPUT_FILE}}, {{PROGRESS_FILE}}
+- [x] 1.4.4 Describe input handling (prompt, file, product artifacts)
+- [x] 1.4.5 Instruct to research codebase before generating spec
+- [x] 1.4.6 Instruct to output JSON with tasks array
+- [x] 1.4.7 Include completion protocol (when spec is ready)
 
 **Acceptance criteria:**
 - Prompt exists at prompts/PROMPT_spec.md

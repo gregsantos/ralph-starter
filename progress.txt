@@ -90,3 +90,43 @@
 
 **Next:** T-004 (PROMPT_spec.md) - create the spec mode prompt file
 
+## Iteration 4 - T-004: Create PROMPT_spec.md
+
+**Completed:** Task 1.4 (T-004) - Create PROMPT_spec.md
+
+**Changes:**
+- Created prompts/PROMPT_spec.md with full spec mode instructions
+
+**Key sections in the prompt:**
+1. Context section with template variables: `{{INPUT_SOURCE}}`, `{{OUTPUT_FILE}}`, `{{PROGRESS_FILE}}`, `{{SOURCE_DIR}}`
+2. Critical instruction to read `.claude/skills/writing-ralph-specs/SKILL.md` FIRST
+3. Input handling for all three sources:
+   - Inline prompt (`-p`)
+   - File input (`-f`)
+   - Product artifacts (`--from-product`) with guidance on which files to prioritize
+4. Codebase research phase before spec generation
+5. Task design guidelines with granularity recommendations
+6. JSON spec output format with tasks array example showing all fields
+7. Validation checklist for spec quality
+8. Completion protocol with pre-completion checklist
+
+**Files modified:**
+- prompts/PROMPT_spec.md (new file)
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-004 status and notes)
+
+**Decisions:**
+- Followed pattern from PROMPT_plan.md and PROMPT_build.md for consistent structure
+- Made skill reading a critical first-action requirement (not just a suggestion)
+- Included task granularity guidelines (1-2 iterations per task)
+- Added validation checklist to catch issues before completion
+- Spec mode typically completes in 1-3 iterations
+
+**Verification:**
+- File exists at prompts/PROMPT_spec.md
+- All template variables present: INPUT_SOURCE, OUTPUT_FILE, PROGRESS_FILE, SOURCE_DIR
+- Skill read instruction in "Critical" section
+- Tasks-based JSON format documented with example
+
+**Next:** T-005 (Wire spec mode in main loop) - now that T-002, T-003, T-004 are complete
+
