@@ -54,12 +54,12 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 1.2: T-002 Add spec mode input flags
 **Effort:** Medium | **Depends on:** T-001
 
-- [ ] 1.2.1 Add --from-product flag that sets INPUT_SOURCE to product-output/ contents
-- [ ] 1.2.2 Ensure -p/--prompt works with spec mode (INPUT_SOURCE = inline prompt)
-- [ ] 1.2.3 Ensure -f/--file works with spec mode (INPUT_SOURCE = file contents)
-- [ ] 1.2.4 Add mutual exclusivity check: error if multiple input sources specified
-- [ ] 1.2.5 Require at least one input source for spec mode
-- [ ] 1.2.6 Run shellcheck ralph.sh
+- [x] 1.2.1 Add --from-product flag that sets INPUT_SOURCE to product-output/ contents
+- [x] 1.2.2 Ensure -p/--prompt works with spec mode (INPUT_SOURCE = inline prompt)
+- [x] 1.2.3 Ensure -f/--file works with spec mode (INPUT_SOURCE = file contents)
+- [x] 1.2.4 Add mutual exclusivity check: error if multiple input sources specified
+- [x] 1.2.5 Require at least one input source for spec mode
+- [x] 1.2.6 Run shellcheck ralph.sh
 
 **Acceptance criteria:**
 - `-p 'description'` works for inline feature description

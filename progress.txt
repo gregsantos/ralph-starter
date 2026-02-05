@@ -26,3 +26,42 @@
 
 **Next:** T-002, T-003, T-004 can now proceed (all depend on T-001)
 
+## Iteration 2 - T-002: Add spec mode input flags
+
+**Completed:** Task 1.2 (T-002) - Add spec mode input flags
+
+**Changes:**
+- Added spec mode variables: FROM_PRODUCT, SPEC_OUTPUT_FILE, SPEC_FORCE_OVERWRITE, SPEC_INPUT_TYPE, SPEC_INPUT_CONTENT, CLI_INLINE_PROMPT, CLI_FILE_PATH
+- Added argument parsing for --from-product, -o/--spec-output, --force flags
+- Added CLI_SPEC_OUTPUT_SET tracking variable
+- Added "Spec Mode Options" section to show_help() with documentation for all spec mode flags
+- Added spec mode examples to Examples section
+- Added spec mode input validation section that:
+  - Counts input sources from -p, -f, and --from-product
+  - Requires exactly one input source for spec mode
+  - Validates input file exists for -f
+  - Validates product artifacts exist for --from-product
+  - Checks output file existence (unless --force)
+  - Creates specs/ directory if needed
+
+**Files modified:**
+- ralph.sh
+
+**Decisions:**
+- Used CLI_INLINE_PROMPT and CLI_FILE_PATH to preserve -p/-f values separately from PROMPT_SOURCE, since the 'spec' preset overwrites PROMPT_SOURCE
+- Spec mode resets PROMPT_SOURCE to "preset" after capturing input, ensuring PROMPT_spec.md is used as the prompt file
+- Default output file is specs/new-spec.json (prompt will derive a better name)
+- --from-product checks for any .md files in product-output/, not just specific artifacts
+
+**Verification:**
+- `./ralph.sh spec` errors with "requires an input source"
+- `./ralph.sh spec -p "X" -f ./README.md` errors with "accepts only one input source"
+- `./ralph.sh spec -p "X" --from-product` errors with "accepts only one input source"
+- `./ralph.sh spec --from-product` errors about missing product artifacts (expected)
+- `./ralph.sh spec -f ./nonexistent.md` errors about file not found
+- `./ralph.sh spec -p "Dark mode"` passes input validation (fails on missing PROMPT_spec.md as expected - T-004)
+- `./ralph.sh --help` shows Spec Mode Options section
+- shellcheck passes (no new errors)
+
+**Next:** T-003 (output flag - mostly done), T-004 (PROMPT_spec.md), then T-005 (wire it all together)
+

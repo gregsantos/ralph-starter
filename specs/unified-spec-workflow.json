@@ -79,10 +79,10 @@
         "shellcheck passes"
       ],
       "dependsOn": ["T-001"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added CLI_INLINE_PROMPT and CLI_FILE_PATH tracking variables to preserve input values when spec preset is used. Added --from-product, -o/--spec-output, --force flags. Added spec mode validation section with input counting and mutual exclusivity check. Updated help text with Spec Mode Options section and examples."
     },
     {
       "id": "T-003",
