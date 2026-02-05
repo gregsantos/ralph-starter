@@ -224,10 +224,10 @@
         "Pre-completion checklist updated in prompt"
       ],
       "dependsOn": ["T-009"],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All acceptance criteria were already implemented in T-009. Verified: Section 6 Check If All Done covers tasks-first with plan fallback, Pre-Completion Checklist (lines 169-186) has both paths, When to Signal Completion (lines 188-202) has correct logic for both workflows."
     },
     {
       "id": "T-011",

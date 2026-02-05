@@ -317,3 +317,28 @@ Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
 
 **Next:** T-010 (Update build mode completion detection) - depends on T-009
 
+## Iteration 10 - T-010: Update build mode completion detection
+
+**Completed:** Task 3.3 (T-010) - Update build mode completion detection
+
+**Changes:**
+- Verified all T-010 acceptance criteria were already implemented in T-009
+- No code changes needed - PROMPT_build.md already contains all required content
+
+**Verification of acceptance criteria:**
+1. ✅ `Completion signaled when all tasks have passes=true` - Lines 132-134 in Section 6, lines 197-199 in When to Signal Completion
+2. ✅ `Falls back to plan checklist if no tasks array` - Lines 136-139 (Section 6), lines 177-179 (Pre-Completion), lines 194/200
+3. ✅ `Pre-completion checklist updated in prompt` - Lines 169-186 contain updated checklist with both workflows
+
+**Files modified:**
+- specs/unified-spec-workflow.json (updated T-010 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- T-009 changes included completion detection updates, making T-010 a verification-only task
+- No additional prompt changes needed
+
+**Milestone M3 progress:** Tasks T-008, T-009, T-010 complete. T-011 remaining for M3.
+
+**Next:** T-011, T-012, T-016, T-017 are now unblocked (T-012 depends on T-010 which is now complete)
+
