@@ -293,10 +293,10 @@
         "Skill usage documented"
       ],
       "dependsOn": ["T-012"],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated CLAUDE.md: Project structure shows PROMPT_spec.md, workflow changed from spec→plan→build to spec→build with plan optional, spec mode examples in Quick Start, tasks format documented with all fields, userStories as legacy, four modes table with spec first, skills section mentions spec mode uses writing-ralph-specs skill."
     },
     {
       "id": "T-015",

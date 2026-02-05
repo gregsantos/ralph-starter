@@ -457,3 +457,33 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-014, T-015, T-016, T-017 remain
 
+## Iteration 14 - T-014: Update CLAUDE.md
+
+**Completed:** Task 4.3 (T-014) - Update CLAUDE.md
+
+**Changes:**
+- Updated Project Structure to show PROMPT_spec.md with "(optional)" note for PROMPT_plan.md
+- Changed workflow section from "Spec → Plan → Build" to "Spec → Build" with plan as optional step 3
+- Added spec mode examples in Creating Specs section (spec -p, spec -f, spec --from-product)
+- Added "Spec Format: Tasks (Recommended)" section with full JSON example and field documentation
+- Added "Legacy: userStories" section with example and note about requiring plan mode
+- Updated Running the Workflow to show spec→build with optional plan
+- Added Tasks vs userStories comparison table
+- Updated Quick Start to show spec mode commands first, organized by mode
+- Changed "Three Modes" to "Four Modes" table with spec mode first
+- Updated Prompt Files to show PROMPT_spec.md first with appropriate descriptions
+- Updated Skills section to note spec mode uses writing-ralph-specs skill
+
+**Files modified:**
+- CLAUDE.md
+- specs/unified-spec-workflow.json (T-014 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ Spec → Build Workflow section updated - Now "Spec → Build Workflow" with plan as optional
+2. ✅ Tasks format documented as primary - Full section with JSON example and field documentation
+3. ✅ Plan mode noted as optional - Multiple places: workflow step 3, Running the Workflow, Tasks vs userStories table
+4. ✅ Skill usage documented - Skills section and Creating Specs section both reference skill
+
+**Next:** T-015, T-016, T-017 remain
+
