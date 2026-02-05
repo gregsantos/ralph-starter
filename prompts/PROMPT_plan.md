@@ -8,9 +8,100 @@
 - **Source**: `{{SOURCE_DIR}}`
 - **CLAUDE.md**: Consult for project context and codebase patterns
 
+## Spec Format Detection
+
+**First, check if the spec has a `tasks` array:**
+
+```
+If spec has "tasks" array:
+  → Generate derived Markdown plan (see "Derived Plan from Tasks" below)
+  → Plan is read-only reference for humans
+  → Build mode works directly from spec, not this plan
+Else (userStories only or no spec):
+  → Use traditional planning workflow (see "Traditional Planning" below)
+  → Build mode will use this plan as source of truth
+```
+
 ## Philosophy
 
 **Plans are disposable.** If a plan becomes wrong, stale, or leads nowhere—regenerate it. Don't patch bad plans; start fresh with new understanding.
+
+---
+
+## Derived Plan from Tasks
+
+**Use this workflow when the spec has a `tasks` array.**
+
+The spec is the source of truth. This plan is a derived human-readable view for reference only.
+
+### Generated Plan Format
+
+Create `{{PLAN_FILE}}` with this structure:
+
+```markdown
+# Implementation Plan: {project name}
+
+> ⚠️ **This is a derived view.** Edit the spec (`{{SPEC_FILE}}`), not this file.
+> Build mode works directly from the spec's tasks array.
+
+## Overview
+
+{Brief description from spec}
+
+## Tasks
+
+### Phase: {phase name}
+
+- [ ] **T-001**: {task title}
+  - {acceptance criterion 1}
+  - {acceptance criterion 2}
+  - Dependencies: {dependsOn tasks or "None"}
+
+- [x] **T-002**: {task title} ✓
+  - Dependencies: T-001
+  - Notes: {task notes if any}
+
+{Continue for all tasks, grouped by phase}
+
+## Progress Summary
+
+- **Completed**: X of Y tasks
+- **In Progress**: {task IDs}
+- **Blocked**: {task IDs and why}
+- **Ready**: {next tasks with satisfied dependencies}
+
+## Dependency Graph
+
+{Optional: visual representation of task dependencies}
+```
+
+### Workflow for Derived Plans
+
+1. **Read** the spec's `tasks` array
+2. **Generate** the Markdown plan following the format above
+3. **Mark tasks** based on their `passes` field: `[ ]` for false, `[x]` for true
+4. **Group by phase** if phases are defined in the spec
+5. **Show dependencies** clearly for each task
+6. **Write** to `{{PLAN_FILE}}`
+7. **Document** in `{{PROGRESS_FILE}}`
+
+### Completion for Derived Plans
+
+This is typically a **single-iteration** operation:
+
+1. Read spec
+2. Generate derived plan
+3. Write plan file
+4. Document in progress
+5. Output `<ralph>COMPLETE</ralph>`
+
+**Note:** Build mode does NOT update this plan. It updates the spec directly.
+
+---
+
+## Traditional Planning
+
+**Use this workflow when the spec has NO `tasks` array (legacy userStories format or no spec).**
 
 ## Iteration Model
 

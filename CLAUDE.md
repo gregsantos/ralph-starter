@@ -32,7 +32,8 @@ ralph-starter/
 ├── ralph.conf                    # Configuration defaults
 ├── CLAUDE.md                     # Project context (this file)
 ├── prompts/
-│   ├── PROMPT_plan.md            # Planning mode instructions
+│   ├── PROMPT_spec.md            # Spec generation instructions
+│   ├── PROMPT_plan.md            # Planning mode instructions (optional)
 │   ├── PROMPT_build.md           # Build mode instructions
 │   └── PROMPT_product.md         # Product artifact generation
 ├── specs/
@@ -164,58 +165,110 @@ return Response.json({error: "Invalid request", details: "..."}, {status: 400})
 
 - Use `frontend-design` skill for creative aesthetics (typography choices, color palettes, animations, visual style)
 - Use `ui-quality` skill for implementation correctness (accessibility, performance, forms, loading states)
-- Use `writing-ralph-specs` skill for creating structured JSON specs for Ralph Loop (see `.claude/skills/`)
+- Use `writing-ralph-specs` skill for creating structured JSON specs with tasks array (see `.claude/skills/`)
+- Spec mode (`./ralph.sh spec`) automatically uses the writing-ralph-specs skill
 
-# Spec → Plan → Build Workflow
+# Spec → Build Workflow
 
 The recommended workflow for implementing features with Ralph:
 
 ```
-1. Create Spec (JSON)     →  specs/{feature}.json     (the "what & why")
-2. Run Plan Mode          →  plans/{feature}_PLAN.md  (the "how")
-3. Run Build Mode         →  Implementation complete   (the code)
+1. Create Spec (JSON)     →  specs/{feature}.json     (the "what & why" + tasks)
+2. Run Build Mode         →  Implementation complete   (the code)
+3. (Optional) Plan Mode   →  plans/{feature}_PLAN.md  (human-readable view)
 ```
 
 ## Creating Specs
 
-Use the `writing-ralph-specs` skill or create JSON specs manually in `specs/`:
+**Recommended: Use spec mode** to generate specs automatically:
 
 ```bash
-# Example spec structure
-specs/
-├── INDEX.md                    # Feature catalog (update this!)
-├── my-feature.json             # Your spec file
-└── ralph-improvements.json     # Example comprehensive spec
+# From an inline description
+./ralph.sh spec -p "Add user authentication with OAuth"
+
+# From a requirements file
+./ralph.sh spec -f ./requirements.md
+
+# From product artifacts
+./ralph.sh spec --from-product
 ```
 
-Key elements of a good spec:
+Or use the `writing-ralph-specs` skill or create JSON specs manually in `specs/`.
 
-- **context**: Current state, target state, constraints
-- **userStories**: Atomic tasks with acceptance criteria and `passes` status
-- **dependencies**: What depends on what
-- **verificationCommands**: How to verify work
+## Spec Format: Tasks (Recommended)
 
-The `passes` field in each user story starts as `false` and is set to `true` by build mode when all acceptance criteria are met.
+Specs use the **tasks array** as the primary format. Build mode works directly from tasks:
+
+```json
+{
+  "project": "My Feature",
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add authentication middleware",
+      "description": "Create middleware for JWT validation",
+      "acceptanceCriteria": ["JWT tokens validated", "401 on invalid token"],
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
+      "effort": "medium",
+      "notes": ""
+    }
+  ]
+}
+```
+
+**Task fields:**
+- **id**: Unique identifier (T-001, T-002, etc.)
+- **title**: Short task name
+- **description**: What needs to be done
+- **acceptanceCriteria**: How to verify completion
+- **dependsOn**: Array of task IDs that must complete first
+- **status**: pending | in_progress | complete | blocked
+- **passes**: Boolean for completion tracking (build mode sets to true)
+- **effort**: small | medium | large (optional)
+- **notes**: Implementation notes (updated by build mode)
+
+## Legacy: userStories
+
+For backward compatibility, specs can still use `userStories` array:
+
+```json
+{
+  "userStories": [
+    {
+      "id": "US-001",
+      "story": "As a user, I want to...",
+      "acceptanceCriteria": ["..."],
+      "passes": false
+    }
+  ]
+}
+```
+
+When using userStories, plan mode is required to create the implementation checklist.
 
 ## Running the Workflow
 
 ```bash
-# Step 1: Create spec (use skill or manually)
-# Step 2: Plan mode creates implementation checklist
-./ralph.sh plan -s ./specs/my-feature.json
+# Recommended: spec mode generates spec with tasks
+./ralph.sh spec -p "Add dark mode toggle"
 
-# Step 3: Build mode executes the plan
-./ralph.sh build -s ./specs/my-feature.json
+# Build mode executes tasks directly from spec
+./ralph.sh build -s ./specs/dark-mode-toggle.json
+
+# Optional: generate human-readable plan
+./ralph.sh plan -s ./specs/dark-mode-toggle.json
 ```
 
-## Spec vs Markdown
+## Tasks vs userStories
 
-| Format            | Use Case                                                                 |
-| ----------------- | ------------------------------------------------------------------------ |
-| **JSON spec**     | Structured features with user stories, acceptance criteria, dependencies |
-| **Markdown spec** | Prose requirements, architecture docs, less structured work              |
+| Format          | Primary Use                   | Build Mode Workflow                |
+| --------------- | ----------------------------- | ---------------------------------- |
+| **tasks**       | Recommended for new specs     | Works directly from spec           |
+| **userStories** | Legacy/backward compatible    | Requires plan mode for checklist   |
 
-Both work with Ralph. JSON specs provide more structure for plan mode to create better checklists, and track completion status via the `passes` field.
+Both work with Ralph. Tasks format is recommended as it eliminates the plan step and makes specs the single source of truth.
 
 # Ralph Loop
 
@@ -224,34 +277,39 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ## Quick Start
 
 ```bash
+# Spec mode (generate specs)
+./ralph.sh spec -p "Add dark mode"      # From inline description
+./ralph.sh spec -f ./requirements.md    # From requirements file
+./ralph.sh spec --from-product          # From product artifacts
+
+# Build mode (implement from spec)
 ./ralph.sh                              # Build mode, opus, 10 iterations (default)
-./ralph.sh plan 5                       # Plan mode, 5 iterations
+./ralph.sh build -s ./specs/feature.json  # Build from specific spec
+./ralph.sh build --model sonnet         # Build with sonnet
+
+# Other modes and options
+./ralph.sh plan -s ./specs/feature.json # Generate human-readable plan (optional)
 ./ralph.sh product                      # Product artifact generation (12 docs)
 ./ralph.sh -p "Fix lint errors" 3       # Inline prompt, 3 iterations
-./ralph.sh -f prompts/review.md         # Custom prompt file
-./ralph.sh build --model sonnet         # Build with sonnet
 ./ralph.sh --no-push                    # Disable auto-push
-./ralph.sh --unlimited                  # Remove iteration limit (careful!)
 ./ralph.sh --dry-run                    # Preview config without running
-./ralph.sh -s ./specs/feature.md        # Custom spec (plan auto-derived)
 ./ralph.sh --resume                     # Resume interrupted session
-./ralph.sh --list-sessions              # List resumable sessions
-./ralph.sh --test                       # Single iteration test mode (no push)
 ./ralph.sh -i                           # Interactive mode (confirm between iterations)
-./ralph.sh -v                           # Verbose mode (show config sources, prompts)
 ```
 
-## Three Modes
+## Four Modes
 
-| Mode        | Purpose                                       | Command              |
-| ----------- | --------------------------------------------- | -------------------- |
-| **plan**    | Analyze codebase, create task checklist       | `./ralph.sh plan`    |
-| **build**   | Execute tasks one at a time                   | `./ralph.sh build`   |
-| **product** | Generate product documentation (12 artifacts) | `./ralph.sh product` |
+| Mode        | Purpose                                         | Command              |
+| ----------- | ----------------------------------------------- | -------------------- |
+| **spec**    | Generate specs from input/files/product         | `./ralph.sh spec`    |
+| **plan**    | Create human-readable plan (optional for tasks) | `./ralph.sh plan`    |
+| **build**   | Execute tasks one at a time                     | `./ralph.sh build`   |
+| **product** | Generate product documentation (12 artifacts)   | `./ralph.sh product` |
 
 ## Prompt Files
 
-- `./prompts/PROMPT_plan.md` - Architecture and planning tasks
+- `./prompts/PROMPT_spec.md` - Spec generation from various inputs
+- `./prompts/PROMPT_plan.md` - Architecture and planning tasks (optional when using tasks)
 - `./prompts/PROMPT_build.md` - Implementation tasks
 - `./prompts/PROMPT_product.md` - Product artifact generation
 

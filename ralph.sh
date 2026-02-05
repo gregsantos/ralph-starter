@@ -854,6 +854,7 @@ show_help() {
     echo -e "${BOLD}Presets:${RESET}"
     echo "  plan              Use PROMPT_plan.md (default model: opus)"
     echo "  build             Use PROMPT_build.md (default model: opus)"
+    echo "  spec              Use PROMPT_spec.md for spec generation (default model: opus)"
     echo "  product           Use PROMPT_product.md for product artifact generation"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
@@ -890,12 +891,25 @@ show_help() {
     echo "  --output PATH        Product output directory (default: ./product-output/)"
     echo "  --artifact-spec PATH Artifact spec file (default: ./docs/PRODUCT_ARTIFACT_SPEC.md)"
     echo ""
+    echo -e "${BOLD}Spec Mode Options:${RESET}"
+    echo "  -p, --prompt STR     Feature description (inline input)"
+    echo "  -f, --file PATH      Requirements file (file input)"
+    echo "  --from-product       Read from product-output/ (7_prd.md, etc.)"
+    echo "  -o, --spec-output PATH  Output spec file (default: specs/{feature}.json)"
+    echo "  --force              Overwrite existing output file"
+    echo "  Note: Exactly one input source (-p, -f, or --from-product) is required for spec mode."
+    echo ""
     echo "  -h, --help        Show this help"
     echo ""
     echo -e "${BOLD}Examples:${RESET}"
     echo "  ./ralph.sh                           # Build mode, 10 iterations (default)"
     echo "  ./ralph.sh plan 5                    # Plan mode, 5 iterations"
     echo "  ./ralph.sh build --model sonnet      # Build with sonnet, 10 iterations"
+    echo "  ./ralph.sh spec -p 'Add dark mode'   # Generate spec from inline description"
+    echo "  ./ralph.sh spec -f ./requirements.md # Generate spec from requirements file"
+    echo "  ./ralph.sh spec --from-product       # Generate spec from product artifacts"
+    echo "  ./ralph.sh spec -p 'X' -o ./specs/x.json  # Specify output path"
+    echo "  ./ralph.sh spec -p 'X' --force       # Overwrite existing spec"
     echo "  ./ralph.sh product                   # Product artifact generation"
     echo "  ./ralph.sh product --context ./ctx/ --output ./out/  # Custom product paths"
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
@@ -923,7 +937,7 @@ show_help() {
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
-    echo "  Model:      opus (plan/build/product), sonnet (inline)"
+    echo "  Model:      opus (plan/build/spec/product), sonnet (inline)"
     echo "  Push:       enabled"
     echo ""
     echo -e "${BOLD}Shell Completion:${RESET}"
@@ -966,6 +980,15 @@ PRODUCT_CONTEXT_DIR=""
 PRODUCT_OUTPUT_DIR=""
 ARTIFACT_SPEC_FILE=""
 
+# Spec mode specific variables
+FROM_PRODUCT=false         # Read from product-output/ artifacts
+SPEC_OUTPUT_FILE=""        # Output file for generated spec
+SPEC_FORCE_OVERWRITE=false # Overwrite existing spec file
+SPEC_INPUT_TYPE=""         # prompt, file, or product (for spec mode)
+SPEC_INPUT_CONTENT=""      # The content/path for spec mode input
+CLI_INLINE_PROMPT=""       # Track -p value separately for spec mode
+CLI_FILE_PATH=""           # Track -f value separately for spec mode
+
 # Track CLI-explicit flags (set during arg parsing)
 CLI_SPEC_SET=false
 CLI_PLAN_SET=false
@@ -979,6 +1002,7 @@ CLI_LOG_FILE_SET=false
 CLI_LOG_FORMAT_SET=false
 CLI_PROGRESS_SET=false
 CLI_WEBHOOK_SET=false
+CLI_SPEC_OUTPUT_SET=false
 
 # Parse arguments
 POSITIONAL_ARGS=()
@@ -992,11 +1016,13 @@ while [[ $# -gt 0 ]]; do
         -f|--file)
             PROMPT_SOURCE="file"
             PROMPT_CONTENT="$2"
+            CLI_FILE_PATH="$2"
             shift 2
             ;;
         -p|--prompt)
             PROMPT_SOURCE="inline"
             PROMPT_CONTENT="$2"
+            CLI_INLINE_PROMPT="$2"
             shift 2
             ;;
         -m|--model)
@@ -1132,7 +1158,20 @@ while [[ $# -gt 0 ]]; do
             ARTIFACT_SPEC_FILE="$2"
             shift 2
             ;;
-        plan|build|product)
+        --from-product)
+            FROM_PRODUCT=true
+            shift
+            ;;
+        -o|--spec-output)
+            SPEC_OUTPUT_FILE="$2"
+            CLI_SPEC_OUTPUT_SET=true
+            shift 2
+            ;;
+        --force)
+            SPEC_FORCE_OVERWRITE=true
+            shift
+            ;;
+        plan|build|product|spec)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
             shift
@@ -1242,6 +1281,96 @@ if [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ] && [ "$CLI_WEBHOOK_SET" != "true" ]; then
     NOTIFY_WEBHOOK="${RALPH_NOTIFY_WEBHOOK}"
 elif [ -z "${NOTIFY_WEBHOOK:-}" ]; then
     NOTIFY_WEBHOOK=""
+fi
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# SPEC MODE INPUT HANDLING
+# Spec mode requires exactly one input source: -p, -f, or --from-product
+# ═══════════════════════════════════════════════════════════════════════════════
+
+if [ "$PRESET_NAME" = "spec" ]; then
+    # Count input sources using preserved CLI values
+    # (PROMPT_SOURCE may be overwritten by 'spec' preset)
+    input_count=0
+
+    # Check for -p/--prompt (inline description)
+    if [ -n "$CLI_INLINE_PROMPT" ]; then
+        SPEC_INPUT_TYPE="prompt"
+        SPEC_INPUT_CONTENT="$CLI_INLINE_PROMPT"
+        ((input_count++))
+    fi
+
+    # Check for -f/--file (requirements file)
+    if [ -n "$CLI_FILE_PATH" ]; then
+        SPEC_INPUT_TYPE="file"
+        SPEC_INPUT_CONTENT="$CLI_FILE_PATH"
+        ((input_count++))
+    fi
+
+    # Check for --from-product
+    if [ "$FROM_PRODUCT" = true ]; then
+        SPEC_INPUT_TYPE="product"
+        ((input_count++))
+    fi
+
+    # Validate exactly one input source
+    if [ "$input_count" -eq 0 ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Spec mode requires an input source.${RESET}"
+        echo "  Use one of:"
+        echo "    -p, --prompt 'description'  Inline feature description"
+        echo "    -f, --file PATH             Requirements file"
+        echo "    --from-product              Read from product-output/"
+        exit 1
+    fi
+
+    if [ "$input_count" -gt 1 ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Spec mode accepts only one input source.${RESET}"
+        echo "  You specified multiple. Choose one of:"
+        echo "    -p, --prompt 'description'  Inline feature description"
+        echo "    -f, --file PATH             Requirements file"
+        echo "    --from-product              Read from product-output/"
+        exit 1
+    fi
+
+    # For spec mode, reset PROMPT_SOURCE to preset so PROMPT_spec.md is used
+    PROMPT_SOURCE="preset"
+
+    # Validate file input exists
+    if [ "$SPEC_INPUT_TYPE" = "file" ] && [ ! -f "$SPEC_INPUT_CONTENT" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Input file not found: $SPEC_INPUT_CONTENT${RESET}"
+        exit 1
+    fi
+
+    # Validate product artifacts exist for --from-product
+    if [ "$SPEC_INPUT_TYPE" = "product" ]; then
+        EFFECTIVE_PRODUCT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output}"
+        if [ ! -d "$EFFECTIVE_PRODUCT_DIR" ]; then
+            echo -e "${RED}${SYM_CROSS} Error: Product output directory not found: $EFFECTIVE_PRODUCT_DIR${RESET}"
+            echo "  Run 'ralph.sh product' first to generate product artifacts."
+            exit 1
+        fi
+        # Check for at least one product artifact
+        if ! ls "$EFFECTIVE_PRODUCT_DIR"/*.md >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: No product artifacts found in: $EFFECTIVE_PRODUCT_DIR${RESET}"
+            echo "  Run 'ralph.sh product' first to generate product artifacts."
+            exit 1
+        fi
+    fi
+
+    # Set default output file if not specified
+    if [ -z "$SPEC_OUTPUT_FILE" ]; then
+        # Create specs/ directory if needed
+        mkdir -p "${SCRIPT_DIR}/specs"
+        # Default: specs/new-spec.json (the prompt will derive a better name)
+        SPEC_OUTPUT_FILE="${SCRIPT_DIR}/specs/new-spec.json"
+    fi
+
+    # Check if output file exists (unless --force)
+    if [ -f "$SPEC_OUTPUT_FILE" ] && [ "$SPEC_FORCE_OVERWRITE" != true ]; then
+        echo -e "${YELLOW}Warning: Output file already exists: $SPEC_OUTPUT_FILE${RESET}"
+        echo "  Use --force to overwrite."
+        exit 1
+    fi
 fi
 
 # Resolve prompt file based on source
@@ -2294,6 +2423,9 @@ substitute_template() {
     content="${content//\{\{PRODUCT_CONTEXT_DIR\}\}/$PRODUCT_CONTEXT_DIR}"
     content="${content//\{\{PRODUCT_OUTPUT_DIR\}\}/$PRODUCT_OUTPUT_DIR}"
     content="${content//\{\{ARTIFACT_SPEC_FILE\}\}/$ARTIFACT_SPEC_FILE}"
+    # Spec mode variables
+    content="${content//\{\{INPUT_SOURCE\}\}/$SPEC_MODE_INPUT_SOURCE}"
+    content="${content//\{\{OUTPUT_FILE\}\}/$SPEC_MODE_OUTPUT_FILE}"
     echo "$content"
 }
 
@@ -2313,6 +2445,65 @@ SOURCE_DIR="${SOURCE_DIR:-src/*}"
 PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
 PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
 ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
+
+# Spec mode variables (for template substitution)
+# These are populated from the input flags parsed earlier
+SPEC_MODE_INPUT_SOURCE=""
+SPEC_MODE_OUTPUT_FILE=""
+
+if [ "$PRESET_NAME" = "spec" ]; then
+    # Set OUTPUT_FILE from SPEC_OUTPUT_FILE (already validated/defaulted)
+    SPEC_MODE_OUTPUT_FILE="$SPEC_OUTPUT_FILE"
+
+    # Populate INPUT_SOURCE based on input type
+    case "$SPEC_INPUT_TYPE" in
+        prompt)
+            # Inline prompt: use the content directly
+            SPEC_MODE_INPUT_SOURCE="$SPEC_INPUT_CONTENT"
+            ;;
+        file)
+            # File input: read and include the file contents
+            if [ -f "$SPEC_INPUT_CONTENT" ]; then
+                SPEC_MODE_INPUT_SOURCE="$(cat "$SPEC_INPUT_CONTENT")"
+            else
+                echo -e "${RED}${SYM_CROSS} Error: Cannot read input file: $SPEC_INPUT_CONTENT${RESET}"
+                exit 1
+            fi
+            ;;
+        product)
+            # Product artifacts: concatenate relevant product-output/ files
+            # Prioritize PRD (7_prd.md) and other key artifacts
+            EFFECTIVE_PRODUCT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output}"
+            product_content=""
+
+            # Read files in priority order if they exist
+            for artifact in "7_prd.md" "9_technical_requirements.md" "4_personas.md" \
+                            "6_user_journey_map.md" "8_feature_specifications.md"; do
+                artifact_path="${EFFECTIVE_PRODUCT_DIR}/${artifact}"
+                if [ -f "$artifact_path" ]; then
+                    product_content+="
+=== ${artifact} ===
+$(cat "$artifact_path")
+"
+                fi
+            done
+
+            # If no prioritized files found, read all .md files
+            if [ -z "$product_content" ]; then
+                for md_file in "$EFFECTIVE_PRODUCT_DIR"/*.md; do
+                    if [ -f "$md_file" ]; then
+                        product_content+="
+=== $(basename "$md_file") ===
+$(cat "$md_file")
+"
+                    fi
+                done
+            fi
+
+            SPEC_MODE_INPUT_SOURCE="$product_content"
+            ;;
+    esac
+fi
 
 # Derive plan file from spec file if spec was set via CLI but plan wasn't
 # e.g., ./specs/feature.md → ./plans/feature_PLAN.md
