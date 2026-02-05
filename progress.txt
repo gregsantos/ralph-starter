@@ -378,3 +378,42 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-012, T-013, T-014, T-015, T-016, T-017 remain (Phase 4: Documentation & Polish)
 
+## Iteration 12 - T-012: Update docs/RALPH_LOOP_REF.md
+
+**Completed:** Task 4.1 (T-012) - Update docs/RALPH_LOOP_REF.md
+
+**Changes:**
+- Added comprehensive spec mode documentation to RALPH_LOOP_REF.md:
+  - New "Spec Mode" section with all flags (-p, -f, --from-product, -o, --force)
+  - Input Sources and Output Options tables
+  - Explanation of how --from-product reads product artifacts in priority order
+  - Updated Model Defaults table to include spec mode (opus)
+  - Updated Preset Prompts section with PROMPT_spec.md
+  - Updated workflow diagram to show simplified product→spec→build flow
+  - New "Tasks Format (Recommended)" section with field documentation
+  - Migration section comparing userStories vs tasks formats
+  - Updated Quick Reference with spec mode examples
+  - Updated Common Workflows with full feature development patterns
+  - Updated File Structure to show PROMPT_spec.md
+  - Updated Related Files section
+
+**Files modified:**
+- docs/RALPH_LOOP_REF.md
+- specs/unified-spec-workflow.json (T-012 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Documented simplified workflow: spec is now single source of truth, plan is optional
+- Emphasized tasks format as recommended over legacy userStories
+- Added migration guidance for existing specs
+- Included practical examples showing spec mode in common workflows
+
+**Verification of acceptance criteria:**
+1. ✅ Spec mode documented with all flags - New "Spec Mode" section with complete flag documentation
+2. ✅ Examples for all input sources (-p, -f, --from-product) - Multiple examples throughout document
+3. ✅ New workflow diagram: product→spec→build - Updated diagram showing simplified flow
+4. ✅ Tasks format documented - New "Tasks Format (Recommended)" section with field table
+5. ✅ Migration notes for existing specs - Table comparing userStories vs tasks
+
+**Next:** T-013, T-014, T-015 depend on T-012 (now complete); T-016, T-017 already unblocked
+

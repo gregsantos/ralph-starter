@@ -259,10 +259,10 @@
         "Migration notes for existing specs"
       ],
       "dependsOn": ["T-005", "T-010"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added comprehensive spec mode documentation: Spec Mode section with all flags and input sources, updated Model Defaults table, updated Preset Prompts section, new simplified workflow diagram (product→spec→build), Tasks Format section with field documentation, Migration notes comparing userStories vs tasks, updated Quick Reference examples, updated Common Workflows with spec mode patterns, updated File Structure with PROMPT_spec.md, updated Related Files section."
     },
     {
       "id": "T-013",
