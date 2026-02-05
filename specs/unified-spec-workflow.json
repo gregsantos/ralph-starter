@@ -97,10 +97,10 @@
         "shellcheck passes"
       ],
       "dependsOn": ["T-001"],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented as -o/--spec-output flag. Default output is specs/new-spec.json (spec prompt derives better name from input). Overwrite protection requires --force to overwrite existing files. mkdir -p ensures specs/ directory exists. All functionality verified working."
     },
     {
       "id": "T-004",

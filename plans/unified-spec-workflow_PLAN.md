@@ -73,12 +73,12 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 1.3: T-003 Add spec mode output flag
 **Effort:** Small | **Depends on:** T-001
 
-- [ ] 1.3.1 Add -o/--output flag for spec output path
-- [ ] 1.3.2 Default output path: specs/{feature-slug}.json (derived from prompt/file)
-- [ ] 1.3.3 Create specs/ directory if it doesn't exist
-- [ ] 1.3.4 Add --force flag to overwrite existing output file
-- [ ] 1.3.5 Warn and exit if output exists without --force
-- [ ] 1.3.6 Run shellcheck ralph.sh
+- [x] 1.3.1 Add -o/--output flag for spec output path
+- [x] 1.3.2 Default output path: specs/{feature-slug}.json (derived from prompt/file)
+- [x] 1.3.3 Create specs/ directory if it doesn't exist
+- [x] 1.3.4 Add --force flag to overwrite existing output file
+- [x] 1.3.5 Warn and exit if output exists without --force
+- [x] 1.3.6 Run shellcheck ralph.sh
 
 **Acceptance criteria:**
 - `-o PATH` specifies output location

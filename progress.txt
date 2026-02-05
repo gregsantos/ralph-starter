@@ -65,3 +65,28 @@
 
 **Next:** T-003 (output flag - mostly done), T-004 (PROMPT_spec.md), then T-005 (wire it all together)
 
+## Iteration 3 - T-003: Add spec mode output flag
+
+**Completed:** Task 1.3 (T-003) - Add spec mode output flag
+
+**Changes:**
+- Verified all T-003 functionality was implemented in T-002 iteration
+- `-o/--spec-output PATH` specifies custom output location
+- Default output: `specs/new-spec.json` (spec prompt derives better name)
+- `mkdir -p specs/` creates directory if needed
+- `--force` flag bypasses overwrite protection
+- Warning and exit if output file exists without `--force`
+
+**Files modified:**
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-003 status and notes)
+- progress.txt (this entry)
+
+**Verification:**
+- `./ralph.sh spec -o ./specs/test.json -p "Test"` reaches prompt validation (missing PROMPT_spec.md - expected)
+- `./ralph.sh spec -o ./specs/unified-spec-workflow.json -p "Test"` warns about existing file
+- `./ralph.sh spec -o ./specs/unified-spec-workflow.json --force -p "Test"` bypasses warning
+- shellcheck passes (existing warnings unrelated to T-003)
+
+**Next:** T-004 (PROMPT_spec.md) - create the spec mode prompt file
+
