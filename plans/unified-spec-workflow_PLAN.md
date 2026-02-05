@@ -148,13 +148,13 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 2.2: T-007 Update writing-ralph-specs skill
 **Effort:** Medium | **Depends on:** T-006
 
-- [ ] 2.2.1 Update .claude/skills/writing-ralph-specs/SKILL.md
-- [ ] 2.2.2 Add tasks array as recommended format (above userStories)
-- [ ] 2.2.3 Mark userStories as legacy/backward-compatible
-- [ ] 2.2.4 Add tasks example showing all fields including passes: false
-- [ ] 2.2.5 Document task granularity guidelines (1-2 iterations per task)
-- [ ] 2.2.6 Document dependsOn usage
-- [ ] 2.2.7 Update workflow section to show spec→build (plan optional)
+- [x] 2.2.1 Update .claude/skills/writing-ralph-specs/SKILL.md
+- [x] 2.2.2 Add tasks array as recommended format (above userStories)
+- [x] 2.2.3 Mark userStories as legacy/backward-compatible
+- [x] 2.2.4 Add tasks example showing all fields including passes: false
+- [x] 2.2.5 Document task granularity guidelines (1-2 iterations per task)
+- [x] 2.2.6 Document dependsOn usage
+- [x] 2.2.7 Update workflow section to show spec→build (plan optional)
 
 **Acceptance criteria:**
 - Skill updated with tasks format

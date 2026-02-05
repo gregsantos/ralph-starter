@@ -212,3 +212,33 @@ Spec mode can now generate specs from user input, file, or product artifacts.
 
 **Next:** T-007 (Update writing-ralph-specs skill) - depends on T-006
 
+## Iteration 7 - T-007: Update writing-ralph-specs skill
+
+**Completed:** Task 2.2 (T-007) - Update writing-ralph-specs skill
+
+**Changes:**
+- Verified all T-007 acceptance criteria were already implemented in T-006
+- No code changes needed - SKILL.md already contains all required content
+
+**Verification of acceptance criteria:**
+1. ✅ `.claude/skills/writing-ralph-specs/SKILL.md updated` - File was updated in T-006
+2. ✅ `tasks array documented as recommended format` - Line 10: "The `tasks` array is the recommended format"
+3. ✅ `userStories marked as legacy/backward-compatible` - Lines 88-90: "Legacy: userStories Array" section
+4. ✅ `Examples show tasks format with passes field` - Lines 61, 78, 159, 176 show `"passes": false`
+5. ✅ `Guidance on task granularity (1-2 iterations per task)` - Line 199: "Atomic tasks: Completable in 1-2 iterations"
+6. ✅ `dependsOn usage documented` - Line 202: "Use dependsOn" with example
+
+**Files modified:**
+- plans/unified-spec-workflow_PLAN.md (marked T-007 items complete)
+- specs/unified-spec-workflow.json (updated T-007 status, passes, notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- T-006 and T-007 had overlapping scope; T-006 completed both
+- No additional changes needed to SKILL.md
+
+**Milestone M2 (Unified Spec Format) Complete:**
+Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
+
+**Next:** T-008, T-011, T-016, T-017 can now proceed (various dependencies unblocked)
+

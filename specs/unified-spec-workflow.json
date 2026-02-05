@@ -173,10 +173,10 @@
         "dependsOn usage documented"
       ],
       "dependsOn": ["T-006"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "All requirements were already implemented as part of T-006. SKILL.md contains: Tasks Array Schema as recommended format, Legacy section for userStories, multiple examples with passes field, task granularity guidance (1-2 iterations), dependsOn documentation, and workflow showing spec→build with plan as optional."
     },
     {
       "id": "T-008",
