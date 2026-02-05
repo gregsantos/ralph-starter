@@ -417,3 +417,43 @@ Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly fro
 
 **Next:** T-013, T-014, T-015 depend on T-012 (now complete); T-016, T-017 already unblocked
 
+## Iteration 13 - T-013: Update README.md
+
+**Completed:** Task 4.2 (T-013) - Update README.md
+
+**Changes:**
+- Updated workflow diagram: simplified from PRODUCT→SPEC→PLAN→BUILD to PRODUCT→SPEC→BUILD (plan optional)
+- Updated Quick Start section with spec mode examples (spec -p, spec -f, spec --from-product)
+- Changed "Three Modes" to "Four Modes" table with spec mode as first entry
+- Added "Spec Formats: Tasks vs User Stories" section with:
+  - Comparison table for tasks vs userStories
+  - JSON example for tasks format with all fields
+  - JSON example for userStories format (legacy)
+  - Explanation of status/passes fields and dependsOn
+- Updated "Common Commands" with spec mode section at top
+- Updated Project Structure to show PROMPT_spec.md
+- Updated "Each Iteration" steps for spec-first workflow
+- Updated "Step 1: Create a Spec" to show spec mode as recommended approach
+- Reordered steps: spec (or manual spec) → build → plan (optional)
+- Updated "Customizing for Your Project" with spec mode as Option A
+- Updated Troubleshooting section with PROMPT_spec.md
+
+**Files modified:**
+- README.md
+- specs/unified-spec-workflow.json (T-013 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Positioned spec mode as the recommended first step (not plan mode)
+- Kept userStories documented as backward compatible but clearly labeled as legacy
+- Emphasized that plan mode is now optional—build works directly from spec tasks
+- Added practical JSON examples for both formats
+
+**Verification of acceptance criteria:**
+1. ✅ Workflow diagram updated to show spec mode - Simplified to product→spec→build
+2. ✅ Quick start includes spec mode example - Added spec -p, spec -f examples
+3. ✅ Three modes table updated to four modes - Now "Four Modes" with spec first
+4. ✅ 'Specs vs Plans' section updated - New comparison section with JSON examples
+
+**Next:** T-014, T-015, T-016, T-017 remain
+

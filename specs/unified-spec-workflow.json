@@ -276,10 +276,10 @@
         "'Specs vs Plans' section updated to explain tasks vs legacy userStories"
       ],
       "dependsOn": ["T-012"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated README.md with: simplified workflow diagram (product→spec→build), updated Quick Start with spec mode examples, Four Modes table with spec mode as first entry, Specs vs Plans section with tasks vs userStories comparison including JSON examples, updated Common Commands with spec mode section, updated Project Structure with PROMPT_spec.md, updated Each Iteration steps for spec-first workflow, updated Step 1-4 workflow to use spec mode, updated Troubleshooting section."
     },
     {
       "id": "T-014",
