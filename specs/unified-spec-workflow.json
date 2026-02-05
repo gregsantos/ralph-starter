@@ -190,10 +190,10 @@
         "One task per iteration rule preserved"
       ],
       "dependsOn": ["T-006"],
-      "status": "pending",
+      "status": "complete",
       "effort": "medium",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Updated PROMPT_build.md with: Task Source Priority section explaining spec tasks vs plan file fallback, dependency-respecting task selection logic (passes=false, dependsOn satisfied, ID order), in_progress status setting before work begins, updated Document section for tasks-first workflow, updated Rules section with spec-as-source-of-truth principle."
     },
     {
       "id": "T-009",

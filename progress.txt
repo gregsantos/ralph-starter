@@ -242,3 +242,39 @@ Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
 
 **Next:** T-008, T-011, T-016, T-017 can now proceed (various dependencies unblocked)
 
+## Iteration 8 - T-008: Update build mode to find next task
+
+**Completed:** Task 3.1 (T-008) - Update build mode to find next task
+
+**Changes:**
+- Updated prompts/PROMPT_build.md with tasks-first workflow:
+  - Added "Task Source Priority" section explaining spec tasks vs plan file fallback
+  - Updated "Understand Current State" with task selection algorithm:
+    1. Find tasks where passes=false
+    2. Filter to tasks where ALL dependsOn have passes=true
+    3. Select first by ID order
+  - Added instruction to set status="in_progress" before starting work
+  - Updated "Document" section to update spec JSON (passes, status, notes)
+  - Updated "Check If All Done" section for tasks-first approach
+  - Updated "Rules" section with spec-as-source-of-truth principles
+
+**Files modified:**
+- prompts/PROMPT_build.md
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-008 status, passes, notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Spec with tasks array is the primary source of truth; plan file is only fallback
+- Task selection respects dependsOn by checking all dependencies have passes=true
+- in_progress status signals to future iterations that work has begun
+- When using spec tasks, plan file is NOT updated (single source of truth)
+
+**Verification of acceptance criteria:**
+1. ✅ Build mode reads spec's tasks array - Task Source Priority section
+2. ✅ Finds first task where passes=false and dependsOn satisfied - Finding next task algorithm
+3. ✅ Sets task status to in_progress - Section 2 "Before starting work"
+4. ✅ Falls back to plan file if no tasks - Task Source Priority items 2 and 3
+
+**Next:** T-009 (Update build mode to update task status) - depends on T-008
+

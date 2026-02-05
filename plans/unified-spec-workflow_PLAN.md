@@ -169,11 +169,11 @@ T-017 (Shell completions) ◄─────────────────
 #### Task 3.1: T-008 Update build mode to find next task
 **Effort:** Medium | **Depends on:** T-006
 
-- [ ] 3.1.1 Update prompts/PROMPT_build.md to check for tasks array in spec
-- [ ] 3.1.2 Add logic to find first task with passes=false and all dependsOn tasks have passes=true
-- [ ] 3.1.3 Add fallback: if no tasks array, use plan file (backward compat)
-- [ ] 3.1.4 Add instruction to set task status to in_progress before starting
-- [ ] 3.1.5 Update workflow section to reflect tasks-first approach
+- [x] 3.1.1 Update prompts/PROMPT_build.md to check for tasks array in spec
+- [x] 3.1.2 Add logic to find first task with passes=false and all dependsOn tasks have passes=true
+- [x] 3.1.3 Add fallback: if no tasks array, use plan file (backward compat)
+- [x] 3.1.4 Add instruction to set task status to in_progress before starting
+- [x] 3.1.5 Update workflow section to reflect tasks-first approach
 
 **Acceptance criteria:**
 - Build mode reads tasks from spec

@@ -2,18 +2,26 @@
 
 ## Context
 
-- **Plan**: `{{PLAN_FILE}}` (primary checklist - the "how")
-- **Spec**: `{{SPEC_FILE}}` (requirements reference - the "what & why")
+- **Spec**: `{{SPEC_FILE}}` (primary source of truth - contains tasks and requirements)
+- **Plan**: `{{PLAN_FILE}}` (fallback checklist - used only if spec has no tasks array)
 - **Progress**: `{{PROGRESS_FILE}}` (append-only iteration history)
 - **Source**: `{{SOURCE_DIR}}`
 - **CLAUDE.md**: Consult for project context and update with discovered patterns
+
+## Task Source Priority
+
+Build mode uses **tasks from the spec** as the primary source when available:
+
+1. **If spec has `tasks` array**: Use tasks directly from spec. Ignore plan file.
+2. **If spec has only `userStories`**: Use plan file checklist (legacy workflow).
+3. **If no spec provided**: Use plan file checklist.
 
 ## Iteration Model
 
 You are running in a loop. Each iteration should:
 
-1. Complete **ONE** checklist item from `{{PLAN_FILE}}`
-2. Mark that item `[x]` and document in `{{PROGRESS_FILE}}`
+1. Complete **ONE** task from spec (or checklist item from plan if no tasks)
+2. Update task status in spec and document in `{{PROGRESS_FILE}}`
 3. Commit and push changes
 4. The loop will call you again for the next task
 
@@ -23,13 +31,39 @@ You are running in a loop. Each iteration should:
 
 ### 1. Understand Current State
 
-- **Study** `{{PLAN_FILE}}` for checklist items (primary task list)
-- **Study** `{{SPEC_FILE}}` for requirements context (the "why" behind tasks)
+**Read the spec first** to determine task source:
+
+```
+If spec has "tasks" array:
+  → Use tasks from spec (recommended workflow)
+  → Find next task using dependency rules below
+Else if spec has "userStories" only:
+  → Use plan file checklist (legacy workflow)
+  → Find next [ ] item
+Else:
+  → Use plan file checklist
+  → Find next [ ] item
+```
+
+**Finding the next task** (when using spec tasks):
+
+1. Find tasks where `passes: false` (incomplete)
+2. Filter to tasks where ALL `dependsOn` task IDs have `passes: true`
+3. Select the first task by ID order (T-001 before T-002, etc.)
+4. If no tasks are ready (all blocked or complete), check if all tasks pass
+
+**Then study context:**
+
+- **Study** `{{SPEC_FILE}}` for task details and requirements context
 - **Study** `{{PROGRESS_FILE}}` for what was completed in previous iterations
 - **Study** CLAUDE.md for project context and previous learnings
-- Identify the **next** incomplete item (highest priority)
+- If using plan file: study `{{PLAN_FILE}}` for checklist items
 
 ### 2. Implement ONE Task
+
+**Before starting work** (when using spec tasks):
+- Set the task's `status` to `"in_progress"` in the spec JSON
+- This signals to future iterations that work has begun
 
 **Critical: Don't assume functionality is missing.** Always search first—the codebase likely has what you need.
 
@@ -50,13 +84,20 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 
 ### 4. Document
 
+**When using spec tasks** (recommended):
+- Update the task in spec JSON:
+  - Set `"passes": true` (task complete)
+  - Set `"status": "complete"`
+  - Update `"notes"` with implementation summary
+- Do NOT update plan file (spec is source of truth)
+
+**When using plan file** (legacy/fallback):
 - Mark the completed item `[x]` in `{{PLAN_FILE}}`
-- **Update spec status** (if using JSON spec with user stories):
-  - When ALL acceptance criteria for a user story are met, set `"passes": true` for that story
-  - Only update when the story is fully complete, not partially
-  - Use precise JSON editing—change only the `passes` value
+- If using JSON spec with userStories, also set `"passes": true` for completed stories
+
+**Always:**
 - Append to `{{PROGRESS_FILE}}`:
-  - Task completed and plan reference
+  - Task completed (include task ID like "T-008" when using spec tasks)
   - Key decisions made and **why** (not just what)
   - Files changed
   - Any blockers or notes for next iteration
@@ -76,19 +117,26 @@ Tests and types are your rejection mechanism. They push back on bad changes:
 
 ### 6. Check If All Done
 
+**When using spec tasks:**
+- Check if ALL tasks in spec have `passes: true`
+- If NO: End this iteration. Loop will continue with next task.
+- If YES: Proceed to Completion Protocol below.
+
+**When using plan file:**
 - Review `{{PLAN_FILE}}` - are ALL items marked `[x]`?
 - If NO: End this iteration. Loop will continue with next task.
 - If YES: Proceed to Completion Protocol below.
 
 ## Rules
 
+- **Spec is source of truth**—when spec has tasks, update spec not plan file
 - **Single source of truth**—no migrations or adapters
 - **Fix related failures**—if tests unrelated to your work fail, resolve them
-- **Keep CLAUDE.md operational only**—status/progress notes belong in `{{PLAN_FILE}}`
+- **Keep CLAUDE.md operational only**—status/progress notes belong in spec or plan
 - **Update CLAUDE.md with patterns**—add discovered conventions, gotchas, insights
-- **Keep plans current**—update `{{PLAN_FILE}}` with learnings after each task
-- **Update spec status**—set `"passes": true` in `{{SPEC_FILE}}` when user stories are complete
-- **Reference specs for context**—consult `{{SPEC_FILE}}` for the "why" behind requirements
+- **Update task status in spec**—set `passes: true` and `status: "complete"` when done
+- **Respect dependencies**—don't start a task until all `dependsOn` tasks have `passes: true`
+- **Reference specs for context**—consult spec for the "why" behind requirements
 - **Keep docs aligned**—update README.md, RALPH_LOOP_REF.md when adding user-facing features
 - **Capture the why**—tests and implementation reasoning matter
 - **Resolve or document bugs**—even if unrelated to current work
