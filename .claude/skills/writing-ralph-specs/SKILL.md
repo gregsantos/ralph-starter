@@ -1,13 +1,39 @@
 ---
 name: writing-ralph-specs
-description: Creates structured JSON specifications for Ralph Loop autonomous execution. Use when creating feature specs, PRDs, improvement plans, or task lists for the spec → plan → build workflow. Triggers on "create a spec", "plan this feature", "write a PRD", "spec out", or when features need implementation planning.
+description: Creates structured JSON specifications for Ralph Loop autonomous execution. Use when creating feature specs, PRDs, improvement plans, or task lists for the spec → build workflow. Triggers on "create a spec", "plan this feature", "write a PRD", "spec out", or when features need implementation planning.
 ---
 
 # Writing Ralph Specs
 
-Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` → `./ralph.sh build`.
+Create JSON specs in `specs/` for autonomous execution via `./ralph.sh build`. Plan mode is optional for generating human-readable views.
 
-## Spec Structure
+## Tasks Array Schema (Recommended)
+
+The `tasks` array is the recommended format for specs. Each task is an atomic unit of work that build mode can execute.
+
+### Task Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique identifier (e.g., "T-001") |
+| `title` | string | Yes | Short action title |
+| `description` | string | Yes | What needs to be done |
+| `acceptanceCriteria` | string[] | Yes | Specific, testable criteria |
+| `dependsOn` | string[] | Yes | Array of task IDs this depends on (empty if none) |
+| `status` | string | Yes | One of: `pending`, `in_progress`, `complete`, `blocked` |
+| `passes` | boolean | Yes | `false` initially; `true` when all criteria met |
+| `effort` | string | Yes | One of: `small`, `medium`, `large` |
+| `notes` | string | No | Implementation notes (populated by build mode) |
+| `phase` | string | No | Phase ID if using phases |
+
+### Status Values
+
+- **pending**: Task not started, waiting for dependencies
+- **in_progress**: Currently being worked on (only one at a time)
+- **complete**: All acceptance criteria met, `passes: true`
+- **blocked**: Cannot proceed due to external factors
+
+### Example Spec with Tasks
 
 ```json
 {
@@ -20,6 +46,51 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
     "constraints": ["Constraint 1"],
     "verificationCommands": ["pnpm test", "pnpm typecheck"]
   },
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Set up infrastructure",
+      "description": "Configure the base infrastructure for the feature",
+      "acceptanceCriteria": [
+        "Install required dependencies",
+        "Add configuration to project",
+        "pnpm typecheck passes"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
+      "effort": "small",
+      "notes": ""
+    },
+    {
+      "id": "T-002",
+      "title": "Implement core functionality",
+      "description": "Build the main feature on top of infrastructure",
+      "acceptanceCriteria": [
+        "Feature works as specified",
+        "Tests added and passing",
+        "pnpm test passes"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "passes": false,
+      "effort": "medium",
+      "notes": ""
+    }
+  ]
+}
+```
+
+**Optional fields**: `version`, `phases`, `milestones`, `glossary`, `dependencies` (top-level map for complex specs).
+
+---
+
+## Legacy: userStories Array
+
+The `userStories` format is still supported for backward compatibility. New specs should use `tasks`.
+
+```json
+{
   "userStories": [
     {
       "id": "US-001",
@@ -34,8 +105,6 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
   "dependencies": {"US-002": ["US-001"]}
 }
 ```
-
-**Optional fields**: `version`, `phases`, `milestones`, `glossary`, `implementation` hints per story.
 
 ## Acceptance Criteria Guidelines
 
@@ -64,7 +133,7 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
 - Workflow changes → `README.md`
 - Config options → `ralph.conf` comments + reference docs
 
-## Example Spec
+## Complete Example (Tasks Format)
 
 ```json
 {
@@ -76,60 +145,66 @@ Create JSON specs in `specs/` for autonomous execution via `./ralph.sh plan` →
     "targetState": "Toggle between light/dark themes",
     "verificationCommands": ["pnpm typecheck"]
   },
-  "userStories": [
+  "tasks": [
     {
-      "id": "US-001",
+      "id": "T-001",
       "title": "Configure next-themes",
-      "description": "As a developer, I need theme infrastructure.",
+      "description": "Set up theme infrastructure with next-themes package",
       "acceptanceCriteria": [
         "Install next-themes",
         "Add ThemeProvider to layout",
         "pnpm typecheck passes"
       ],
-      "priority": 1,
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
       "effort": "small",
-      "passes": false
+      "notes": ""
     },
     {
-      "id": "US-002",
+      "id": "T-002",
       "title": "Add theme toggle component",
-      "description": "As a user, I want to switch themes.",
+      "description": "Create component to switch between light/dark/system themes",
       "acceptanceCriteria": [
         "ThemeToggle component toggles light/dark/system",
         "Add to header",
         "pnpm typecheck passes"
       ],
-      "priority": 2,
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "passes": false,
       "effort": "small",
-      "passes": false
+      "notes": ""
     }
-  ],
-  "dependencies": {"US-002": ["US-001"]}
+  ]
 }
 ```
 
 ## Workflow
 
 ```bash
-# 1. Create spec
-#    → specs/my-feature.json
+# 1. Create spec (manual or via spec mode)
+./ralph.sh spec -p "Add dark mode toggle"
+#    → specs/dark-mode.json
 
-# 2. Plan mode creates checklist
-./ralph.sh plan -s ./specs/my-feature.json
+# 2. (Optional) Plan mode generates readable view
+./ralph.sh plan -s ./specs/dark-mode.json
 
-# 3. Build mode executes
-./ralph.sh build -s ./specs/my-feature.json
+# 3. Build mode executes tasks directly from spec
+./ralph.sh build -s ./specs/dark-mode.json
 ```
 
 ## Tips
 
-- **Atomic stories**: Completable in 1-2 iterations
+- **Atomic tasks**: Completable in 1-2 iterations
 - **Testable criteria**: Include verification commands
 - **Include doc updates**: Add documentation criteria for user-facing features (--help, README, reference docs)
-- **Map dependencies**: `{ "US-002": ["US-001"] }` means US-002 depends on US-001
+- **Use dependsOn**: `"dependsOn": ["T-001"]` means task depends on T-001 completion
 - **Update INDEX.md**: Add entry to `specs/INDEX.md`
-- **passes field**: Initialize as `false`; build mode sets to `true` when acceptance criteria are met
+- **passes field**: Initialize as `false`; build mode sets to `true` when all criteria met
+- **status field**: Build mode sets to `in_progress` when starting, `complete` when done
 
 ## Reference
 
-See `specs/ralph-improvements.json` for a comprehensive multi-phase example with phases, milestones, and implementation hints.
+- `specs/example-tasks.json` - Simple example showing all task fields and dependencies
+- `specs/unified-spec-workflow.json` - Comprehensive multi-phase example with phases, milestones, and task dependencies

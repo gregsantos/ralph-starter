@@ -1,649 +1,582 @@
-# Progress for branch: ralph/resilience-and-dx
-# Started: 2026-02-03 22:07:34
+# Progress for branch: spec-mode
+# Started: 2026-02-04 16:04:20
 
-## Iteration 1 - 2026-02-03
+## Iteration 1 - T-001: Add spec mode argument parsing
 
-### Task Completed: US-001 Pre-flight Dependency Checks (Task 1.1)
+**Completed:** Task 1.1 (T-001) - Add spec mode argument parsing
 
-**What was done:**
-- Created `preflight_checks()` function after CONFIGURATION section
-- Checks for: claude CLI (with auth validation), jq, git (and git repo status)
-- Each check provides clear error messages with installation instructions
-- Uses existing color/symbol conventions (RED, SYM_CROSS) for consistency
-- Added `--skip-checks` flag to bypass validation for advanced users
-- Integrated preflight checks into main flow before `print_header`
+**Changes:**
+- Added "spec" to preset case statement in ralph.sh (line ~1137)
+- Updated show_help() with spec mode in Presets section
+- Added spec mode example in Examples section
+- Updated Defaults section to include spec mode
 
-**Why:**
-- Pre-flight checks prevent cryptic mid-session failures by verifying dependencies upfront
-- Auth check catches unauthenticated claude CLI before wasting time
-- Installation instructions reduce friction for new users
-- `--skip-checks` flag allows advanced users to bypass when needed (e.g., offline testing)
+**Files modified:**
+- ralph.sh
 
-**Files changed:**
-- `ralph.sh` - Added preflight_checks() function, SKIP_CHECKS variable, --skip-checks flag parsing, help text update, main flow integration
+**Decisions:**
+- Spec mode uses same default model (opus) as other presets via existing preset logic
+- Prompt file dynamically resolved to prompts/PROMPT_spec.md via existing PRESET_NAME mechanism
+- No new flags added yet (that's T-002/T-003)
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings)
-- `./ralph.sh --help` - Shows new --skip-checks flag
-- `./ralph.sh --dry-run` - Pre-flight checks run successfully
+- `./ralph.sh --help` shows spec mode in presets
+- `./ralph.sh spec --dry-run` recognizes spec mode (fails on missing PROMPT_spec.md as expected - that's T-004)
+- shellcheck passes (no new warnings introduced)
 
-## Iteration 2 - 2026-02-03
+**Next:** T-002, T-003, T-004 can now proceed (all depend on T-001)
 
-### Task Completed: US-002 Structured Session State File (Task 1.2)
+## Iteration 2 - T-002: Add spec mode input flags
 
-**What was done:**
-- Created SESSION STATE MANAGEMENT section after PRE-FLIGHT CHECKS with three functions:
-  - `init_session_state()` - Creates `.ralph-session.json` with full session metadata
-  - `update_session_state()` - Updates iteration history array after each iteration
-  - `finalize_session_state()` - Sets final status, archives on success, preserves on failure
-- Session state includes: session_id, start_time, mode, model, prompt_file, current_iteration, max_iterations, branch, status, spec_file, plan_file, progress_file, iteration_history[]
-- Each iteration entry includes: iteration, duration, exit_code, files_modified, timestamp, commit_message
-- Session ID format: `YYYYMMDD_HHMMSS_PID` for uniqueness
-- On completion: archives to `~/.ralph/logs/{session_id}_session.json`
-- On interrupt/failure: preserves `.ralph-session.json` for debugging/resume capability
+**Completed:** Task 1.2 (T-002) - Add spec mode input flags
 
-**Why:**
-- Session state is foundational for US-003 (retry logic) and US-004 (session resume)
-- Structured JSON format allows programmatic access to session data
-- Iteration history enables detailed post-session analysis
-- Archive on success keeps project root clean; preserve on failure enables debugging
-- Files modified count from git diff provides insight into iteration productivity
+**Changes:**
+- Added spec mode variables: FROM_PRODUCT, SPEC_OUTPUT_FILE, SPEC_FORCE_OVERWRITE, SPEC_INPUT_TYPE, SPEC_INPUT_CONTENT, CLI_INLINE_PROMPT, CLI_FILE_PATH
+- Added argument parsing for --from-product, -o/--spec-output, --force flags
+- Added CLI_SPEC_OUTPUT_SET tracking variable
+- Added "Spec Mode Options" section to show_help() with documentation for all spec mode flags
+- Added spec mode examples to Examples section
+- Added spec mode input validation section that:
+  - Counts input sources from -p, -f, and --from-product
+  - Requires exactly one input source for spec mode
+  - Validates input file exists for -f
+  - Validates product artifacts exist for --from-product
+  - Checks output file existence (unless --force)
+  - Creates specs/ directory if needed
 
-**Files changed:**
-- `ralph.sh` - Added SESSION STATE MANAGEMENT section, integrated init/update/finalize calls into main flow and cleanup()
+**Files modified:**
+- ralph.sh
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Works correctly
-- `./ralph.sh --dry-run` - Works correctly (session state not initialized during dry-run)
-
-## Iteration 3 - 2026-02-03
-
-### Task Completed: US-003 Retry Logic for Transient Failures (Task 1.3)
-
-**What was done:**
-- Added RETRY LOGIC section after SESSION STATE MANAGEMENT with comprehensive retry functionality:
-  - `RETRYABLE_PATTERNS[]` - Array of transient error patterns (rate_limit, 429, 529, timeout, connection errors, etc.)
-  - `FATAL_PATTERNS[]` - Array of unrecoverable errors (auth failure, 401, 403, permission denied, etc.)
-  - `is_retryable_error()` - Classifies errors as retryable vs fatal based on message and exit code
-  - `show_retry_countdown()` - Displays countdown timer with retry reason
-  - `log_retry_attempt()` - Records retry attempts to session state JSON
-  - `clear_retry_attempts()` - Cleans up retry tracking after iteration completes
-  - `run_with_retry()` - Wrapper around claude invocation with full retry logic
-- Added configuration variables: RETRY_ENABLED, MAX_RETRIES (default 3), RETRY_BACKOFF_BASE (5s)
-- Exponential backoff: 5s → 15s → 45s (base * 3^attempt)
-- Added CLI flags: `--no-retry` to disable, `--max-retries N` to customize
-- Updated help text with new options
-- Updated print_config() to show retry settings
-- Replaced direct claude invocation in main loop with run_with_retry()
-- Added RETRY_OUTPUT_FILE temp file to cleanup_temp()
-
-**Why:**
-- Transient failures (rate limits, network issues) shouldn't abort long-running sessions
-- Exponential backoff prevents hammering the API during outages
-- Clear error classification avoids wasting retries on fatal errors (auth, bad config)
-- Session state logging enables post-session analysis of retry patterns
-- --no-retry flag allows disabling for debugging or when you want immediate failure
-- Countdown display keeps user informed during wait periods
-
-**Files changed:**
-- `ralph.sh` - Added RETRY LOGIC section, CLI flags, config display, main loop integration
+**Decisions:**
+- Used CLI_INLINE_PROMPT and CLI_FILE_PATH to preserve -p/-f values separately from PROMPT_SOURCE, since the 'spec' preset overwrites PROMPT_SOURCE
+- Spec mode resets PROMPT_SOURCE to "preset" after capturing input, ensuring PROMPT_spec.md is used as the prompt file
+- Default output file is specs/new-spec.json (prompt will derive a better name)
+- --from-product checks for any .md files in product-output/, not just specific artifacts
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from retry code)
-- `./ralph.sh --help` - Shows new --no-retry and --max-retries flags
-- `./ralph.sh --dry-run` - Shows "Retry → enabled (max 3, backoff 5s)"
-- `./ralph.sh --dry-run --no-retry` - Shows "Retry → disabled"
-- `./ralph.sh --dry-run --max-retries 5` - Shows "Retry → enabled (max 5, backoff 5s)"
+- `./ralph.sh spec` errors with "requires an input source"
+- `./ralph.sh spec -p "X" -f ./README.md` errors with "accepts only one input source"
+- `./ralph.sh spec -p "X" --from-product` errors with "accepts only one input source"
+- `./ralph.sh spec --from-product` errors about missing product artifacts (expected)
+- `./ralph.sh spec -f ./nonexistent.md` errors about file not found
+- `./ralph.sh spec -p "Dark mode"` passes input validation (fails on missing PROMPT_spec.md as expected - T-004)
+- `./ralph.sh --help` shows Spec Mode Options section
+- shellcheck passes (no new errors)
 
-## Iteration 4 - 2026-02-03
+**Next:** T-003 (output flag - mostly done), T-004 (PROMPT_spec.md), then T-005 (wire it all together)
 
-### Task Completed: US-004 Session Resume Capability (Task 1.4)
+## Iteration 3 - T-003: Add spec mode output flag
 
-**What was done:**
-- Added SESSION RESUME section after SESSION STATE MANAGEMENT with three functions:
-  - `list_sessions()` - Lists resumable sessions in current directory and ~/.ralph/logs/
-  - `validate_session()` - Validates session file (exists, valid JSON, not complete, branch matches)
-  - `restore_session()` - Restores all session state and displays resume summary
-- Added `--resume` flag to resume from `.ralph-session.json`
-- Added `--list-sessions` flag to show all resumable sessions
-- Session age check warns if session is >24 hours old (but allows resume)
-- Branch mismatch detection with clear error message and suggested fixes
-- Completed session detection prevents resuming already-finished sessions
-- Resume shows previous iteration history before continuing
-- Restores: mode, model, prompt_file, iteration count, max_iterations, branch, spec/plan/progress files
-- Updated session status to "in_progress" when resuming
+**Completed:** Task 1.3 (T-003) - Add spec mode output flag
 
-**Why:**
-- Resume capability prevents losing progress when sessions are interrupted (laptop sleep, network drop, Ctrl+C)
-- --list-sessions helps users find sessions that can be resumed
-- Branch validation prevents accidentally mixing work from different features
-- Session age warning helps users avoid resuming stale sessions with outdated context
-- Completed session check prevents confusion when trying to resume finished work
-- Iteration history display helps users understand where they're resuming from
+**Changes:**
+- Verified all T-003 functionality was implemented in T-002 iteration
+- `-o/--spec-output PATH` specifies custom output location
+- Default output: `specs/new-spec.json` (spec prompt derives better name)
+- `mkdir -p specs/` creates directory if needed
+- `--force` flag bypasses overwrite protection
+- Warning and exit if output file exists without `--force`
 
-**Files changed:**
-- `ralph.sh` - Added SESSION RESUME section, --resume/--list-sessions flags, help text, integration into main flow
+**Files modified:**
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-003 status and notes)
+- progress.txt (this entry)
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Shows new --resume and --list-sessions flags
-- `./ralph.sh --list-sessions` - Shows "No resumable sessions found" when clean
-- `./ralph.sh --resume` - Shows appropriate error when no session file exists
-- Branch mismatch, completed session, and age warnings all tested
+- `./ralph.sh spec -o ./specs/test.json -p "Test"` reaches prompt validation (missing PROMPT_spec.md - expected)
+- `./ralph.sh spec -o ./specs/unified-spec-workflow.json -p "Test"` warns about existing file
+- `./ralph.sh spec -o ./specs/unified-spec-workflow.json --force -p "Test"` bypasses warning
+- shellcheck passes (existing warnings unrelated to T-003)
 
-## Iteration 5 - 2026-02-03
+**Next:** T-004 (PROMPT_spec.md) - create the spec mode prompt file
 
-### Task Completed: US-005 Persistent Log Directory (Task 1.5)
+## Iteration 4 - T-004: Create PROMPT_spec.md
 
-**What was done:**
-- Added LOG FILE SETUP section after argument parsing with `setup_log_file()` function
-- Default log directory: `~/.ralph/logs/` (created automatically if not exists)
-- Added `--log-dir PATH` flag to specify custom log directory
-- Added `--log-file PATH` flag to specify explicit log file path (overrides --log-dir)
-- Added `RALPH_LOG_DIR` environment variable support
-- Precedence chain: --log-file > --log-dir > RALPH_LOG_DIR > config > default
-- Log filename format: `{mode}_{branch}_{timestamp}.log` (branch sanitized: / → -)
-- Creates `~/.ralph/logs/latest.log` symlink pointing to current session log
-- Updated help text with new options
+**Completed:** Task 1.4 (T-004) - Create PROMPT_spec.md
 
-**Why:**
-- Persistent log directory provides consistent location for session logs
-- Environment variable support enables CI/CD configuration
-- --log-file override allows explicit control for specific use cases
-- Symlink to latest.log enables quick access without knowing exact filename
-- Branch in filename helps identify which feature the log relates to
-- Auto-creation of directories reduces setup friction
+**Changes:**
+- Created prompts/PROMPT_spec.md with full spec mode instructions
 
-**Files changed:**
-- `ralph.sh` - Added logging configuration variables, setup_log_file() function, --log-dir/--log-file flags, help text updates
+**Key sections in the prompt:**
+1. Context section with template variables: `{{INPUT_SOURCE}}`, `{{OUTPUT_FILE}}`, `{{PROGRESS_FILE}}`, `{{SOURCE_DIR}}`
+2. Critical instruction to read `.claude/skills/writing-ralph-specs/SKILL.md` FIRST
+3. Input handling for all three sources:
+   - Inline prompt (`-p`)
+   - File input (`-f`)
+   - Product artifacts (`--from-product`) with guidance on which files to prioritize
+4. Codebase research phase before spec generation
+5. Task design guidelines with granularity recommendations
+6. JSON spec output format with tasks array example showing all fields
+7. Validation checklist for spec quality
+8. Completion protocol with pre-completion checklist
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Shows new --log-dir and --log-file flags
-- `./ralph.sh --dry-run` - Shows log path in ~/.ralph/logs/ format
-- `./ralph.sh --dry-run --log-dir /tmp/custom-logs` - Uses custom directory
-- `./ralph.sh --dry-run --log-file /tmp/my-session.log` - Uses explicit file path
-- `RALPH_LOG_DIR=/tmp/env-logs ./ralph.sh --dry-run` - Uses env var directory
-- `~/.ralph/logs/latest.log` symlink created correctly
+**Files modified:**
+- prompts/PROMPT_spec.md (new file)
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-004 status and notes)
 
-## Iteration 6 - 2026-02-03
-
-### Task Completed: US-006 Environment Variable Support (Task 2.1)
-
-**What was done:**
-- Added ENVIRONMENT VARIABLES section after argument parsing (before config file loading)
-- Supported environment variables with correct precedence (CLI > env var > config > defaults):
-  - `RALPH_MODEL` - Model selection (opus, sonnet, haiku)
-  - `RALPH_MAX_ITERATIONS` - Maximum iterations (with numeric validation)
-  - `RALPH_PUSH_ENABLED` - Git push toggle (true/false/yes/no/1/0)
-  - `RALPH_SPEC_FILE` - Spec file path
-  - `RALPH_PLAN_FILE` - Plan file path
-  - `RALPH_PROGRESS_FILE` - Progress file path
-  - `RALPH_LOG_DIR` - Log directory (already partially supported, formalized)
-  - `RALPH_LOG_FORMAT` - Log format placeholder for US-009 (text/json)
-  - `RALPH_NOTIFY_WEBHOOK` - Webhook URL placeholder for US-010
-- Added CLI_*_SET tracking flags to ensure CLI always overrides env vars
-- Updated `load_ralph_config()` to preserve env var values when config file loads
-- Added comprehensive "Environment Variables" section to `show_help()` output
-
-**Why:**
-- CI/CD pipelines commonly use environment variables for configuration
-- Allows users to set defaults without modifying config files or CLI args
-- Enables containerized deployments with runtime configuration
-- Matches common Unix tool patterns (e.g., EDITOR, PAGER, HOME)
-- Precedence order (CLI > env > config > defaults) follows principle of least surprise
-
-**Files changed:**
-- `ralph.sh` - Added env var section, CLI_*_SET tracking flags, updated load_ralph_config(), updated show_help()
+**Decisions:**
+- Followed pattern from PROMPT_plan.md and PROMPT_build.md for consistent structure
+- Made skill reading a critical first-action requirement (not just a suggestion)
+- Included task granularity guidelines (1-2 iterations per task)
+- Added validation checklist to catch issues before completion
+- Spec mode typically completes in 1-3 iterations
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from env var code)
-- `./ralph.sh --help` - Shows new "Environment Variables" section with all 9 variables documented
-- `./ralph.sh --dry-run` - Shows default config
-- `RALPH_MODEL=sonnet RALPH_MAX_ITERATIONS=5 RALPH_PUSH_ENABLED=false ./ralph.sh --dry-run` - All env vars respected
-- `RALPH_MODEL=sonnet ./ralph.sh --model haiku --dry-run` - CLI flag correctly overrides env var
-- `RALPH_LOG_DIR=/tmp/test-logs ./ralph.sh --dry-run` - Custom log directory from env var
+- File exists at prompts/PROMPT_spec.md
+- All template variables present: INPUT_SOURCE, OUTPUT_FILE, PROGRESS_FILE, SOURCE_DIR
+- Skill read instruction in "Critical" section
+- Tasks-based JSON format documented with example
 
-## Iteration 7 - 2026-02-03
+**Next:** T-005 (Wire spec mode in main loop) - now that T-002, T-003, T-004 are complete
 
-### Task Completed: US-007 Safe Config File Parsing (Task 2.2)
+## Iteration 5 - T-005: Wire spec mode in main loop
 
-**What was done:**
-- Replaced `source ralph.conf` with safe key=value parser to prevent arbitrary code execution
-- Created CONFIGURATION LOADING (SAFE) section with comprehensive security features:
-  - `ALLOWED_CONFIG_KEYS[]` - Whitelist of 13 valid config keys
-  - `is_allowed_config_key()` - Validates keys against whitelist
-  - `validate_config_value()` - Type-checks values based on key (MODEL must be opus/sonnet/haiku, MAX_ITERATIONS must be number, etc.)
-  - `safe_load_config()` - Reads config file line by line with regex matching
-- Security protections implemented:
-  - Only whitelisted keys accepted (SPEC_FILE, PLAN_FILE, PROGRESS_FILE, SOURCE_DIR, MODEL, MAX_ITERATIONS, PUSH_ENABLED, PRODUCT_CONTEXT_DIR, PRODUCT_OUTPUT_DIR, ARTIFACT_SPEC_FILE, LOG_DIR, LOG_FORMAT, NOTIFY_WEBHOOK)
-  - Shell command patterns rejected: $(), ``, ${}, ||, &&, ;, |
-  - Value type validation for MODEL, MAX_ITERATIONS, PUSH_ENABLED, LOG_FORMAT
-  - Clear warnings for unknown keys, invalid values, and suspicious patterns
-- Maintains proper precedence: CLI > env var > config file > defaults
+**Completed:** Task 1.5 (T-005) - Wire spec mode in main loop
 
-**Why:**
-- Previous `source ralph.conf` approach was a security risk - untrusted config files could execute arbitrary code
-- Type validation prevents misconfiguration (e.g., MODEL=typo would silently fail before)
-- Whitelist approach ensures only expected variables can be set from config
-- Shell pattern detection catches attempts to inject commands through config values
-- Warnings help users identify and fix config errors quickly
+**Changes:**
+- Added SPEC_MODE_INPUT_SOURCE and SPEC_MODE_OUTPUT_FILE variables to ralph.sh
+- Added spec mode variable population section (after product mode defaults)
+- Updated substitute_template() function to include {{INPUT_SOURCE}} and {{OUTPUT_FILE}}
+- INPUT_SOURCE populated based on input type:
+  - prompt: uses inline content directly
+  - file: reads and includes file contents via `cat`
+  - product: concatenates product artifacts in priority order
 
-**Files changed:**
-- `ralph.sh` - Replaced CONFIGURATION LOADING section with CONFIGURATION LOADING (SAFE), added 4 new functions (~130 lines)
+**Product artifact priority order:**
+1. 7_prd.md (PRD - primary source)
+2. 9_technical_requirements.md
+3. 4_personas.md
+4. 6_user_journey_map.md
+5. 8_feature_specifications.md
+- Falls back to all .md files if none of the priority files exist
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from safe config code)
-- `./ralph.sh --help` - Works correctly
-- `./ralph.sh --dry-run` - Config values loaded correctly from ralph.conf
-- Tested with malicious config file containing:
-  - Invalid MODEL value → Warning displayed, value rejected
-  - Invalid MAX_ITERATIONS → Warning displayed, value rejected
-  - Unknown keys → Warning displayed, keys ignored
-  - Shell injection attempts ($(), ``, ${}, ||, &&, ;) → All detected and rejected
+**Files modified:**
+- ralph.sh (substitute_template function, spec mode variable section)
+- plans/unified-spec-workflow_PLAN.md (marked T-005 items complete)
+- specs/unified-spec-workflow.json (updated T-005 status, passes, notes)
+- progress.txt (this entry)
 
-## Iteration 8 - 2026-02-03
-
-### Task Completed: US-008 Global Config File Support (Task 2.3)
-
-**What was done:**
-- Added global config file support at `~/.ralph/config` (default location)
-- Modified `load_ralph_config()` to load config files in correct order:
-  1. Global config file first (lowest precedence after defaults)
-  2. Project `ralph.conf` second (overrides global)
-- Added `--global-config PATH` flag to specify alternate global config file
-- Added `LOADED_CONFIG_FILES[]` array to track which config files were loaded
-- Updated `print_config()` to display loaded config files in `--dry-run` output
-- Auto-creates `~/.ralph/` directory on first run if it doesn't exist
-- Updated `show_help()` with new `--global-config` flag documentation
-
-**Why:**
-- Users with multiple projects can now set global defaults (model, log directory, etc.) once
-- Reduces repetitive configuration across projects
-- CI/CD pipelines can use a global config for consistent behavior
-- `--dry-run` now shows config precedence for debugging configuration issues
-- Auto-creation of `~/.ralph/` directory improves first-run experience
-
-**Files changed:**
-- `ralph.sh` - Added GLOBAL_CONFIG_FILE variable, LOADED_CONFIG_FILES array, --global-config flag, updated load_ralph_config() function, updated print_config() for dry-run output, updated show_help()
+**Decisions:**
+- Used SPEC_MODE_* prefix for template variables to avoid name collisions
+- PROMPT_FILE was already correctly set by existing preset logic at line 1379
+- Product artifacts concatenated with "=== filename ===" headers for clarity
+- Priority order for product files based on typical importance for spec generation
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Shows new --global-config flag
-- `./ralph.sh --dry-run` - Shows "Config files loaded" section with both global and project configs
-- `./ralph.sh --global-config /tmp/custom.conf --dry-run` - Uses custom global config path
-- Global config values (e.g., MAX_ITERATIONS=99) correctly loaded
-- Project config values correctly override global config values
-- CLI flags correctly override both config files
+- `./ralph.sh spec -p "Add dark mode" --dry-run` runs successfully
+- `./ralph.sh spec -p "Add dark mode" -v --dry-run` shows verbose config
+- `./ralph.sh --help` shows spec mode documentation
+- shellcheck passes (no new warnings in added code)
+- Template substitution logic verified with inline bash test
 
-## Iteration 9 - 2026-02-03
+**Milestone M1 (Spec Mode MVP) Complete:**
+Tasks T-001, T-002, T-003, T-004, T-005 are all complete.
+Spec mode can now generate specs from user input, file, or product artifacts.
 
-### Task Completed: US-009 Structured JSON Logging Option (Task 3.1)
+**Next:** T-006 (Define enhanced spec schema with tasks) - Phase 2 begins
 
-**What was done:**
-- Added `--log-format` flag accepting `text` (default) or `json`
-- Added `RALPH_LOG_FORMAT` environment variable support with proper precedence
-- Created comprehensive STRUCTURED LOGGING section with:
-  - `log_event()` - Core function for structured JSON logging
-  - `log_session_start()` - Logs session configuration at start
-  - `log_iteration_start()` - Logs iteration begins
-  - `log_iteration_end()` - Logs iteration completion with metrics
-  - `log_tool_call()` - Logs tool invocations
-  - `log_error()` - Logs errors with message and code
-  - `log_session_end()` - Logs session completion status
-- JSON format: `{"timestamp":"...","session_id":"...","event":"...","data":{...}}`
-- All events include session_id for correlation across log entries
-- Terminal output remains human-readable regardless of log format
-- Updated `print_config()` to show log format when JSON is selected
-- Updated `show_help()` with new flag documentation
-- Updated `docs/RALPH_LOOP_REF.md` with comprehensive structured logging documentation
-- Updated `ralph.conf` with LOG_FORMAT setting example
-- Validation for invalid log format values (CLI and env var)
+## Iteration 6 - T-006: Define enhanced spec schema with tasks
 
-**Why:**
-- Structured logging enables integration with log aggregation systems (ELK, Datadog, Splunk)
-- JSON format allows programmatic analysis of session data
-- session_id correlation enables tracking entire sessions across multiple log entries
-- Event types provide structured insight into session lifecycle
-- Maintaining human-readable terminal output preserves developer experience
+**Completed:** Task 2.1 (T-006) - Define enhanced spec schema with tasks
 
-**Files changed:**
-- `ralph.sh` - Added STRUCTURED LOGGING section (~100 lines), --log-format flag, CLI_LOG_FORMAT_SET tracking, validation, integrated log calls
-- `docs/RALPH_LOOP_REF.md` - Added Structured JSON Logging section, updated Future Improvements, updated env var and config tables
-- `ralph.conf` - Added LOG_FORMAT setting with comment
-- `plans/ralph-improvements_PLAN.md` - Marked task 3.1 complete
+**Changes:**
+- Updated .claude/skills/writing-ralph-specs/SKILL.md with comprehensive tasks array schema
+- Added "Tasks Array Schema (Recommended)" section with:
+  - Task Fields table documenting all fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes, phase
+  - Type information for each field (string, string[], boolean)
+  - Required vs optional field designation
+- Added "Status Values" section: pending, in_progress, complete, blocked
+- Added "Example Spec with Tasks" showing full task structure
+- Added "Legacy: userStories Array" section for backward compatibility
+- Updated workflow section to show: spec mode → (optional) plan mode → build mode
+- Updated tips section with tasks terminology (atomic tasks vs atomic stories)
+- Changed reference from ralph-improvements.json to unified-spec-workflow.json
+
+**Files modified:**
+- .claude/skills/writing-ralph-specs/SKILL.md
+
+**Decisions:**
+- Documented schema directly in the writing-ralph-specs skill (not a separate schema file) since Claude reads this skill when creating specs
+- Made tasks the recommended format, userStories as legacy
+- Included status field alongside passes for workflow visibility (status = human-readable state, passes = boolean for automation)
+- dependsOn uses array of task IDs (not dependencies map) for simpler task-level declarations
 
 **Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings)
-- `./ralph.sh --help` - Shows new --log-format flag and RALPH_LOG_FORMAT
-- `./ralph.sh --dry-run` - Works correctly (log format not shown for text default)
-- `./ralph.sh --dry-run --log-format json` - Shows "LogFmt → json (structured)"
-- `./ralph.sh --log-format invalid --dry-run` - Proper validation error
-- `RALPH_LOG_FORMAT=json ./ralph.sh --dry-run` - Env var works
-- `RALPH_LOG_FORMAT=json ./ralph.sh --log-format text --dry-run` - CLI overrides env
+- Schema fully documented with all fields and types
+- Status values defined: pending, in_progress, complete, blocked
+- passes field documented as boolean for completion tracking
+- dependsOn documented as array of task IDs
+- Backward compatibility section explains userStories still works
+- Skill file updated and ready for use
 
-## Iteration 10 - 2026-02-03
+**Next:** T-007 (Update writing-ralph-specs skill) - depends on T-006
 
-### Task Completed: US-010 Webhook Notifications (Task 3.2)
+## Iteration 7 - T-007: Update writing-ralph-specs skill
 
-**What was done:**
-- Added WEBHOOK NOTIFICATIONS section after STRUCTURED LOGGING with:
-  - `send_webhook()` - Sends POST requests on session events with JSON payload
-  - Non-blocking execution with 10-second timeout using curl
-  - Background process prevents blocking session cleanup
-  - Logs webhook response to session log file
-- Added `--notify-webhook URL` CLI flag for specifying webhook endpoint
-- Added `CLI_WEBHOOK_SET` tracking flag for proper precedence handling
-- Updated `RALPH_NOTIFY_WEBHOOK` environment variable support with correct precedence (CLI > env > config)
-- Events supported: session_complete, session_max_iterations, session_interrupted
-- JSON payload includes: event, session_id, status, iterations, failed_iterations, duration, branch, mode, model, summary, last_commit, timestamp
-- Basic auth supported via URL format (https://user:pass@host/path)
-- Credentials redacted in display (shown as https://***@host/path)
-- Long URLs truncated to 40 chars in display
-- Updated `print_config()` to show webhook URL when configured
-- Updated `show_help()` with --notify-webhook flag documentation
-- Called `send_webhook()` in cleanup() for interrupted sessions
-- Called `send_webhook()` at normal session end (complete or max_iterations)
-- Updated docs/RALPH_LOOP_REF.md with comprehensive Webhook Notifications section
-- Updated ralph.conf with NOTIFY_WEBHOOK example
-- Updated environment variable and config tables to mark webhook as implemented
+**Completed:** Task 2.2 (T-007) - Update writing-ralph-specs skill
 
-**Why:**
-- Webhook notifications enable remote monitoring of long-running sessions
-- Integrates with Slack, Discord, Teams, PagerDuty, or custom systems
-- Non-blocking design ensures notifications don't delay session cleanup
-- Basic auth support enables secure integration with protected endpoints
-- Credential redaction in display prevents accidental exposure in logs/screenshots
-- Consistent JSON payload format supports easy parsing by receivers
+**Changes:**
+- Verified all T-007 acceptance criteria were already implemented in T-006
+- No code changes needed - SKILL.md already contains all required content
 
-**Files changed:**
-- `ralph.sh` - Added WEBHOOK NOTIFICATIONS section (~90 lines), --notify-webhook flag, CLI_WEBHOOK_SET tracking, print_config() display, cleanup() and session end integration
-- `docs/RALPH_LOOP_REF.md` - Added Webhook Notifications section, updated env var and config tables
-- `ralph.conf` - Added NOTIFY_WEBHOOK example
-- `plans/ralph-improvements_PLAN.md` - Marked task 3.2 complete
+**Verification of acceptance criteria:**
+1. ✅ `.claude/skills/writing-ralph-specs/SKILL.md updated` - File was updated in T-006
+2. ✅ `tasks array documented as recommended format` - Line 10: "The `tasks` array is the recommended format"
+3. ✅ `userStories marked as legacy/backward-compatible` - Lines 88-90: "Legacy: userStories Array" section
+4. ✅ `Examples show tasks format with passes field` - Lines 61, 78, 159, 176 show `"passes": false`
+5. ✅ `Guidance on task granularity (1-2 iterations per task)` - Line 199: "Atomic tasks: Completable in 1-2 iterations"
+6. ✅ `dependsOn usage documented` - Line 202: "Use dependsOn" with example
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Shows new --notify-webhook flag and RALPH_NOTIFY_WEBHOOK
-- `./ralph.sh --dry-run --notify-webhook "https://example.com/webhook"` - Shows webhook in config
-- `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --dry-run` - Env var works
-- `RALPH_NOTIFY_WEBHOOK="https://env.example.com" ./ralph.sh --notify-webhook "https://cli.example.com" --dry-run` - CLI overrides env
-- `./ralph.sh --dry-run --notify-webhook "https://user:pass@example.com/webhook"` - Basic auth redacted in display
+**Files modified:**
+- plans/unified-spec-workflow_PLAN.md (marked T-007 items complete)
+- specs/unified-spec-workflow.json (updated T-007 status, passes, notes)
+- progress.txt (this entry)
 
-## Iteration 11 - 2026-02-04
+**Decisions:**
+- T-006 and T-007 had overlapping scope; T-006 completed both
+- No additional changes needed to SKILL.md
 
-### Task Completed: US-011 Session Summary Report (Task 3.3)
+**Milestone M2 (Unified Spec Format) Complete:**
+Tasks T-006 and T-007 are done. Tasks format is fully documented in the skill.
 
-**What was done:**
-- Added SESSION SUMMARY REPORT section after WEBHOOK NOTIFICATIONS with:
-  - `generate_summary()` function - Generates comprehensive markdown summary report
-  - `GENERATE_SUMMARY` variable for controlling summary generation (default: true)
-- Summary report includes:
-  - Session Overview table: status (with emoji), session_id, mode, model, branch, start time, duration, iterations
-  - Configuration section: spec, plan, progress, and log file paths
-  - Iteration Details table: per-iteration duration, exit code, files modified, commit message
-  - Timing Breakdown: total iteration time, average per iteration, overhead
-  - Files Modified: git diff list of all changed files
-  - Commits Made: git log of commits during session
-  - Troubleshooting section (for failed/interrupted sessions): failed iteration details, suggested actions
-  - Related Files: links to log, session state, progress, and plan files
-- Added `--no-summary` CLI flag to disable summary generation
-- Integrated `generate_summary()` call into `finalize_session_state()` before archive/cleanup
-- Output file location: `{log_directory}/{session_id}_summary.md`
-- Updated `show_help()` with --no-summary flag documentation
-- Updated `docs/RALPH_LOOP_REF.md` with comprehensive Session Summary Reports section
-- Updated user files documentation to include summary files
+**Next:** T-008, T-011, T-016, T-017 can now proceed (various dependencies unblocked)
 
-**Why:**
-- Summary reports provide post-session visibility into what was accomplished
-- Useful for team visibility when running autonomous sessions
-- Troubleshooting section helps diagnose failed/interrupted sessions
-- Iteration timing breakdown enables efficiency analysis
-- Markdown format integrates well with documentation workflows
-- --no-summary flag allows disabling for minimal overhead
+## Iteration 8 - T-008: Update build mode to find next task
 
-**Files changed:**
-- `ralph.sh` - Added SESSION SUMMARY REPORT section (~170 lines), generate_summary() function, --no-summary flag, integration into finalize_session_state()
-- `docs/RALPH_LOOP_REF.md` - Added Session Summary Reports section, updated User Files structure, added --no-summary to quick reference
-- `plans/ralph-improvements_PLAN.md` - Marked task 3.3 complete
-- `specs/ralph-improvements.json` - Updated US-011 passes: true
+**Completed:** Task 3.1 (T-008) - Update build mode to find next task
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from summary code)
-- `./ralph.sh --help` - Shows new --no-summary flag
-- `./ralph.sh --dry-run` - Works correctly
-- `./ralph.sh --no-summary --dry-run` - Flag accepted without error
+**Changes:**
+- Updated prompts/PROMPT_build.md with tasks-first workflow:
+  - Added "Task Source Priority" section explaining spec tasks vs plan file fallback
+  - Updated "Understand Current State" with task selection algorithm:
+    1. Find tasks where passes=false
+    2. Filter to tasks where ALL dependsOn have passes=true
+    3. Select first by ID order
+  - Added instruction to set status="in_progress" before starting work
+  - Updated "Document" section to update spec JSON (passes, status, notes)
+  - Updated "Check If All Done" section for tasks-first approach
+  - Updated "Rules" section with spec-as-source-of-truth principles
 
-## Iteration 12 - 2026-02-04
+**Files modified:**
+- prompts/PROMPT_build.md
+- plans/unified-spec-workflow_PLAN.md (marked items complete)
+- specs/unified-spec-workflow.json (updated T-008 status, passes, notes)
+- progress.txt (this entry)
 
-### Task Completed: US-012 Single Iteration Test Mode (Task 4.1)
+**Decisions:**
+- Spec with tasks array is the primary source of truth; plan file is only fallback
+- Task selection respects dependsOn by checking all dependencies have passes=true
+- in_progress status signals to future iterations that work has begun
+- When using spec tasks, plan file is NOT updated (single source of truth)
 
-**What was done:**
-- Added `--test` and `-1` CLI flags for single iteration test mode
-- Added `TEST_MODE` variable in CONFIGURATION section
-- Test mode sets: MAX_ITERATIONS=1, PUSH_ENABLED=false
-- Updated `print_header()` to display "⚠ TEST MODE RALPH LOOP" banner when active
-- Updated `print_config()` to show "Test → enabled (1 iter, no push, no marker check)"
-- Modified completion marker check in main loop to skip when TEST_MODE is true
-- Updated header comment in ralph.sh with new flag
-- Updated `show_help()` with --test/-1 flag and example
-- Updated `docs/RALPH_LOOP_REF.md` with:
-  - New Test Mode section in usage documentation
-  - Test mode commands in Quick Reference
+**Verification of acceptance criteria:**
+1. ✅ Build mode reads spec's tasks array - Task Source Priority section
+2. ✅ Finds first task where passes=false and dependsOn satisfied - Finding next task algorithm
+3. ✅ Sets task status to in_progress - Section 2 "Before starting work"
+4. ✅ Falls back to plan file if no tasks - Task Source Priority items 2 and 3
 
-**Why:**
-- Test mode enables quick prompt validation without committing to full loops
-- Ideal for debugging configuration or prompt issues
-- Single iteration prevents wasted time on bad prompts
-- No push keeps remote branches clean during testing
-- Ignoring completion marker ensures the iteration always completes (no early exit)
-- -1 shorthand is intuitive (run 1 iteration)
+**Next:** T-009 (Update build mode to update task status) - depends on T-008
 
-**Files changed:**
-- `ralph.sh` - Added TEST_MODE variable, --test/-1 flag parsing, test mode handling, print_header() banner, print_config() indicator, completion marker skip logic
-- `docs/RALPH_LOOP_REF.md` - Added Test Mode section, updated Quick Reference
-- `plans/ralph-improvements_PLAN.md` - Marked task 4.1 complete
-- `specs/ralph-improvements.json` - Updated US-012 passes: true
+## Iteration 9 - T-009: Update build mode to update task status
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `./ralph.sh --help` - Shows new --test/-1 flag and example
-- `./ralph.sh --dry-run` - Works correctly
-- `./ralph.sh --test --dry-run` - Shows TEST MODE banner, 1 iteration, push disabled
-- `./ralph.sh -1 --dry-run` - Same as --test
+**Completed:** Task 3.2 (T-009) - Update build mode to update task status
 
-## Iteration 13 - 2026-02-04
+**Changes:**
+- Updated prompts/PROMPT_build.md Section 5 (Commit):
+  - Added task ID format in commit messages: `feat(T-001): description`
+  - Added examples showing feat/fix/docs with task IDs
+  - Updated commit steps to reference task ID placeholder
+- Updated Section 4 (Document) legacy/fallback:
+  - Clarified userStories.passes handling for legacy format
+  - Noted that user stories don't have status field
+  - Added note that tasks array doesn't exist in legacy format
+- Updated Pre-Completion Checklist:
+  - Made tasks-first with spec tasks checking passes and status
+  - Plan file checking as legacy/fallback path
+- Updated When to Signal Completion:
+  - Added tasks-first criteria (passes: false check)
+  - Plan file checking as fallback
 
-### Task Completed: US-013 Interactive Confirmation Mode (Task 4.2)
+**Files modified:**
+- prompts/PROMPT_build.md
+- specs/unified-spec-workflow.json (T-009 status and notes)
+- progress.txt (this entry)
 
-**What was done:**
-- Added INTERACTIVE CONFIRMATION MODE section after SESSION SUMMARY REPORT with:
-  - `INTERACTIVE_MODE` variable (default: false)
-  - `INTERACTIVE_TIMEOUT` variable (default: 300 seconds / 5 minutes)
-  - `show_iteration_summary()` - Displays iteration summary (duration, status, files changed)
-  - `prompt_continue()` - Prompts user with Y/n/s options and timeout
-  - `handle_interactive_confirmation()` - Orchestrates summary + prompt + diff loop
-- Added `--interactive` and `-i` CLI flags for enabling interactive mode
-- Added `--interactive-timeout N` flag for custom timeout (with validation)
-- Integrated into main loop after completion marker check
-- Added TTY detection: in non-TTY environments, warns and continues automatically
-- Options implemented:
-  - `Y` or Enter: Continue to next iteration
-  - `n`: Stop session gracefully (exit_reason=user_stopped)
-  - `s`: Show git diff --stat then prompt again
-- Added `user_stopped` exit reason with proper webhook and summary handling
-- Updated `print_header()` to show "⚡ INTERACTIVE RALPH LOOP" banner
-- Updated `print_config()` to show interactive mode status and timeout
-- Updated `show_help()` with new flags and examples
-- Updated header comment in ralph.sh with new flags
-- Updated `docs/RALPH_LOOP_REF.md` with Interactive Mode section and Quick Reference
+**Decisions:**
+- Commit message format uses conventional commits with task ID scope: `feat(T-XXX): description`
+- Legacy userStories.passes handling preserved but explicitly documented
+- Pre-completion and completion sections now prioritize tasks-first workflow
 
-**Why:**
-- Interactive mode provides control for cautious users who want to review changes between iterations
-- Useful for learning how Ralph works by watching each iteration
-- Enables periodic check-ins during long-running sessions
-- The 's' option allows reviewing changes before deciding to continue
-- TTY detection prevents hanging in non-interactive environments (CI/CD, cron, piped input)
-- Timeout default of 5 minutes provides reasonable wait without indefinite blocking
+**Verification of acceptance criteria:**
+1. ✅ After task completion, set passes=true and status='complete' - Lines 88-91
+2. ✅ notes field updated with implementation summary - Line 91
+3. ✅ No longer updates separate plan file - Line 92
+4. ✅ Commit message includes task ID - Lines 117-127
+5. ✅ userStories.passes still updated if using legacy format - Lines 94-99
 
-**Files changed:**
-- `ralph.sh` - Added INTERACTIVE CONFIRMATION MODE section (~100 lines), INTERACTIVE_MODE/INTERACTIVE_TIMEOUT variables, --interactive/-i and --interactive-timeout flags, main loop integration, print_header()/print_config() updates, user_stopped handling
-- `docs/RALPH_LOOP_REF.md` - Added Interactive Mode section, updated Quick Reference
-- `plans/ralph-improvements_PLAN.md` - Marked task 4.2 complete
-- `specs/ralph-improvements.json` - Updated US-013 passes: true
+**Next:** T-010 (Update build mode completion detection) - depends on T-009
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from interactive code)
-- `./ralph.sh --help` - Shows new --interactive/-i and --interactive-timeout flags
-- `./ralph.sh --dry-run` - Works correctly
-- `./ralph.sh --interactive --dry-run` - Shows INTERACTIVE banner and "Interact → enabled (prompt between iters, timeout 300s)"
-- `./ralph.sh -i --interactive-timeout 60 --dry-run` - Shows custom timeout of 60s
-- `./ralph.sh --interactive-timeout abc` - Proper validation error
+## Iteration 10 - T-010: Update build mode completion detection
 
-## Iteration 14 - 2026-02-04
+**Completed:** Task 3.3 (T-010) - Update build mode completion detection
 
-### Task Completed: US-014 Verbose Mode with Prompt Preview (Task 4.3)
+**Changes:**
+- Verified all T-010 acceptance criteria were already implemented in T-009
+- No code changes needed - PROMPT_build.md already contains all required content
 
-**What was done:**
-- Added VERBOSE MODE section after INTERACTIVE CONFIRMATION MODE with:
-  - `VERBOSE` variable (default: false)
-  - `verbose_log()` - Log single verbose message with [verbose] prefix
-  - `verbose_log_kv()` - Log key-value pairs with [verbose] prefix
-  - `verbose_log_source()` - Log config value with source attribution (cli/env/config/default)
-  - `verbose_show_prompt()` - Display resolved prompt content (first 20 lines with line count)
-  - `verbose_session_update()` - Log session state changes
-  - `verbose_retry_decision()` - Log retry logic decisions
-- Added `--verbose` and `-v` CLI flags for enabling verbose mode
-- Created `show_config_precedence()` function to display where each config value came from:
-  - Shows MODEL, MAX_ITERATIONS, PUSH_ENABLED, SPEC_FILE, PLAN_FILE, LOG_DIR, LOG_FORMAT, WEBHOOK with source labels
-  - Color-coded by source: green (cli), cyan (env), yellow (config), dim (default)
-  - Lists loaded config files
-- Updated `print_header()` to show "🔍 VERBOSE RALPH LOOP" banner when active
-- Updated `print_config()` to show "Verbose → enabled (prompt preview, config sources)"
-- Integrated verbose calls throughout codebase:
-  - `init_session_state()` - Logs session creation
-  - `update_session_state()` - Logs iteration metrics
-  - `finalize_session_state()` - Logs archive/preserve actions
-  - `run_with_retry()` - Logs retry decisions (skip, give up, abort, retry)
-  - Main loop - Shows resolved prompt content before sending to Claude
-- Updated `show_help()` with new --verbose/-v flag and example
-- Updated header comment in ralph.sh with new flag
-- Updated `docs/RALPH_LOOP_REF.md` with:
-  - New Verbose Mode section with usage examples and output examples
-  - Updated Quick Reference with verbose mode commands
+**Verification of acceptance criteria:**
+1. ✅ `Completion signaled when all tasks have passes=true` - Lines 132-134 in Section 6, lines 197-199 in When to Signal Completion
+2. ✅ `Falls back to plan checklist if no tasks array` - Lines 136-139 (Section 6), lines 177-179 (Pre-Completion), lines 194/200
+3. ✅ `Pre-completion checklist updated in prompt` - Lines 169-186 contain updated checklist with both workflows
 
-**Why:**
-- Verbose mode is essential for debugging configuration issues in complex setups
-- Config precedence display clarifies which value came from where (CLI vs env vs config vs default)
-- Prompt preview allows verification of template substitution before execution
-- Session state logging helps debug state management issues
-- Retry decision logging helps understand failure classification
-- Clear [verbose] prefix distinguishes debug output from normal output
+**Files modified:**
+- specs/unified-spec-workflow.json (updated T-010 status and notes)
+- progress.txt (this entry)
 
-**Files changed:**
-- `ralph.sh` - Added VERBOSE variable, --verbose/-v flag parsing, VERBOSE MODE section (~90 lines), show_config_precedence() function (~55 lines), integrated verbose calls in session state functions, retry logic, and main loop
-- `docs/RALPH_LOOP_REF.md` - Added Verbose Mode section, updated Quick Reference
-- `plans/ralph-improvements_PLAN.md` - Marked task 4.3 complete
-- `specs/ralph-improvements.json` - Updated US-014 passes: true
+**Decisions:**
+- T-009 changes included completion detection updates, making T-010 a verification-only task
+- No additional prompt changes needed
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues from verbose code)
-- `./ralph.sh --help` - Shows new --verbose/-v flag and example
-- `./ralph.sh --dry-run` - Works correctly (no verbose output when not requested)
-- `./ralph.sh -v --dry-run` - Shows VERBOSE banner, config precedence with sources
-- `RALPH_MODEL=sonnet ./ralph.sh -v --dry-run -s ./specs/ralph-improvements.json` - Correctly shows env/cli sources
-- `./ralph.sh --verbose --dry-run` - Same as -v
+**Milestone M3 progress:** Tasks T-008, T-009, T-010 complete. T-011 remaining for M3.
 
-## Iteration 15 - 2026-02-04
+**Next:** T-011, T-012, T-016, T-017 are now unblocked (T-012 depends on T-010 which is now complete)
 
-### Task Completed: US-015 Shell Completion Scripts (Task 4.4)
+## Iteration 11 - T-011: Update plan mode as derived artifact generator
 
-**What was done:**
-- Created `completions/` directory for shell completion scripts
-- Created `completions/ralph.bash` - Comprehensive bash completion script:
-  - Completes presets: plan, build, product
-  - Completes all 30+ flags: --model, --file, --spec, --log-format, etc.
-  - Completes model names: opus, sonnet, haiku
-  - Completes log formats: text, json
-  - Completes file paths for flags: -f, --file, -s, --spec, -l, --plan, --progress, --log-file, --global-config, --artifact-spec
-  - Completes directory paths for flags: --log-dir, --source, --context, --output
-  - Uses shellcheck-compliant mapfile approach for array population
-  - Includes 3 installation options with clear instructions
-- Created `completions/ralph.zsh` - Comprehensive zsh completion script:
-  - Full _arguments completion spec with descriptions for each flag
-  - Descriptive preset/model/format completions (e.g., "opus:Most capable model")
-  - Proper file and directory completion with _files
-  - 3 installation options for different user preferences
-- Updated `show_help()` in ralph.sh with new "Shell Completion" section pointing to completion scripts
-- Updated `docs/RALPH_LOOP_REF.md` with:
-  - New "Shell Completion" section under Installation with detailed setup instructions for bash and zsh
-  - Added shell completion examples to Quick Reference section
+**Completed:** Task 3.4 (T-011) - Update plan mode as derived artifact generator
 
-**Why:**
-- Tab completion significantly improves CLI usability for power users
-- Reduces need to check --help or docs for flag names
-- Prevents typos in commonly used flags and values
-- Model/format completion reduces cognitive load (no need to remember exact values)
-- File/directory completion for path flags saves typing and prevents errors
-- Both major shells (bash/zsh) supported for broad compatibility
+**Changes:**
+- Updated prompts/PROMPT_plan.md with dual-mode workflow:
+  - Added "Spec Format Detection" section at top to determine which workflow to use
+  - Added "Derived Plan from Tasks" section (lines 31-98) for specs with tasks array:
+    - Generated plan format with warning banner: "This is a derived view. Edit the spec, not this file."
+    - Markdown checklist structure grouped by phase
+    - Progress summary showing completed/in-progress/blocked/ready tasks
+    - Single-iteration workflow for simple transformation
+  - Preserved "Traditional Planning" section (lines 102-231) for legacy userStories format
+- PROMPT_build.md already enforces plan as read-only (line 92: "Do NOT update plan file")
 
-**Files changed:**
-- `completions/ralph.bash` - New bash completion script (~130 lines)
-- `completions/ralph.zsh` - New zsh completion script (~80 lines)
-- `ralph.sh` - Added Shell Completion section to show_help()
-- `docs/RALPH_LOOP_REF.md` - Added Shell Completion section under Installation, updated Quick Reference
-- `plans/ralph-improvements_PLAN.md` - Marked task 4.4 complete
-- `specs/ralph-improvements.json` - Updated US-015 passes: true
+**Files modified:**
+- prompts/PROMPT_plan.md
+- specs/unified-spec-workflow.json (updated T-011 status and notes)
+- progress.txt (this entry)
 
-**Verification:**
-- `shellcheck completions/ralph.bash` - Passes with no warnings or errors
-- `./ralph.sh --help` - Shows new Shell Completion section at end of help output
-- `ls completions/` - Both ralph.bash and ralph.zsh present
-- Bash completion tested: presets, flags, --model values, --log-format values, file paths all complete correctly
+**Decisions:**
+- Kept traditional planning as default for backwards compatibility
+- Derived plan includes explicit warning that build mode works from spec, not plan
+- Single-iteration workflow for derived plans (straightforward transformation)
 
-## Iteration 16 - 2026-02-04
+**Verification of acceptance criteria:**
+1. ✅ Plan mode still works as before for specs without tasks - Traditional Planning section preserved
+2. ✅ For specs with tasks, plan mode generates Markdown checklist view - Derived Plan format documented
+3. ✅ Generated plan includes note: 'This is a derived view...' - Lines 44-45 in template
+4. ✅ Plan is read-only reference, build mode does not update it - PROMPT_build.md line 92
 
-### Task Completed: US-016 Update Documentation (Task 4.5)
+**Milestone M3 (Build Mode Integration) Complete:**
+Tasks T-008, T-009, T-010, T-011 are all done. Build mode now works directly from spec tasks.
 
-**What was done:**
-- Verified docs/RALPH_LOOP_REF.md already has comprehensive documentation for all features (added during previous iterations)
-- Verified show_help() already includes all new flags (added during previous iterations)
-- Updated ralph.conf with comprehensive commented examples:
-  - Added configuration precedence documentation header
-  - Added section headers for organization (Path, Execution, Logging, Notifications)
-  - Added detailed comments for each setting with examples
-  - Added product mode path configuration
-  - Added webhook examples (Slack, Discord, custom with auth)
-- Updated ralph.sh header comments with all new flags:
-  - Added --skip-checks, --no-retry, --max-retries N
-  - Added --resume, --list-sessions
-  - Added --log-dir, --log-file, --log-format
-  - Added --notify-webhook, --no-summary, --global-config
-  - Added Environment Variables summary section
-  - Added more example commands
-- Verified all code examples in docs work:
-  - --help, --dry-run, --test, -1, --interactive, -i
-  - --interactive-timeout, --verbose, -v, --list-sessions
-  - --no-retry, --max-retries, --log-format json
-  - --skip-checks, --no-summary, --notify-webhook, --log-dir
-  - plan, build presets, -s spec flag, environment variables
+**Next:** T-012, T-013, T-014, T-015, T-016, T-017 remain (Phase 4: Documentation & Polish)
 
-**Why:**
-- Documentation is critical for user adoption and maintainability
-- Comprehensive ralph.conf comments enable self-discovery of configuration options
-- Header comments serve as quick reference for developers reading the script
-- Verified examples prevent documentation drift from implementation
+## Iteration 12 - T-012: Update docs/RALPH_LOOP_REF.md
 
-**Files changed:**
-- `ralph.sh` - Updated header comments with all new flags and environment variables section
-- `ralph.conf` - Comprehensive rewrite with sections, detailed comments, and examples
-- `plans/ralph-improvements_PLAN.md` - Marked task 4.5 complete
-- `specs/ralph-improvements.json` - Updated US-016 passes: true
+**Completed:** Task 4.1 (T-012) - Update docs/RALPH_LOOP_REF.md
 
-**Verification:**
-- `shellcheck ralph.sh` - Passes (only pre-existing warnings, no new issues)
-- `shellcheck completions/ralph.bash` - Passes with no issues
-- All code examples tested and verified working
-- `./ralph.sh --help` shows all new flags documented
+**Changes:**
+- Added comprehensive spec mode documentation to RALPH_LOOP_REF.md:
+  - New "Spec Mode" section with all flags (-p, -f, --from-product, -o, --force)
+  - Input Sources and Output Options tables
+  - Explanation of how --from-product reads product artifacts in priority order
+  - Updated Model Defaults table to include spec mode (opus)
+  - Updated Preset Prompts section with PROMPT_spec.md
+  - Updated workflow diagram to show simplified product→spec→build flow
+  - New "Tasks Format (Recommended)" section with field documentation
+  - Migration section comparing userStories vs tasks formats
+  - Updated Quick Reference with spec mode examples
+  - Updated Common Workflows with full feature development patterns
+  - Updated File Structure to show PROMPT_spec.md
+  - Updated Related Files section
+
+**Files modified:**
+- docs/RALPH_LOOP_REF.md
+- specs/unified-spec-workflow.json (T-012 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Documented simplified workflow: spec is now single source of truth, plan is optional
+- Emphasized tasks format as recommended over legacy userStories
+- Added migration guidance for existing specs
+- Included practical examples showing spec mode in common workflows
+
+**Verification of acceptance criteria:**
+1. ✅ Spec mode documented with all flags - New "Spec Mode" section with complete flag documentation
+2. ✅ Examples for all input sources (-p, -f, --from-product) - Multiple examples throughout document
+3. ✅ New workflow diagram: product→spec→build - Updated diagram showing simplified flow
+4. ✅ Tasks format documented - New "Tasks Format (Recommended)" section with field table
+5. ✅ Migration notes for existing specs - Table comparing userStories vs tasks
+
+**Next:** T-013, T-014, T-015 depend on T-012 (now complete); T-016, T-017 already unblocked
+
+## Iteration 13 - T-013: Update README.md
+
+**Completed:** Task 4.2 (T-013) - Update README.md
+
+**Changes:**
+- Updated workflow diagram: simplified from PRODUCT→SPEC→PLAN→BUILD to PRODUCT→SPEC→BUILD (plan optional)
+- Updated Quick Start section with spec mode examples (spec -p, spec -f, spec --from-product)
+- Changed "Three Modes" to "Four Modes" table with spec mode as first entry
+- Added "Spec Formats: Tasks vs User Stories" section with:
+  - Comparison table for tasks vs userStories
+  - JSON example for tasks format with all fields
+  - JSON example for userStories format (legacy)
+  - Explanation of status/passes fields and dependsOn
+- Updated "Common Commands" with spec mode section at top
+- Updated Project Structure to show PROMPT_spec.md
+- Updated "Each Iteration" steps for spec-first workflow
+- Updated "Step 1: Create a Spec" to show spec mode as recommended approach
+- Reordered steps: spec (or manual spec) → build → plan (optional)
+- Updated "Customizing for Your Project" with spec mode as Option A
+- Updated Troubleshooting section with PROMPT_spec.md
+
+**Files modified:**
+- README.md
+- specs/unified-spec-workflow.json (T-013 status and notes)
+- progress.txt (this entry)
+
+**Decisions:**
+- Positioned spec mode as the recommended first step (not plan mode)
+- Kept userStories documented as backward compatible but clearly labeled as legacy
+- Emphasized that plan mode is now optional—build works directly from spec tasks
+- Added practical JSON examples for both formats
+
+**Verification of acceptance criteria:**
+1. ✅ Workflow diagram updated to show spec mode - Simplified to product→spec→build
+2. ✅ Quick start includes spec mode example - Added spec -p, spec -f examples
+3. ✅ Three modes table updated to four modes - Now "Four Modes" with spec first
+4. ✅ 'Specs vs Plans' section updated - New comparison section with JSON examples
+
+**Next:** T-014, T-015, T-016, T-017 remain
+
+## Iteration 14 - T-014: Update CLAUDE.md
+
+**Completed:** Task 4.3 (T-014) - Update CLAUDE.md
+
+**Changes:**
+- Updated Project Structure to show PROMPT_spec.md with "(optional)" note for PROMPT_plan.md
+- Changed workflow section from "Spec → Plan → Build" to "Spec → Build" with plan as optional step 3
+- Added spec mode examples in Creating Specs section (spec -p, spec -f, spec --from-product)
+- Added "Spec Format: Tasks (Recommended)" section with full JSON example and field documentation
+- Added "Legacy: userStories" section with example and note about requiring plan mode
+- Updated Running the Workflow to show spec→build with optional plan
+- Added Tasks vs userStories comparison table
+- Updated Quick Start to show spec mode commands first, organized by mode
+- Changed "Three Modes" to "Four Modes" table with spec mode first
+- Updated Prompt Files to show PROMPT_spec.md first with appropriate descriptions
+- Updated Skills section to note spec mode uses writing-ralph-specs skill
+
+**Files modified:**
+- CLAUDE.md
+- specs/unified-spec-workflow.json (T-014 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ Spec → Build Workflow section updated - Now "Spec → Build Workflow" with plan as optional
+2. ✅ Tasks format documented as primary - Full section with JSON example and field documentation
+3. ✅ Plan mode noted as optional - Multiple places: workflow step 3, Running the Workflow, Tasks vs userStories table
+4. ✅ Skill usage documented - Skills section and Creating Specs section both reference skill
+
+**Next:** T-015, T-016, T-017 remain
+
+## Iteration 15 - T-015: Update specs/INDEX.md
+
+**Completed:** Task 4.4 (T-015) - Update specs/INDEX.md
+
+**Changes:**
+- Added workflow diagram showing simplified spec→build→(optional)plan flow
+- Added "Spec Formats: Tasks vs userStories" section with:
+  - Comparison table (Format, Primary Use, Build Mode Workflow, Recommended)
+  - JSON example for tasks format with all fields
+  - JSON example for userStories format (legacy)
+- Updated Spec Files section to emphasize tasks as single source of truth
+- Updated Plan Files section to note plans are optional/derived views
+- Updated "When to Create Separate Files" table for spec-first workflow
+- Updated Template Variables table with:
+  - Added Mode(s) column
+  - Added {{INPUT_SOURCE}} for spec mode
+  - Added {{OUTPUT_FILE}} for spec mode
+- Updated File Organization to show PROMPT_spec.md and updated descriptions
+
+**Files modified:**
+- specs/INDEX.md
+- specs/unified-spec-workflow.json (T-015 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ Tasks vs userStories conventions documented - Comparison table with JSON examples
+2. ✅ Workflow diagram updated - ASCII diagram showing spec→build→(optional)plan
+3. ✅ Template variables updated - Added INPUT_SOURCE, OUTPUT_FILE with Mode(s) column
+
+**Next:** T-016, T-017 remain
+
+## Iteration 16 - T-016: Create example spec with tasks
+
+**Completed:** Task 4.5 (T-016) - Create example spec with tasks
+
+**Changes:**
+- Created specs/example-tasks.json demonstrating the tasks format
+- Example uses "User Preferences API" as realistic feature
+- Shows all task fields: id, title, description, acceptanceCriteria, dependsOn, status, passes, effort, notes
+- Includes dependency examples:
+  - T-001 and T-002 have no dependencies (can run in parallel)
+  - T-003 depends on both T-001 and T-002
+  - T-004 depends on T-003
+  - T-005 depends on T-004
+- Updated SKILL.md Reference section with link to example
+- Added Examples section to INDEX.md with reference to example-tasks.json
+
+**Files modified:**
+- specs/example-tasks.json (new file)
+- .claude/skills/writing-ralph-specs/SKILL.md (updated Reference section)
+- specs/INDEX.md (added Examples section)
+- specs/unified-spec-workflow.json (T-016 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ specs/example-tasks.json created with tasks array - File created with 5 tasks
+2. ✅ Shows all task fields - All required fields present in each task
+3. ✅ Includes dependency example - T-003 depends on [T-001, T-002], T-004 depends on [T-003], T-005 depends on [T-004]
+4. ✅ Referenced from skill and INDEX.md - Both files updated with references
+
+**Next:** T-017 (Add shell completion for spec mode)
+
+## Iteration 17 - T-017: Add shell completion for spec mode
+
+**Completed:** Task 4.6 (T-017) - Add shell completion for spec mode
+
+**Changes:**
+- Updated completions/ralph.bash:
+  - Added 'spec' to presets list (now: spec plan build product)
+  - Added spec mode flags to opts list: --from-product, -o, --spec-output, --force
+  - Added case statement handlers for -o/--spec-output (file completion) and --from-product/--force (no args)
+  - Updated preset detection case to include 'spec'
+- Updated completions/ralph.zsh:
+  - Added 'spec' preset with description: 'Use PROMPT_spec.md for generating JSON specs from input'
+  - Added three new argument definitions: --from-product, -o/--spec-output (with file completion), --force
+
+**Files modified:**
+- completions/ralph.bash
+- completions/ralph.zsh
+- specs/unified-spec-workflow.json (T-017 status and notes)
+- progress.txt (this entry)
+
+**Verification of acceptance criteria:**
+1. ✅ completions/ralph.bash updated with spec preset - Line 22: presets="spec plan build product"
+2. ✅ completions/ralph.zsh updated with spec preset - Line 22: 'spec:Use PROMPT_spec.md...'
+3. ✅ --from-product flag completed - Both scripts include the flag
+4. ✅ shellcheck passes on completion scripts - Verified: no errors
+
+**Milestone M4 (Documentation Complete) Complete:**
+All tasks T-012 through T-017 are done. Documentation updated, examples created, completions updated.
+
+**All tasks complete.** Proceeding to final verification.
 

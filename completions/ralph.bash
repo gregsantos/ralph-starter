@@ -19,7 +19,7 @@ _ralph_completions() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Presets
-    presets="plan build product"
+    presets="spec plan build product"
 
     # Models
     models="opus sonnet haiku"
@@ -60,6 +60,9 @@ _ralph_completions() {
         --context
         --output
         --artifact-spec
+        --from-product
+        -o --spec-output
+        --force
     "
 
     # Handle options that take file paths
@@ -92,6 +95,15 @@ _ralph_completions() {
             # These take strings, no completion
             return 0
             ;;
+        -o|--spec-output)
+            # Complete file paths for spec output
+            mapfile -t COMPREPLY < <(compgen -f -- "${cur}")
+            return 0
+            ;;
+        --from-product|--force)
+            # These are flags without arguments
+            return 0
+            ;;
     esac
 
     # If current word starts with -, complete options
@@ -104,7 +116,7 @@ _ralph_completions() {
     local has_preset=false
     for word in "${COMP_WORDS[@]}"; do
         case "${word}" in
-            plan|build|product)
+            spec|plan|build|product)
                 has_preset=true
                 break
                 ;;

@@ -67,7 +67,7 @@ After installation, restart your shell or run `source ~/.bashrc` (bash) or `sour
 
 **What's Completed:**
 
-- Presets: `plan`, `build`, `product`
+- Presets: `plan`, `build`, `product`, `spec`
 - All flags: `--model`, `--file`, `--spec`, `--log-format`, etc.
 - Model names: `opus`, `sonnet`, `haiku`
 - Log formats: `text`, `json`
@@ -281,6 +281,56 @@ Verbose mode is ideal for:
 - Verifying prompt content before execution
 - Troubleshooting retry behavior
 
+### Spec Mode
+
+Spec mode generates structured JSON specifications from various input sources. The generated specs can then be executed directly by build mode.
+
+```bash
+# Generate spec from inline description
+./ralph.sh spec -p "Add dark mode toggle to settings"
+
+# Generate spec from requirements file
+./ralph.sh spec -f ./requirements/dark-mode.md
+
+# Generate spec from product artifacts (reads 7_prd.md, etc.)
+./ralph.sh spec --from-product
+
+# Specify custom output path
+./ralph.sh spec -p "Add user authentication" -o ./specs/auth.json
+
+# Overwrite existing spec file
+./ralph.sh spec -p "Update auth flow" -o ./specs/auth.json --force
+
+# Combined: from product, custom output, force overwrite
+./ralph.sh spec --from-product -o ./specs/my-feature.json --force
+```
+
+**Input Sources** (exactly one required):
+
+| Flag | Description |
+|------|-------------|
+| `-p, --prompt STR` | Inline feature description |
+| `-f, --file PATH` | Requirements file (markdown, text) |
+| `--from-product` | Read from product-output/ artifacts |
+
+**Output Options:**
+
+| Flag | Description |
+|------|-------------|
+| `-o, --spec-output PATH` | Output spec file (default: `specs/new-spec.json`) |
+| `--force` | Overwrite existing output file |
+
+**How --from-product works:**
+
+When using `--from-product`, Ralph reads product artifacts in priority order:
+1. `product-output/7_prd.md` (PRD - primary source)
+2. `product-output/9_technical_requirements.md`
+3. `product-output/4_personas.md`
+4. `product-output/6_user_journey_map.md`
+5. `product-output/8_feature_specifications.md`
+
+If none of these exist, it falls back to reading all `.md` files in `product-output/`.
+
 ### Product Mode
 
 ```bash
@@ -332,6 +382,7 @@ Verbose mode is ideal for:
 | ------------- | ------------- | -------------------------------------------- |
 | `plan`        | opus          | Complex reasoning for architecture decisions |
 | `build`       | opus          | Quality implementation with full context     |
+| `spec`        | opus          | Requires deep understanding for spec design  |
 | `product`     | opus          | Comprehensive product artifact generation    |
 | `inline` (-p) | sonnet        | Faster for quick, focused tasks              |
 | `custom` (-f) | opus          | Assumes complex task unless specified        |
@@ -344,6 +395,7 @@ The script looks for these files in the `prompts/` directory:
 
 - `prompts/PROMPT_plan.md` - Planning and architecture tasks
 - `prompts/PROMPT_build.md` - Implementation and coding tasks
+- `prompts/PROMPT_spec.md` - Spec generation from inputs
 - `prompts/PROMPT_product.md` - Product artifact generation
 
 ### Creating Custom Prompts
@@ -722,8 +774,16 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 ./ralph.sh plan               # Plan mode, opus, 10 iterations
 ./ralph.sh build 5            # Build mode, 5 iterations
 ./ralph.sh plan 3             # Plan mode, 3 iterations
+./ralph.sh spec -p "Feature"  # Spec mode, generate from description
 ./ralph.sh -n 20              # Explicit max iterations
 ./ralph.sh --unlimited        # Remove limit (careful!)
+
+# Spec mode (generate specs)
+./ralph.sh spec -p "Add dark mode"             # From inline description
+./ralph.sh spec -f ./requirements.md           # From requirements file
+./ralph.sh spec --from-product                 # From product artifacts
+./ralph.sh spec -p "X" -o ./specs/x.json       # Custom output path
+./ralph.sh spec --from-product --force         # Overwrite existing
 
 # Custom files
 ./ralph.sh -f prompts/review.md
@@ -797,6 +857,19 @@ ralph<TAB>                                   # Complete presets and options
 ### Common Workflows
 
 ```bash
+# Full feature development workflow (recommended)
+./ralph.sh product                           # Generate product artifacts
+./ralph.sh spec --from-product               # Generate spec from PRD
+./ralph.sh build -s ./specs/new-spec.json    # Execute tasks
+
+# Quick feature from idea to implementation
+./ralph.sh spec -p "Add dark mode toggle"
+./ralph.sh build -s ./specs/new-spec.json
+
+# Generate spec from existing requirements
+./ralph.sh spec -f ./docs/auth-requirements.md -o ./specs/auth.json
+./ralph.sh build -s ./specs/auth.json
+
 # Quick bug fix (fast model, single iteration, no push)
 ./ralph.sh -p "Fix the null pointer in UserCard component" --model haiku --no-push 1
 
@@ -887,6 +960,15 @@ Prompts support these placeholders (automatically substituted):
 | `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist (the "how")     |
 | `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration history log                    |
 | `{{SOURCE_DIR}}`    | `src/*`                          | Source code location                     |
+
+### Spec Mode
+
+| Variable            | Default                | Description                                      |
+| ------------------- | ---------------------- | ------------------------------------------------ |
+| `{{INPUT_SOURCE}}`  | (from -p, -f, or product) | The input content for spec generation         |
+| `{{OUTPUT_FILE}}`   | `specs/new-spec.json`  | Output path for generated spec                   |
+| `{{PROGRESS_FILE}}` | `progress.txt`         | Iteration history log                            |
+| `{{SOURCE_DIR}}`    | `src/*`                | Source code location (for codebase analysis)     |
 
 ### Product Mode
 
@@ -981,14 +1063,15 @@ project-root/
 │   └── ... (12 total)
 ├── specs/                          # Feature specifications (Step 1)
 │   ├── INDEX.md                    # Feature catalog
-│   ├── {feature}.json              # JSON specs (recommended)
-│   └── {feature}.md                # Markdown specs (alternative)
-├── plans/                          # Implementation checklists (Step 2)
+│   ├── {feature}.json              # JSON specs with tasks (recommended)
+│   └── {feature}.md                # Markdown specs (legacy)
+├── plans/                          # Optional derived plans
 │   ├── IMPLEMENTATION_PLAN.md      # Default active plan
-│   └── {feature}_PLAN.md           # Feature-specific plans
+│   └── {feature}_PLAN.md           # Derived human-readable views
 ├── prompts/
 │   ├── PROMPT_plan.md              # Planning mode instructions
 │   ├── PROMPT_build.md             # Build mode instructions
+│   ├── PROMPT_spec.md              # Spec generation instructions
 │   └── PROMPT_product.md           # Product artifact generation
 ├── docs/
 │   └── PRODUCT_ARTIFACT_SPEC.md    # Product artifact specifications
@@ -1014,24 +1097,31 @@ project-root/
     └── {mode}_{branch}_{ts}.log    # Session logs
 ```
 
-## Complete Workflow: Product → Spec → Plan → Build
+## Complete Workflow: Product → Spec → Build
 
 The full workflow for implementing features with Ralph:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│           PRODUCT (optional) → SPEC → PLAN → BUILD                          │
+│     PRODUCT (optional) → SPEC MODE → BUILD MODE                             │
 │                                                                             │
-│  ┌──────────┐    ┌──────────┐    ┌──────────┐    ┌──────────┐              │
-│  │ Product  │ -> │  Create  │ -> │   Plan   │ -> │  Build   │              │
-│  │   Mode   │    │   Spec   │    │   Mode   │    │   Mode   │              │
-│  │(discover)│    │  (JSON)  │    │ (analyze)│    │ (execute)│              │
-│  └──────────┘    └──────────┘    └──────────┘    └──────────┘              │
-│       │               │               │               │                     │
-│  product-output/  specs/*.json   plans/*_PLAN.md   Code changes            │
-│  12 artifacts     "what & why"    "how"           Implementation           │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐                               │
+│  │ Product  │ -> │   Spec   │ -> │  Build   │                               │
+│  │   Mode   │    │   Mode   │    │   Mode   │                               │
+│  │(discover)│    │(generate)│    │ (execute)│                               │
+│  └──────────┘    └──────────┘    └──────────┘                               │
+│       │               │               │                                     │
+│  product-output/  specs/*.json    Code changes                              │
+│  12 artifacts     with tasks      Implementation                            │
+│                                                                             │
+│  Optional: Plan mode generates human-readable view from spec                │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+**New Simplified Workflow:**
+- Specs with `tasks` array are the single source of truth
+- Build mode works directly from spec tasks (no separate plan file needed)
+- Plan mode is optional for generating human-readable views
 
 ### Step 0: Product Discovery (Optional)
 
@@ -1064,68 +1154,154 @@ See `docs/PRODUCT_ARTIFACT_SPEC.md` for full artifact specifications.
 
 ### Step 1: Create a Spec
 
-Use insights from product artifacts (or create directly for smaller features):
+Use spec mode to generate a JSON spec from various inputs:
 
 ```bash
-# Create a JSON spec with user stories and acceptance criteria
-# (use the writing-ralph-specs skill or create manually)
-#    → specs/my-feature.json
+# Generate spec from product artifacts
+./ralph.sh spec --from-product
+#    → specs/new-spec.json (or derived name)
 
-# Example minimal spec:
-cat > specs/my-feature.json << 'EOF'
+# Generate spec from inline description
+./ralph.sh spec -p "Add dark mode toggle to settings"
+#    → specs/new-spec.json
+
+# Generate spec from requirements file
+./ralph.sh spec -f ./requirements/dark-mode.md -o ./specs/dark-mode.json
+#    → specs/dark-mode.json
+
+# Or create manually using the writing-ralph-specs skill
+# The spec should use the tasks array format (recommended)
+```
+
+**Example spec with tasks (recommended format):**
+
+```json
 {
   "project": "My Feature",
   "branchName": "feature/my-feature",
   "description": "Feature description from PRD",
-  "userStories": [
+  "context": {
+    "currentState": "What exists today",
+    "targetState": "What we want to achieve",
+    "verificationCommands": ["pnpm test", "pnpm typecheck"]
+  },
+  "tasks": [
     {
-      "id": "US-001",
+      "id": "T-001",
       "title": "First task",
+      "description": "What needs to be done",
       "acceptanceCriteria": ["Criterion 1", "Criterion 2"],
-      "priority": 1,
-      "passes": false
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
+      "effort": "small",
+      "notes": ""
     }
   ]
 }
-EOF
 ```
 
-### Step 2: Run Plan Mode
+### Step 2: Run Build Mode
 
-Plan mode analyzes the spec and codebase, then creates a task checklist:
-
-```bash
-./ralph.sh plan -s ./specs/my-feature.json
-#    → plans/my-feature_PLAN.md (auto-derived from spec name)
-```
-
-### Step 3: Run Build Mode
-
-Build mode executes the plan one task at a time:
+Build mode executes tasks directly from the spec:
 
 ```bash
 ./ralph.sh build -s ./specs/my-feature.json
 #    → Implementation complete
-#    → spec.passes updated to true for completed stories
+#    → task.passes updated to true, task.status to "complete"
 ```
+
+Build mode:
+1. Finds the next task where `passes: false` and all `dependsOn` tasks have `passes: true`
+2. Sets `status: "in_progress"` before starting work
+3. Implements the task
+4. Sets `passes: true` and `status: "complete"` when done
+5. Commits with task ID: `feat(T-001): description`
+
+### Optional: Plan Mode (Derived View)
+
+For specs with tasks, plan mode generates a human-readable Markdown view:
+
+```bash
+./ralph.sh plan -s ./specs/my-feature.json
+#    → plans/my-feature_PLAN.md (read-only derived view)
+```
+
+The generated plan includes a warning: "This is a derived view. Edit the spec, not this file."
 
 ### Quick Reference Commands
 
 ```bash
 # Full workflow from product discovery to implementation
 ./ralph.sh product                           # Step 0: Generate product artifacts
-# (manually create spec from product output)  # Step 1: Create spec
-./ralph.sh plan -s ./specs/my-feature.json   # Step 2: Create plan
-./ralph.sh build -s ./specs/my-feature.json  # Step 3: Execute plan
+./ralph.sh spec --from-product               # Step 1: Generate spec from PRD
+./ralph.sh build -s ./specs/my-feature.json  # Step 2: Execute tasks
 
-# Skip product mode for smaller features
-./ralph.sh plan -s ./specs/my-feature.json   # Create plan from existing spec
-./ralph.sh build -s ./specs/my-feature.json  # Execute plan
+# Quick feature development (skip product mode)
+./ralph.sh spec -p "Add user authentication"
+./ralph.sh build -s ./specs/new-spec.json
+
+# With custom paths
+./ralph.sh spec -p "Add dark mode" -o ./specs/dark-mode.json
+./ralph.sh build -s ./specs/dark-mode.json
 ```
 
-JSON specs provide structured user stories with acceptance criteria that plan mode uses to create detailed checklists. Build mode updates the `passes` field in each user story when all acceptance criteria are met, providing story-level completion tracking.
+## Tasks Format (Recommended)
 
-See `specs/ralph-improvements.json` for a comprehensive spec example.
+The `tasks` array is the recommended format for specs. It provides:
+
+- **Single source of truth**: Spec is the authority; no separate plan file needed
+- **Dependency tracking**: `dependsOn` array controls task ordering
+- **Status tracking**: `status` and `passes` fields track progress
+- **Atomic commits**: Each task = one commit with task ID in message
+
+### Task Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique identifier (e.g., "T-001") |
+| `title` | string | Yes | Short action title |
+| `description` | string | Yes | What needs to be done |
+| `acceptanceCriteria` | string[] | Yes | Specific, testable criteria |
+| `dependsOn` | string[] | Yes | Task IDs this depends on (empty if none) |
+| `status` | string | Yes | pending, in_progress, complete, blocked |
+| `passes` | boolean | Yes | `false` initially; `true` when done |
+| `effort` | string | Yes | small, medium, large |
+| `notes` | string | No | Implementation notes (populated by build) |
+| `phase` | string | No | Phase ID if using phases |
+
+### Migration: userStories → tasks
+
+The legacy `userStories` format is still supported for backward compatibility:
+
+```json
+// Legacy format (still works)
+{
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Feature title",
+      "acceptanceCriteria": ["..."],
+      "priority": 1,
+      "passes": false
+    }
+  ],
+  "dependencies": {"US-002": ["US-001"]}
+}
+```
+
+**Differences:**
+
+| Aspect | userStories (legacy) | tasks (recommended) |
+|--------|---------------------|---------------------|
+| Dependencies | Top-level `dependencies` map | `dependsOn` array per task |
+| Status tracking | `passes` only | `passes` + `status` |
+| Plan file | Required for build mode | Optional (derived view) |
+| Build mode updates | Both spec and plan | Spec only |
+
+**To migrate**: Convert `userStories` to `tasks`, move dependencies inline, add `status: "pending"` and `notes: ""` fields.
+
+See `specs/unified-spec-workflow.json` for a comprehensive example.
 
 ## Related Files
 
@@ -1133,6 +1309,7 @@ See `specs/ralph-improvements.json` for a comprehensive spec example.
 
 - `prompts/PROMPT_plan.md` - Planning mode prompt
 - `prompts/PROMPT_build.md` - Build mode prompt
+- `prompts/PROMPT_spec.md` - Spec generation prompt
 - `prompts/PROMPT_product.md` - Product artifact generation prompt
 
 ### Product Mode
@@ -1144,8 +1321,8 @@ See `specs/ralph-improvements.json` for a comprehensive spec example.
 ### Specs & Plans
 
 - `specs/INDEX.md` - Feature catalog
-- `specs/*.json` - JSON specs (recommended)
-- `plans/*_PLAN.md` - Implementation checklists
+- `specs/*.json` - JSON specs with tasks (recommended)
+- `plans/*_PLAN.md` - Optional derived human-readable views
 - `.claude/skills/writing-ralph-specs/` - Skill for creating JSON specs
 
 ### Configuration
