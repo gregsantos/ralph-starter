@@ -9,7 +9,7 @@ A comprehensive guide to autonomous AI-assisted development with Ralph Loop.
 1. [What is Ralph Loop?](#what-is-ralph-loop)
 2. [Core Concepts](#core-concepts)
 3. [Quick Start](#quick-start)
-4. [The Four Modes](#the-four-modes)
+4. [The Five Modes](#the-five-modes)
 5. [The Recommended Workflow](#the-recommended-workflow)
 6. [Configuration](#configuration)
 7. [Spec Mode](#spec-mode)
@@ -77,14 +77,15 @@ Each iteration starts with **zero memory** of previous runs. The AI reads its st
 
 **The key insight**: Specs with a `tasks` array are the single source of truth. Build mode works directly from the spec—no separate plan file needed. Plan mode is optional for generating human-readable views.
 
-### 3. Four Modes
+### 3. Five Modes
 
-| Mode      | Purpose                                 | When to Use                                  |
-| --------- | --------------------------------------- | -------------------------------------------- |
-| **Spec**  | Generate JSON specs from input          | Starting from requirements, PRD, or idea     |
-| **Plan**  | Create human-readable plan (optional)   | When you need a readable checklist view      |
-| **Build** | Execute tasks one at a time             | Implementing the spec                        |
-| **Product** | Generate product documentation        | Product discovery and planning               |
+| Mode      | Purpose                                           | When to Use                                      |
+| --------- | ------------------------------------------------- | ------------------------------------------------ |
+| **Launch** | One-shot pipeline (product optional -> spec -> build) | Fastest path from idea to first implementation   |
+| **Spec**  | Generate JSON specs from input                    | Starting from requirements, PRD, or idea         |
+| **Plan**  | Create human-readable plan (optional)             | When you need a readable checklist view          |
+| **Build** | Execute tasks one at a time                       | Implementing the spec                            |
+| **Product** | Generate product documentation                  | Product discovery and planning                   |
 
 ### 4. One Task Per Iteration
 
@@ -131,10 +132,11 @@ Ralph runs pre-flight checks automatically to verify dependencies. Use `--skip-c
 ### Your First Run
 
 ```bash
-# 1. Generate a spec from an idea
-./ralph.sh spec -p "Add dark mode toggle to settings"
+# 1. One-shot flow (recommended for quick starts)
+./ralph.sh launch -p "Add dark mode toggle to settings"
 
-# 2. Build the feature (executes tasks from spec)
+# 2. Optional: use explicit spec->build for more control
+./ralph.sh spec -p "Add dark mode toggle to settings"
 ./ralph.sh build -s ./specs/new-spec.json
 
 # Done! Ralph handles the rest autonomously.
@@ -150,7 +152,7 @@ You should see the help output with all available options.
 
 ---
 
-## The Four Modes
+## The Five Modes
 
 ### Mode Overview
 
@@ -175,6 +177,7 @@ You should see the help output with all available options.
 
 | Mode          | Default Model | Rationale                                    |
 | ------------- | ------------- | -------------------------------------------- |
+| `launch`      | opus          | End-to-end product/spec/build orchestration |
 | `spec`        | opus          | Requires deep understanding for spec design  |
 | `plan`        | opus          | Complex reasoning for architecture decisions |
 | `build`       | opus          | Quality implementation with full context     |
@@ -185,6 +188,28 @@ You should see the help output with all available options.
 ---
 
 ## The Recommended Workflow
+
+### Launch (One Command)
+
+For most greenfield or early feature work, use launch mode:
+
+```bash
+# Product phase auto-runs only when context is meaningful
+./ralph.sh launch -p "Add user authentication with OAuth"
+
+# Force product phase first
+./ralph.sh launch --full-product -p "Build a recruiting platform"
+
+# Force spec->build only
+./ralph.sh launch --skip-product -p "Ship a small docs feature"
+```
+
+Launch behavior:
+1. Auto-creates/switches to `feature/<slug>` branch
+2. Runs product phase only when forced or meaningful `product-input/` exists
+3. Runs spec phase (default max 5 iterations)
+4. Runs build phase with dynamic iterations (`task_count + launch buffer`)
+5. Skips plan mode (spec tasks are source of truth)
 
 ### Spec → Build (Simplest)
 
@@ -225,6 +250,7 @@ mkdir -p product-input
 
 | Scenario | Workflow |
 |----------|----------|
+| One-shot implementation | `./ralph.sh launch -p "..."` |
 | Quick bug fix | `./ralph.sh -p "Fix the null pointer in UserCard"` |
 | Small feature | `./ralph.sh spec -p "..." && ./ralph.sh build -s ...` |
 | Major feature | `./ralph.sh product && ./ralph.sh spec --from-product && ./ralph.sh build -s ...` |
@@ -277,6 +303,9 @@ CLI flags > Environment variables > Config file > Defaults
 | `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
 | `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
+| `RALPH_LAUNCH_BUFFER`  | Build iteration buffer in launch mode   | `RALPH_LAUNCH_BUFFER=8`       |
+| `RALPH_FULL_PRODUCT`   | Force product phase in launch mode      | `RALPH_FULL_PRODUCT=true`     |
+| `RALPH_SKIP_PRODUCT`   | Skip product phase in launch mode       | `RALPH_SKIP_PRODUCT=true`     |
 | `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
 
 ### Template Variables
@@ -816,6 +845,7 @@ Verbose mode shows:
 - Prompt preview (first 20 lines)
 - Session state updates
 - Retry logic decisions
+- In launch mode, dry-run is read-only and does not archive branches or rewrite `progress.txt`.
 
 ### Session Resume
 
@@ -1086,6 +1116,12 @@ Resume it:
 ./ralph.sh spec -p "X" -o ./specs/x.json # Custom output path
 ./ralph.sh spec --force                  # Overwrite existing
 
+# Launch mode (one-shot)
+./ralph.sh launch -p "Build a Kanban board"      # Auto pipeline
+./ralph.sh launch --full-product -p "Build CRM"  # Force product phase
+./ralph.sh launch --skip-product -p "Quick MVP"  # Skip product phase
+./ralph.sh launch --launch-buffer 8 -p "App"     # Increase build headroom
+
 # Plan mode (optional human-readable view)
 ./ralph.sh plan                          # Default spec
 ./ralph.sh plan -s ./specs/feature.json  # Specific spec
@@ -1108,6 +1144,7 @@ Resume it:
 ./ralph.sh --interactive                 # Confirm between iterations
 ./ralph.sh --verbose                     # Show detailed output
 ./ralph.sh --dry-run                     # Preview config
+./ralph.sh launch --dry-run -p "Idea"    # Preview launch plan (read-only)
 
 # Session management
 ./ralph.sh --resume                      # Resume interrupted session
