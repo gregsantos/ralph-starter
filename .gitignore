@@ -1,6 +1,7 @@
 # Ralph Loop
 .ralph-last-branch
 .ralph-session.json
+.ralph-launch-session.json
 archive/
 
 # Claude settings (but not skills)
