@@ -19,7 +19,7 @@ _ralph_completions() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Presets
-    presets="spec plan build product"
+    presets="launch spec plan build product"
 
     # Models
     models="opus sonnet haiku"
@@ -60,6 +60,9 @@ _ralph_completions() {
         --context
         --output
         --artifact-spec
+        --full-product
+        --skip-product
+        --launch-buffer
         --from-product
         -o --spec-output
         --force
@@ -87,7 +90,7 @@ _ralph_completions() {
             mapfile -t COMPREPLY < <(compgen -W "${log_formats}" -- "${cur}")
             return 0
             ;;
-        -n|--max|--max-retries|--interactive-timeout)
+        -n|--max|--max-retries|--interactive-timeout|--launch-buffer)
             # These take numbers, no completion
             return 0
             ;;
@@ -100,7 +103,7 @@ _ralph_completions() {
             mapfile -t COMPREPLY < <(compgen -f -- "${cur}")
             return 0
             ;;
-        --from-product|--force)
+        --from-product|--force|--full-product|--skip-product)
             # These are flags without arguments
             return 0
             ;;
@@ -116,7 +119,7 @@ _ralph_completions() {
     local has_preset=false
     for word in "${COMP_WORDS[@]}"; do
         case "${word}" in
-            spec|plan|build|product)
+            launch|spec|plan|build|product)
                 has_preset=true
                 break
                 ;;
