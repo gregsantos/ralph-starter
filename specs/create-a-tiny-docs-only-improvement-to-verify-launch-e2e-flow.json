@@ -1,0 +1,59 @@
+{
+  "project": "Launch E2E Flow Verification",
+  "branchName": "feature/create-a-tiny-docs-only-improvement-to-verify-launch-e2e-flow",
+  "version": "1.0.0",
+  "description": "Add documentation clarification to verify the complete launch mode e2e pipeline works correctly",
+  "context": {
+    "currentState": "Launch mode pipeline is implemented but hasn't been fully verified end-to-end with a complete example",
+    "targetState": "Documentation includes a clear example showing launch mode workflow with expected output, confirming the full pipeline works",
+    "constraints": [
+      "Docs-only change, no code modifications",
+      "Should be small enough to verify in one iteration",
+      "Should demonstrate the launch mode workflow"
+    ],
+    "verificationCommands": [
+      "shellcheck ralph.sh",
+      "grep -q 'launch' docs/RALPH_LOOP_REF.md",
+      "grep -q 'Launch' docs/RALPH_WORKSHOP.md"
+    ]
+  },
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add launch mode example to RALPH_LOOP_REF.md",
+      "description": "Enhance the Ralph Loop reference documentation with a complete launch mode example showing input, execution, and expected output",
+      "acceptanceCriteria": [
+        "Add 'Launch Mode Example' section after the basic launch commands",
+        "Include example: ./ralph.sh launch -p 'Add a README section'",
+        "Document what happens in each stage: spec generation, build, commit, push",
+        "Include sample expected output or progress indication",
+        "Explain why launch mode is useful for small improvements",
+        "Section is accessible and easy to find in the docs"
+      ],
+      "dependsOn": [],
+      "status": "complete",
+      "effort": "small",
+      "passes": true,
+      "notes": "Added comprehensive 'Launch Mode Example' section to RALPH_LOOP_REF.md after line 372. Includes concrete example with ./ralph.sh launch --skip-product, detailed execution flow, sample output, rationale for docs-only improvements, and decision table for when to use launch mode. Section covers all acceptance criteria."
+    },
+    {
+      "id": "T-002",
+      "title": "Update RALPH_WORKSHOP.md launch section with practical guidance",
+      "description": "Enhance the workshop guide's launch mode section with practical tips and when to use each launch mode variant",
+      "acceptanceCriteria": [
+        "Add 'Launch Mode in Practice' subsection to the Launch section",
+        "Include decision tree or table: when to use --skip-product vs --full-product",
+        "Add example: launching a tiny docs-only improvement (like this one)",
+        "Document the --skip-product flag benefits for documentation-only changes",
+        "Mention launch-buffer parameter and when it might be needed",
+        "Include success indicators (what to look for when launch completes)"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "effort": "small",
+      "passes": false,
+      "notes": ""
+    }
+  ],
+  "dependencies": {}
+}

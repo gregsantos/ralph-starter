@@ -18,6 +18,7 @@ Source of truth for all system capabilities and planned features.
 
 | Feature               | Spec                                                             | Status      | Plan                                                                    | Description                                                |
 | --------------------- | ---------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Launch E2E Verification | [create-a-tiny-docs-only-improvement-to-verify-launch-e2e-flow.json](./create-a-tiny-docs-only-improvement-to-verify-launch-e2e-flow.json) | In Progress | — | Docs-only improvement: enhance launch mode examples and guidance |
 | Unified Spec Workflow | [unified-spec-workflow.json](./unified-spec-workflow.json)       | In Progress | [unified-spec-workflow_PLAN.md](../plans/unified-spec-workflow_PLAN.md) | Add spec mode, eliminate plan requirement, tasks in specs  |
 
 ## Planned

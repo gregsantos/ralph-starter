@@ -375,6 +375,77 @@ Launch mode defaults:
 - Build phase iterations are computed dynamically from generated spec tasks plus buffer (`--launch-buffer`, default 5).
 - Plan mode is intentionally not part of launch.
 
+### Launch Mode Example
+
+For documentation-only improvements or small features, launch mode provides the fastest path from idea to completion:
+
+```bash
+# Simple launch with inline description
+./ralph.sh launch --skip-product -p "Add a README section explaining how to run tests"
+```
+
+**What happens during execution:**
+
+1. **Branch Creation**: Auto-creates or switches to `feature/add-readme-section-on-tests`
+2. **Spec Generation** (max 5 iterations):
+   - Claude analyzes the requirement
+   - Generates `specs/new-spec.json` with specific tasks
+   - Tasks might be: "Update README with test instructions", "Add quick-start section", etc.
+3. **Build** (dynamic iterations based on task count):
+   - Executes each task from the spec
+   - Updates progress.txt after each task
+   - Commits with task ID: `feat(T-001): description`
+4. **Auto-Completion**:
+   - When all tasks have `passes: true`, outputs `<ralph>COMPLETE</ralph>`
+   - Exits successfully
+
+**Expected output summary:**
+
+```
+╔════════════════════════════════════════════════════════════════╗
+║                      RALPH LOOP                              ║
+╚════════════════════════════════════════════════════════════════╝
+
+Mode     → launch
+Model    → opus
+Branch   → feature/add-readme-section-on-tests
+...
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚙ SPEC GENERATION: Iteration 1
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  📝 Generated spec: specs/add-readme-section-on-tests.json (3 tasks)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ⚙ BUILD: Iteration 1 of 3
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  ✎ Edit README.md
+  ✓ Pushed to feature/add-readme-section-on-tests
+  ✓ Iteration 1 complete (42s)
+
+  [... Iterations 2 and 3 complete ...]
+
+✓ All tasks complete
+<ralph>COMPLETE</ralph>
+```
+
+**Why launch mode is ideal for docs-only improvements:**
+
+- **Speed**: One command handles branch creation, spec generation, and implementation
+- **Minimal setup**: No need to manually create specs beforehand
+- **Small scope**: Perfect for documentation updates that don't need full product discovery
+- **E2E verification**: Demonstrates the complete pipeline works end-to-end
+- **Hands-off**: Start the command and check back later when done
+
+**When to use launch mode:**
+
+| Scenario | Command |
+|----------|---------|
+| Docs-only improvement | `./ralph.sh launch --skip-product -p "..."` |
+| Small feature with product discovery | `./ralph.sh launch --full-product -p "..."` |
+| Quick fix or enhancement | `./ralph.sh launch -p "..."` |
+| Feature with many tasks (increase buffer) | `./ralph.sh launch --launch-buffer 8 -p "..."` |
+
 ### Model Selection
 
 ```bash
