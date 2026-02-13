@@ -60,3 +60,52 @@ Added comprehensive "Launch Mode Example" section to `docs/RALPH_LOOP_REF.md` im
 - Ready for T-002: Update RALPH_WORKSHOP.md launch section with practical guidance
 - Launch mode documentation is now comprehensive with example + rationale
 
+## Build Mode: Iteration 2
+
+### Task
+- [x] T-002: Update RALPH_WORKSHOP.md launch section with practical guidance
+
+### Implementation
+Added comprehensive "Launch Mode in Practice" subsection to `docs/RALPH_WORKSHOP.md` in the Launch section (after the launch behavior list, before "Spec → Build (Simplest)"). The new subsection includes:
+
+1. **Decision Table**: Shows when to use each launch variant:
+   - `--skip-product` for docs-only improvements (straightforward requirements)
+   - Default launch for small features (auto-detects product context)
+   - `--full-product` for major features (forces discovery phase)
+   - `--launch-buffer` for complex features with many expected tasks
+
+2. **Success Indicators**: Detailed list of what to look for when launch completes:
+   - Branch creation with kebab-case name
+   - Spec generation with clear task count
+   - Per-iteration progress output format
+   - Completion marker output
+   - Commits with task IDs on feature branch
+
+3. **Concrete Example**: Docs-only improvement matching this very feature:
+   - Shows command: `./ralph.sh launch --skip-product -p "Add launch mode example..."`
+   - Documents what happens: branch creation → spec generation → task execution → completion
+
+4. **--launch-buffer Explanation**: When and why to use it:
+   - Default behavior: task_count + 5 iterations
+   - Example: `--launch-buffer 8` for 8+ expected tasks
+   - Use cases: complex features with many tasks/dependencies, safety margin
+
+### Decisions
+- Placed immediately after launch behavior list for logical flow (reader learns behavior, then learns practice)
+- Used both decision table and narrative format for different learning styles
+- Included actual output examples matching what users will see
+- Used the current task (this docs improvement) as the concrete example
+- Provided practical guidance on --launch-buffer without overwhelming users
+
+### Files Changed
+- `docs/RALPH_WORKSHOP.md` (added ~100 lines of practical launch mode guidance)
+
+### Verification
+All acceptance criteria met:
+✓ Added 'Launch Mode in Practice' subsection to the Launch section
+✓ Included decision table: when to use --skip-product vs --full-product vs default vs --launch-buffer
+✓ Added example: launching a tiny docs-only improvement (this feature itself)
+✓ Documented --skip-product flag benefits for documentation-only changes
+✓ Mentioned launch-buffer parameter with clear use cases
+✓ Included success indicators with actual expected output format
+

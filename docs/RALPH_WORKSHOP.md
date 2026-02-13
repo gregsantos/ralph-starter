@@ -211,6 +211,85 @@ Launch behavior:
 4. Runs build phase with dynamic iterations (`task_count + launch buffer`)
 5. Skips plan mode (spec tasks are source of truth)
 
+### Launch Mode in Practice
+
+**Decision: When to use each launch variant**
+
+| Use Case | Command | Rationale |
+|----------|---------|-----------|
+| **Docs-only improvement** | `./ralph.sh launch --skip-product -p "Add README section"` | Skip discovery phase—requirements are straightforward |
+| **Small feature** | `./ralph.sh launch -p "Add dark mode toggle"` | Auto-detect if product context needed; default behavior |
+| **Major feature with discovery** | `./ralph.sh launch --full-product -p "Build CRM system"` | Force product phase for stakeholder alignment |
+| **Complex feature (many tasks)** | `./ralph.sh launch --launch-buffer 8 -p "..."` | Increase build headroom beyond default 5 iterations |
+
+**Success indicators—what to look for when launch completes:**
+
+1. **Branch created**: Feature branch with kebab-case name from your prompt
+   ```
+   Switched to branch: feature/add-readme-section
+   ```
+
+2. **Spec generated**: Located at `specs/new-spec.json` with clear tasks
+   ```
+   Generated spec: specs/add-readme-section.json (2 tasks)
+   ```
+
+3. **Tasks execute in order**: Progress shown per iteration
+   ```
+   ⚙ SPEC GENERATION: Iteration 1
+   📝 Generated spec: specs/add-readme-section.json (2 tasks)
+
+   ⚙ BUILD: Iteration 1 of 2
+   ✎ Edit README.md
+   ✓ Pushed to feature/add-readme-section
+   ```
+
+4. **All tasks complete**: Completion marker output
+   ```
+   ✓ All tasks complete
+   <ralph>COMPLETE</ralph>
+   ```
+
+5. **Commits on feature branch**: View with `git log`
+   ```
+   feat(T-001): add getting started section
+   feat(T-002): update development setup instructions
+   ```
+
+**Example: Documentation-only improvement (like verifying launch mode)**
+
+```bash
+# Simple docs improvement with no product discovery
+./ralph.sh launch --skip-product -p "Add launch mode example to the reference documentation"
+
+# What happens:
+# 1. Creates feature/add-launch-mode-example branch
+# 2. Generates spec with 2 tasks (update RALPH_LOOP_REF.md, update RALPH_WORKSHOP.md)
+# 3. Executes T-001: updates reference docs with concrete example
+# 4. Executes T-002: adds practical guidance to workshop
+# 5. All tasks complete → outputs <ralph>COMPLETE</ralph>
+# 6. Push happens automatically
+# 7. Ready for PR review
+```
+
+**The --launch-buffer parameter**
+
+For features with many tasks, increase the build budget:
+
+```bash
+# Default: task_count + 5 iterations
+./ralph.sh launch -p "Migrate API to REST"
+
+# If you expect ~8 tasks but want extra safety
+./ralph.sh launch --launch-buffer 8 -p "Migrate API to REST"
+# Result: 8 + 8 = 16 iterations available for build phase
+```
+
+Use when:
+- Spec is expected to generate many tasks (8+)
+- Tasks have complex dependencies
+- You want safety margin to avoid hitting max iterations
+
 ### Spec → Build (Simplest)
 
 For most features, you only need two steps:

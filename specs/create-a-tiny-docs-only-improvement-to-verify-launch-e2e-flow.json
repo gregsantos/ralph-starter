@@ -49,10 +49,10 @@
         "Include success indicators (what to look for when launch completes)"
       ],
       "dependsOn": [],
-      "status": "pending",
+      "status": "complete",
       "effort": "small",
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added comprehensive 'Launch Mode in Practice' subsection to RALPH_WORKSHOP.md in the Launch section (after launch behavior list). Includes: decision table for when to use each variant (--skip-product, default, --full-product, --launch-buffer), detailed success indicators with actual output examples, concrete example of docs-only improvement matching this feature, and explanation of --launch-buffer parameter with use cases. All 6 acceptance criteria met."
     }
   ],
   "dependencies": {}
