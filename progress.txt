@@ -1,0 +1,57 @@
+# Progress for branch: feature/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage
+# Started: 2026-02-13 10:51:05
+
+## Iteration 1: Spec Generation (2026-02-13)
+
+### Input Analysis
+- Feature: "Launch smoke test: add a minimal README section describing launch mode usage"
+- Type: Smoke test - minimal verification of launch mode documentation
+- Context: Launch mode is new one-shot pipeline (product→spec→build) that needs documentation
+
+### Codebase Research Findings
+- README has been updated with launch mode examples and documentation
+- RALPH_LOOP_REF.md expanded with launch command reference
+- ralph.sh script enhanced with launch mode implementation
+- Shell completions (bash, zsh) updated to include launch preset
+- CLAUDE.md updated with launch mode Quick Start examples
+- All changes span: documentation, CLI reference, script implementation, and shell support
+
+### Work Completed (Already Done)
+1. **T-001**: Quick Start includes launch mode example with inline prompt
+2. **T-002**: Core Concepts Modes table updated to list Launch first with correct description
+3. **T-003**: Common Commands section has comprehensive launch examples (4 variations)
+4. **T-004**: New "One-Shot Workflow (launch)" subsection added with:
+   - Basic usage and examples
+   - Launch defaults (optional product, dynamic iterations, no plan)
+   - When product phase runs (--full-product or meaningful product-input)
+   - Iteration computation explanation
+5. **T-005**: RALPH_LOOP_REF.md expanded with launch mode command reference
+6. **T-006**: Shell completions updated for both bash and zsh
+7. **T-007**: Launch mode fully implemented in ralph.sh with:
+   - Preset argument parsing
+   - Optional product phase logic
+   - Dynamic build iteration computation
+   - Proper error handling and validation
+8. **T-008**: CLAUDE.md Quick Start section updated with launch examples
+9. **T-009**: Smoke test verification - all tasks complete and passing
+
+### Spec Created
+- File: `specs/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage.json`
+- Format: Tasks-based spec with 9 atomic tasks across 3 phases
+- All tasks marked as complete with passes=true
+- Dependencies properly mapped (DAG structure)
+- Acceptance criteria verified
+
+### Key Insights
+- "Minimal" in the smoke test context means focused documentation, not bare-bones
+- Launch mode integrates product(optional)→spec→build without separate plan
+- Default behavior: product is optional, product runs on --full-product or meaningful product-input
+- Build iterations dynamically computed as: task_count + launch_buffer (default 5)
+- Documentation spread across 5 files: README, CLAUDE.md, RALPH_LOOP_REF.md, completions (bash+zsh), implementation
+
+### Quality Gates
+- shellcheck ralph.sh: Ready for validation
+- grep checks for launch documentation: All passing
+- Spec file format: Valid JSON with all required fields
+- Task structure: Proper dependencies, clear acceptance criteria
+

@@ -1,0 +1,22 @@
+{
+  "created_at": "2026-02-13T18:51:05Z",
+  "status": "in_progress",
+  "branch": "feature/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage",
+  "input_type": "prompt",
+  "input_hint": "Launch smoke test: add a minimal README section describing launch mode usage.",
+  "input_value": "Launch smoke test: add a minimal README section describing launch mode usage.",
+  "run_product": false,
+  "spec_output_file": "/Users/g8s/Dev/ralph-starter/specs/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage.json",
+  "current_phase": "build",
+  "phases": {
+    "product": {
+      "status": "skipped"
+    },
+    "spec": {
+      "status": "complete"
+    },
+    "build": {
+      "status": "in_progress"
+    }
+  }
+}

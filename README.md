@@ -44,6 +44,9 @@ cd my-project
 # Or generate a spec from an existing PRD/requirements file
 ./ralph.sh spec -f ./requirements.md
 
+# Or run the full one-shot pipeline (product optional)
+./ralph.sh launch -p "Build a collaborative notes app with auth and realtime sync"
+
 # Run build mode (executes tasks from spec one at a time)
 ./ralph.sh build -s ./specs/user-auth.json
 
@@ -84,16 +87,17 @@ ralph-starter/
 
 ## Core Concepts
 
-### Four Modes
+### Modes
 
 | Mode        | Purpose                                      | Command              |
 | ----------- | -------------------------------------------- | -------------------- |
+| **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch` |
 | **Spec**    | Generate JSON spec from input (NEW!)         | `./ralph.sh spec`    |
 | **Plan**    | Derive readable checklist from spec tasks    | `./ralph.sh plan`    |
 | **Build**   | Execute tasks from spec one at a time        | `./ralph.sh build`   |
 | **Product** | Generate product documentation artifacts     | `./ralph.sh product` |
 
-**Recommended workflow**: `spec` → `build` (plan mode is optional)
+**Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control (plan mode is optional).
 
 ### Specs vs Plans
 
@@ -185,6 +189,12 @@ This tells the loop to exit successfully.
 ./ralph.sh product               # Generate product docs (12 artifacts)
 ./ralph.sh product --context ./input/ --output ./output/  # Custom paths
 
+# Launch pipeline (one-shot)
+./ralph.sh launch -p "Build an AI meeting assistant"
+./ralph.sh launch -f ./requirements.md
+./ralph.sh launch --full-product --context ./product-input
+./ralph.sh launch --skip-product -p "Build a Kanban app"
+
 # Custom prompts
 ./ralph.sh -f prompts/review.md  # Use custom prompt file
 ./ralph.sh -p "Fix lint errors"  # Inline prompt (build mode)
@@ -229,6 +239,25 @@ The simplified workflow for implementing features with Ralph:
 │  Plan mode is optional—generates human-readable view from spec tasks        │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+### One-Shot Workflow (`launch`)
+
+Run the full pipeline with one command:
+
+```bash
+# Uses prompt input, auto-creates feature branch, runs spec->build
+# Product phase runs only when --full-product or product-input has meaningful content
+./ralph.sh launch -p "Build a habit tracker with streaks"
+
+# Force product phase first (15 iters), then spec (5), then build (tasks + buffer)
+./ralph.sh launch --full-product -p "Build a CRM for small agencies"
+```
+
+Launch defaults:
+- Product phase is **optional** by default.
+- Product runs when `--full-product` is set, or `product-input/` contains meaningful non-empty context files.
+- Build iterations are computed dynamically: `task_count + launch_buffer` (default buffer `5`).
+- Plan mode is not part of launch (spec tasks are the source of truth).
 
 ### Step 0: Product Discovery (Optional)
 

@@ -6,6 +6,7 @@
 # Usage: ./ralph.sh [preset|options] [max_iterations]
 #
 # Presets:
+#   launch            Run product (optional) -> spec -> build pipeline
 #   plan              Use PROMPT_plan.md (default model: opus)
 #   build             Use PROMPT_build.md (default model: opus)
 #   product           Use PROMPT_product.md for product artifact generation
@@ -41,17 +42,21 @@
 #   --context PATH        Product context directory (default: ./product-input/)
 #   --output PATH         Product output directory (default: ./product-output/)
 #   --artifact-spec PATH  Artifact spec file (default: ./docs/PRODUCT_ARTIFACT_SPEC.md)
+#   --full-product        Force product phase in launch mode
+#   --skip-product        Skip product phase in launch mode
+#   --launch-buffer N     Build phase buffer added to task count (default: 5)
 #   -h, --help            Show this help
 #
 # Environment Variables:
 #   RALPH_MODEL, RALPH_MAX_ITERATIONS, RALPH_PUSH_ENABLED, RALPH_SPEC_FILE,
 #   RALPH_PLAN_FILE, RALPH_PROGRESS_FILE, RALPH_LOG_DIR, RALPH_LOG_FORMAT,
-#   RALPH_NOTIFY_WEBHOOK
+#   RALPH_NOTIFY_WEBHOOK, RALPH_LAUNCH_BUFFER, RALPH_FULL_PRODUCT, RALPH_SKIP_PRODUCT
 #   Precedence: CLI > env vars > config file > defaults
 #
 # Examples:
 #   ./ralph.sh                           # Build mode, 10 iterations
 #   ./ralph.sh plan 5                    # Plan mode, 5 iterations
+#   ./ralph.sh launch -p "App idea"      # One-shot launch pipeline
 #   ./ralph.sh build --model sonnet      # Build with sonnet
 #   ./ralph.sh product                   # Product artifact generation
 #   ./ralph.sh -f ./prompts/review.md    # Custom prompt file
@@ -379,6 +384,30 @@ list_sessions() {
             echo -e "   ${BOLD}Progress:${RESET} ${current_iter}/${max_iter} iterations"
             echo -e "   ${BOLD}Status:${RESET}   ${YELLOW}${status}${RESET}"
             echo -e "   ${DIM}Resume with: ./ralph.sh --resume${RESET}"
+            echo ""
+        fi
+    fi
+
+    # Check for resumable launch pipeline session
+    if [ -f "$LAUNCH_SESSION_FILE" ]; then
+        local launch_status
+        launch_status=$(jq -r '.status // "unknown"' "$LAUNCH_SESSION_FILE" 2>/dev/null)
+        if [ "$launch_status" != "complete" ]; then
+            found_any=true
+            local launch_branch launch_phase launch_input launch_spec
+            launch_branch=$(jq -r '.branch // "unknown"' "$LAUNCH_SESSION_FILE")
+            launch_phase=$(jq -r '.current_phase // "unknown"' "$LAUNCH_SESSION_FILE")
+            launch_input=$(jq -r '.input_hint // "unknown"' "$LAUNCH_SESSION_FILE")
+            launch_spec=$(jq -r '.spec_output_file // "unknown"' "$LAUNCH_SESSION_FILE")
+
+            echo -e "${GREEN}${SYM_DOT} Active launch pipeline${RESET}"
+            echo -e "   ${BOLD}File:${RESET}     $LAUNCH_SESSION_FILE"
+            echo -e "   ${BOLD}Branch:${RESET}   $launch_branch"
+            echo -e "   ${BOLD}Phase:${RESET}    $launch_phase"
+            echo -e "   ${BOLD}Input:${RESET}    ${launch_input:0:60}"
+            echo -e "   ${BOLD}Spec:${RESET}     $launch_spec"
+            echo -e "   ${BOLD}Status:${RESET}   ${YELLOW}${launch_status}${RESET}"
+            echo -e "   ${DIM}Resume with: ./ralph.sh launch --resume${RESET}"
             echo ""
         fi
     fi
@@ -852,6 +881,7 @@ show_help() {
     echo -e "${BOLD}Usage:${RESET} ./ralph.sh [preset|options] [max_iterations]"
     echo ""
     echo -e "${BOLD}Presets:${RESET}"
+    echo "  launch            Run product (optional) → spec → build pipeline"
     echo "  plan              Use PROMPT_plan.md (default model: opus)"
     echo "  build             Use PROMPT_build.md (default model: opus)"
     echo "  spec              Use PROMPT_spec.md for spec generation (default model: opus)"
@@ -885,6 +915,9 @@ show_help() {
     echo "  -l, --plan PATH   Plan file (derived from spec if not set, or ./plans/IMPLEMENTATION_PLAN.md)"
     echo "  --progress PATH   Progress file (default: progress.txt)"
     echo "  --source PATH     Source directory (default: src/*)"
+    echo "  --full-product    Force product phase in launch mode"
+    echo "  --skip-product    Skip product phase in launch mode"
+    echo "  --launch-buffer N Build phase buffer added to task count (default: 5)"
     echo ""
     echo -e "${BOLD}Product Mode Options:${RESET}"
     echo "  --context PATH       Product context directory (default: ./product-input/)"
@@ -903,6 +936,7 @@ show_help() {
     echo ""
     echo -e "${BOLD}Examples:${RESET}"
     echo "  ./ralph.sh                           # Build mode, 10 iterations (default)"
+    echo "  ./ralph.sh launch -p 'Build a habit tracker'  # One-shot pipeline"
     echo "  ./ralph.sh plan 5                    # Plan mode, 5 iterations"
     echo "  ./ralph.sh build --model sonnet      # Build with sonnet, 10 iterations"
     echo "  ./ralph.sh spec -p 'Add dark mode'   # Generate spec from inline description"
@@ -934,6 +968,9 @@ show_help() {
     echo "  RALPH_LOG_DIR          Log directory path"
     echo "  RALPH_LOG_FORMAT       Log format: text (default) or json"
     echo "  RALPH_NOTIFY_WEBHOOK   Webhook URL for notifications"
+    echo "  RALPH_LAUNCH_BUFFER    Build iteration buffer for launch mode"
+    echo "  RALPH_FULL_PRODUCT     Force product phase in launch mode"
+    echo "  RALPH_SKIP_PRODUCT     Skip product phase in launch mode"
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
@@ -956,7 +993,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Defaults
 PROMPT_SOURCE="preset"    # preset, file, or inline
 PROMPT_CONTENT=""         # file path or inline string
-PRESET_NAME="build"       # plan, build
+PRESET_NAME="build"       # launch, plan, build, product, spec
 MODEL=""                  # set after parsing based on mode
 MODEL_OVERRIDE=""         # user-specified model
 PUSH_ENABLED=true
@@ -979,6 +1016,12 @@ SOURCE_DIR=""
 PRODUCT_CONTEXT_DIR=""
 PRODUCT_OUTPUT_DIR=""
 ARTIFACT_SPEC_FILE=""
+
+# Launch mode specific variables
+FULL_PRODUCT=false         # Force running product phase in launch mode
+SKIP_PRODUCT=false         # Force skipping product phase in launch mode
+LAUNCH_BUFFER=5            # Build iterations = task_count + buffer
+LAUNCH_SESSION_FILE=".ralph-launch-session.json"
 
 # Spec mode specific variables
 FROM_PRODUCT=false         # Read from product-output/ artifacts
@@ -1003,6 +1046,7 @@ CLI_LOG_FORMAT_SET=false
 CLI_PROGRESS_SET=false
 CLI_WEBHOOK_SET=false
 CLI_SPEC_OUTPUT_SET=false
+CLI_LAUNCH_BUFFER_SET=false
 
 # Parse arguments
 POSITIONAL_ARGS=()
@@ -1158,6 +1202,24 @@ while [[ $# -gt 0 ]]; do
             ARTIFACT_SPEC_FILE="$2"
             shift 2
             ;;
+        --full-product)
+            FULL_PRODUCT=true
+            shift
+            ;;
+        --skip-product)
+            SKIP_PRODUCT=true
+            shift
+            ;;
+        --launch-buffer)
+            if [[ "$2" =~ ^[0-9]+$ ]]; then
+                LAUNCH_BUFFER="$2"
+                CLI_LAUNCH_BUFFER_SET=true
+            else
+                echo -e "${RED}${SYM_CROSS} Error: --launch-buffer must be a non-negative integer${RESET}"
+                exit 1
+            fi
+            shift 2
+            ;;
         --from-product)
             FROM_PRODUCT=true
             shift
@@ -1171,7 +1233,7 @@ while [[ $# -gt 0 ]]; do
             SPEC_FORCE_OVERWRITE=true
             shift
             ;;
-        plan|build|product|spec)
+        launch|plan|build|product|spec)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
             shift
@@ -1207,6 +1269,11 @@ fi
 if [ "$TEST_MODE" = true ]; then
     MAX_ITERATIONS=1
     PUSH_ENABLED=false
+fi
+
+if [ "$FULL_PRODUCT" = true ] && [ "$SKIP_PRODUCT" = true ]; then
+    echo -e "${RED}${SYM_CROSS} Error: --full-product and --skip-product cannot be used together${RESET}"
+    exit 1
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1281,6 +1348,38 @@ if [ -n "${RALPH_NOTIFY_WEBHOOK:-}" ] && [ "$CLI_WEBHOOK_SET" != "true" ]; then
     NOTIFY_WEBHOOK="${RALPH_NOTIFY_WEBHOOK}"
 elif [ -z "${NOTIFY_WEBHOOK:-}" ]; then
     NOTIFY_WEBHOOK=""
+fi
+
+# RALPH_LAUNCH_BUFFER: Additional build iterations in launch mode
+if [ -n "${RALPH_LAUNCH_BUFFER:-}" ] && [ "$CLI_LAUNCH_BUFFER_SET" != "true" ]; then
+    if [[ "$RALPH_LAUNCH_BUFFER" =~ ^[0-9]+$ ]]; then
+        LAUNCH_BUFFER="$RALPH_LAUNCH_BUFFER"
+    else
+        echo -e "${YELLOW}Warning: RALPH_LAUNCH_BUFFER must be a non-negative integer, ignoring: $RALPH_LAUNCH_BUFFER${RESET}"
+    fi
+fi
+
+# RALPH_FULL_PRODUCT: Force product phase in launch mode
+if [ -n "${RALPH_FULL_PRODUCT:-}" ] && [ "$FULL_PRODUCT" != "true" ] && [ "$SKIP_PRODUCT" != "true" ]; then
+    case "$RALPH_FULL_PRODUCT" in
+        true|TRUE|1|yes|YES) FULL_PRODUCT=true ;;
+        false|FALSE|0|no|NO) FULL_PRODUCT=false ;;
+        *) echo -e "${YELLOW}Warning: RALPH_FULL_PRODUCT must be true/false, ignoring: $RALPH_FULL_PRODUCT${RESET}" ;;
+    esac
+fi
+
+# RALPH_SKIP_PRODUCT: Skip product phase in launch mode
+if [ -n "${RALPH_SKIP_PRODUCT:-}" ] && [ "$SKIP_PRODUCT" != "true" ] && [ "$FULL_PRODUCT" != "true" ]; then
+    case "$RALPH_SKIP_PRODUCT" in
+        true|TRUE|1|yes|YES) SKIP_PRODUCT=true ;;
+        false|FALSE|0|no|NO) SKIP_PRODUCT=false ;;
+        *) echo -e "${YELLOW}Warning: RALPH_SKIP_PRODUCT must be true/false, ignoring: $RALPH_SKIP_PRODUCT${RESET}" ;;
+    esac
+fi
+
+# Force preset prompt resolution for launch/spec modes even when -p/-f are also provided.
+if [ "$PRESET_NAME" = "launch" ] || [ "$PRESET_NAME" = "spec" ]; then
+    PROMPT_SOURCE="preset"
 fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1376,7 +1475,12 @@ fi
 # Resolve prompt file based on source
 case $PROMPT_SOURCE in
     preset)
-        PROMPT_FILE="${SCRIPT_DIR}/prompts/PROMPT_${PRESET_NAME}.md"
+        if [ "$PRESET_NAME" = "launch" ]; then
+            # Launch orchestrates phases and does not use a dedicated prompt file directly.
+            PROMPT_FILE="${SCRIPT_DIR}/prompts/PROMPT_build.md"
+        else
+            PROMPT_FILE="${SCRIPT_DIR}/prompts/PROMPT_${PRESET_NAME}.md"
+        fi
         MODE="$PRESET_NAME"
         # Default model for presets
         MODEL="${MODEL_OVERRIDE:-opus}"
@@ -2187,6 +2291,9 @@ ALLOWED_CONFIG_KEYS=(
     "PRODUCT_CONTEXT_DIR"
     "PRODUCT_OUTPUT_DIR"
     "ARTIFACT_SPEC_FILE"
+    "LAUNCH_BUFFER"
+    "FULL_PRODUCT"
+    "SKIP_PRODUCT"
     "LOG_DIR"
     "LOG_FORMAT"
     "NOTIFY_WEBHOOK"
@@ -2223,21 +2330,21 @@ validate_config_value() {
                     ;;
             esac
             ;;
-        MAX_ITERATIONS)
+        MAX_ITERATIONS|LAUNCH_BUFFER)
             # MAX_ITERATIONS must be a positive integer
             if [[ "$value" =~ ^[0-9]+$ ]]; then
                 return 0
             else
-                echo -e "${YELLOW}Warning: Invalid MAX_ITERATIONS value '${value}' in config (expected: positive integer)${RESET}" >&2
+                echo -e "${YELLOW}Warning: Invalid ${key} value '${value}' in config (expected: non-negative integer)${RESET}" >&2
                 return 1
             fi
             ;;
-        PUSH_ENABLED)
+        PUSH_ENABLED|FULL_PRODUCT|SKIP_PRODUCT)
             # PUSH_ENABLED must be true/false
             case "$value" in
                 true|false|TRUE|FALSE|1|0|yes|no|YES|NO) return 0 ;;
                 *)
-                    echo -e "${YELLOW}Warning: Invalid PUSH_ENABLED value '${value}' in config (expected: true/false)${RESET}" >&2
+                    echo -e "${YELLOW}Warning: Invalid ${key} value '${value}' in config (expected: true/false)${RESET}" >&2
                     return 1
                     ;;
             esac
@@ -2354,6 +2461,25 @@ safe_load_config() {
                     ;;
                 ARTIFACT_SPEC_FILE)
                     [ -z "$ARTIFACT_SPEC_FILE" ] && ARTIFACT_SPEC_FILE="$value"
+                    ;;
+                LAUNCH_BUFFER)
+                    [ "$CLI_LAUNCH_BUFFER_SET" != "true" ] && [ -z "${RALPH_LAUNCH_BUFFER:-}" ] && LAUNCH_BUFFER="$value"
+                    ;;
+                FULL_PRODUCT)
+                    if [ -z "${RALPH_FULL_PRODUCT:-}" ] && [ "$FULL_PRODUCT" != "true" ] && [ "$SKIP_PRODUCT" != "true" ]; then
+                        case "$value" in
+                            true|TRUE|1|yes|YES) FULL_PRODUCT=true ;;
+                            false|FALSE|0|no|NO) FULL_PRODUCT=false ;;
+                        esac
+                    fi
+                    ;;
+                SKIP_PRODUCT)
+                    if [ -z "${RALPH_SKIP_PRODUCT:-}" ] && [ "$SKIP_PRODUCT" != "true" ] && [ "$FULL_PRODUCT" != "true" ]; then
+                        case "$value" in
+                            true|TRUE|1|yes|YES) SKIP_PRODUCT=true ;;
+                            false|FALSE|0|no|NO) SKIP_PRODUCT=false ;;
+                        esac
+                    fi
                     ;;
                 LOG_DIR)
                     [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "$LOG_DIR" ] && LOG_DIR="$value"
@@ -2566,11 +2692,18 @@ show_config_precedence() {
     [ "$CLI_WEBHOOK_SET" = "true" ] && webhook_source="cli"
     [ -z "${NOTIFY_WEBHOOK:-}" ] && webhook_source="(not set)"
 
+    local launch_buffer_source="default"
+    [ -n "${RALPH_LAUNCH_BUFFER:-}" ] && launch_buffer_source="env"
+    [ "$CLI_LAUNCH_BUFFER_SET" = "true" ] && launch_buffer_source="cli"
+
     verbose_log_source "MODEL" "$MODEL" "$model_source"
     verbose_log_source "MAX_ITERATIONS" "$MAX_ITERATIONS" "$max_source"
     verbose_log_source "PUSH_ENABLED" "$PUSH_ENABLED" "$push_source"
     verbose_log_source "SPEC_FILE" "$SPEC_FILE" "$spec_source"
     verbose_log_source "PLAN_FILE" "$PLAN_FILE" "$plan_source"
+    if [ "$MODE" = "launch" ]; then
+        verbose_log_source "LAUNCH_BUFFER" "$LAUNCH_BUFFER" "$launch_buffer_source"
+    fi
     verbose_log_source "LOG_DIR" "${LOG_DIR:-$DEFAULT_LOG_DIR}" "$log_dir_source"
     verbose_log_source "LOG_FORMAT" "$LOG_FORMAT" "$log_format_source"
     [ -n "${NOTIFY_WEBHOOK:-}" ] && verbose_log_source "WEBHOOK" "${NOTIFY_WEBHOOK:0:30}..." "$webhook_source"
@@ -2661,6 +2794,420 @@ check_branch_change() {
 check_branch_change
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# LAUNCH MODE ORCHESTRATION
+# One-shot pipeline: product(optional) -> spec -> build
+# ═══════════════════════════════════════════════════════════════════════════════
+
+launch_log() {
+    local message="$1"
+    echo -e "${CYAN}${BOLD}  ${SYM_ARROW} Launch:${RESET} ${message}"
+}
+
+slugify_text() {
+    local input="$1"
+    local slug
+    slug=$(echo "$input" | tr '[:upper:]' '[:lower:]' | tr -cs 'a-z0-9' '-')
+    slug="${slug#-}"
+    slug="${slug%-}"
+    echo "${slug:-app}"
+}
+
+get_launch_input_seed() {
+    if [ -n "$CLI_INLINE_PROMPT" ]; then
+        echo "$CLI_INLINE_PROMPT"
+        return
+    fi
+
+    if [ -n "$CLI_FILE_PATH" ]; then
+        local basename_without_ext
+        basename_without_ext=$(basename "$CLI_FILE_PATH")
+        basename_without_ext="${basename_without_ext%.*}"
+        echo "$basename_without_ext"
+        return
+    fi
+
+    echo "app"
+}
+
+has_meaningful_product_context() {
+    local context_dir="$1"
+    local min_chars=200
+
+    [ -d "$context_dir" ] || return 1
+
+    local candidate
+    for candidate in "$context_dir"/*.md "$context_dir"/*.markdown "$context_dir"/*.txt; do
+        [ -f "$candidate" ] || continue
+
+        local char_count
+        char_count=$(tr -d '[:space:]' < "$candidate" | wc -c | tr -d ' ')
+        if [ "${char_count:-0}" -ge "$min_chars" ]; then
+            return 0
+        fi
+    done
+
+    return 1
+}
+
+resolve_launch_spec_output_file() {
+    if [ -n "$SPEC_OUTPUT_FILE" ]; then
+        echo "$SPEC_OUTPUT_FILE"
+        return
+    fi
+
+    mkdir -p "${SCRIPT_DIR}/specs"
+
+    local base_slug
+    base_slug=$(slugify_text "$(get_launch_input_seed)")
+
+    local candidate="${SCRIPT_DIR}/specs/${base_slug}.json"
+    if [ -f "$candidate" ]; then
+        candidate="${SCRIPT_DIR}/specs/${base_slug}-$(date +%Y%m%d-%H%M%S).json"
+    fi
+
+    echo "$candidate"
+}
+
+resolve_launch_branch_name() {
+    local base_slug
+    base_slug=$(slugify_text "$(get_launch_input_seed)")
+
+    local branch_name="feature/${base_slug}"
+    if git show-ref --verify --quiet "refs/heads/${branch_name}" || git show-ref --verify --quiet "refs/remotes/origin/${branch_name}"; then
+        branch_name="feature/${base_slug}-$(date +%Y%m%d-%H%M%S)"
+    fi
+
+    echo "$branch_name"
+}
+
+create_or_switch_launch_branch() {
+    local target_branch="$1"
+    local previous_branch="$CURRENT_BRANCH"
+
+    if [ "$DRY_RUN" = true ]; then
+        launch_log "Would create/switch branch: ${target_branch}"
+        return 0
+    fi
+
+    if [ "$CURRENT_BRANCH" = "$target_branch" ]; then
+        launch_log "Using existing branch: ${target_branch}"
+        return 0
+    fi
+
+    if git show-ref --verify --quiet "refs/heads/${target_branch}"; then
+        if ! git checkout "$target_branch" >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: Failed to switch to existing branch ${target_branch}${RESET}"
+            return 1
+        fi
+        launch_log "Switched to existing branch: ${target_branch}"
+    else
+        if ! git checkout -b "$target_branch" >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: Failed to create branch ${target_branch}${RESET}"
+            return 1
+        fi
+        launch_log "Created and switched to branch: ${target_branch}"
+    fi
+
+    CURRENT_BRANCH=$(git branch --show-current 2>/dev/null || echo "$target_branch")
+
+    # Update branch archive tracking to keep per-branch progress behavior intact.
+    [ -n "$previous_branch" ] && check_branch_change
+    return 0
+}
+
+set_launch_state_field() {
+    local jq_expr="$1"
+    [ -f "$LAUNCH_SESSION_FILE" ] || return 0
+
+    local updated
+    updated=$(jq "$jq_expr" "$LAUNCH_SESSION_FILE" 2>/dev/null)
+    if [ -n "$updated" ] && [ "$updated" != "null" ]; then
+        local tmp_file
+        tmp_file=$(mktemp "${LAUNCH_SESSION_FILE}.XXXXXX")
+        echo "$updated" > "$tmp_file"
+        mv "$tmp_file" "$LAUNCH_SESSION_FILE"
+    fi
+}
+
+init_launch_state() {
+    local branch_name="$1"
+    local input_type="$2"
+    local input_hint="$3"
+    local input_value="$4"
+    local run_product="$5"
+    local spec_output_file="$6"
+
+    jq -n \
+        --arg created_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+        --arg status "in_progress" \
+        --arg branch "$branch_name" \
+        --arg input_type "$input_type" \
+        --arg input_hint "$input_hint" \
+        --arg input_value "$input_value" \
+        --arg spec_output_file "$spec_output_file" \
+        --argjson run_product "$run_product" \
+        --arg current_phase "product" \
+        '{
+            created_at: $created_at,
+            status: $status,
+            branch: $branch,
+            input_type: $input_type,
+            input_hint: $input_hint,
+            input_value: $input_value,
+            run_product: $run_product,
+            spec_output_file: $spec_output_file,
+            current_phase: $current_phase,
+            phases: {
+                product: {status: "pending"},
+                spec: {status: "pending"},
+                build: {status: "pending"}
+            }
+        }' > "$LAUNCH_SESSION_FILE"
+}
+
+run_launch_phase_command() {
+    local phase_name="$1"
+    local max_iterations="$2"
+    shift 2
+
+    local cmd=("$SCRIPT_DIR/ralph.sh" "$phase_name" "--max" "$max_iterations" "--skip-checks")
+
+    if [ "$PUSH_ENABLED" = true ]; then
+        cmd+=("--push")
+    else
+        cmd+=("--no-push")
+    fi
+
+    if [ -n "$MODEL_OVERRIDE" ]; then
+        cmd+=("--model" "$MODEL_OVERRIDE")
+    fi
+
+    if [ "$RETRY_ENABLED" = false ]; then
+        cmd+=("--no-retry")
+    else
+        cmd+=("--max-retries" "$MAX_RETRIES")
+    fi
+
+    if [ "$INTERACTIVE_MODE" = true ]; then
+        cmd+=("--interactive" "--interactive-timeout" "$INTERACTIVE_TIMEOUT")
+    fi
+
+    if [ "$VERBOSE" = true ]; then
+        cmd+=("--verbose")
+    fi
+
+    if [ "$LOG_FORMAT" != "text" ]; then
+        cmd+=("--log-format" "$LOG_FORMAT")
+    fi
+
+    if [ -n "$GLOBAL_CONFIG_FILE" ]; then
+        cmd+=("--global-config" "$GLOBAL_CONFIG_FILE")
+    fi
+
+    if [ -n "${NOTIFY_WEBHOOK:-}" ]; then
+        cmd+=("--notify-webhook" "$NOTIFY_WEBHOOK")
+    fi
+
+    cmd+=("$@")
+
+    launch_log "Running phase '${phase_name}' (max ${max_iterations})"
+    "${cmd[@]}"
+}
+
+calculate_launch_build_iterations() {
+    local spec_file="$1"
+    local task_count
+    task_count=$(jq '.tasks | length' "$spec_file" 2>/dev/null || echo "0")
+
+    if ! [[ "$task_count" =~ ^[0-9]+$ ]] || [ "$task_count" -le 0 ]; then
+        echo -e "${RED}${SYM_CROSS} Error: Spec has no executable tasks: ${spec_file}${RESET}"
+        return 1
+    fi
+
+    local build_iterations=$((task_count + LAUNCH_BUFFER))
+
+    # Guardrails for accidental runaway values.
+    [ "$build_iterations" -lt 5 ] && build_iterations=5
+    [ "$build_iterations" -gt 200 ] && build_iterations=200
+
+    echo "$build_iterations"
+}
+
+should_run_product_phase_for_launch() {
+    if [ "$FULL_PRODUCT" = true ]; then
+        echo "true:forced by --full-product"
+        return
+    fi
+
+    if [ "$SKIP_PRODUCT" = true ]; then
+        echo "false:forced by --skip-product"
+        return
+    fi
+
+    if has_meaningful_product_context "$PRODUCT_CONTEXT_DIR"; then
+        echo "true:detected meaningful product context in ${PRODUCT_CONTEXT_DIR}"
+        return
+    fi
+
+    echo "false:no meaningful product context found"
+}
+
+load_launch_resume_state() {
+    [ -f "$LAUNCH_SESSION_FILE" ] || return 1
+    jq empty "$LAUNCH_SESSION_FILE" >/dev/null 2>&1 || return 1
+    return 0
+}
+
+run_launch_pipeline() {
+    local run_product=false
+    local run_product_reason=""
+    local input_type=""
+    local input_hint=""
+    local input_value=""
+    local spec_output_file=""
+    local target_branch=""
+
+    if [ "$RESUME_SESSION" = true ]; then
+        if ! load_launch_resume_state; then
+            echo -e "${RED}${SYM_CROSS} Error: No resumable launch session found at ${LAUNCH_SESSION_FILE}${RESET}"
+            echo -e "  ${DIM}Start a new pipeline with: ./ralph.sh launch -p \"your app idea\"${RESET}"
+            return 1
+        fi
+
+        run_product=$(jq -r '.run_product // false' "$LAUNCH_SESSION_FILE")
+        input_type=$(jq -r '.input_type // ""' "$LAUNCH_SESSION_FILE")
+        input_hint=$(jq -r '.input_hint // ""' "$LAUNCH_SESSION_FILE")
+        input_value=$(jq -r '.input_value // ""' "$LAUNCH_SESSION_FILE")
+        spec_output_file=$(jq -r '.spec_output_file // ""' "$LAUNCH_SESSION_FILE")
+        target_branch=$(jq -r '.branch // ""' "$LAUNCH_SESSION_FILE")
+
+        launch_log "Resuming launch pipeline from saved state"
+    else
+        local product_decision
+        product_decision=$(should_run_product_phase_for_launch)
+        run_product="${product_decision%%:*}"
+        run_product_reason="${product_decision#*:}"
+
+        if [ "$run_product" = "true" ] || [ "$FROM_PRODUCT" = true ]; then
+            input_type="product"
+            input_hint="${PRODUCT_OUTPUT_DIR}"
+            input_value="${PRODUCT_OUTPUT_DIR}"
+        elif [ -n "$CLI_INLINE_PROMPT" ]; then
+            input_type="prompt"
+            input_hint="${CLI_INLINE_PROMPT:0:80}"
+            input_value="$CLI_INLINE_PROMPT"
+        elif [ -n "$CLI_FILE_PATH" ]; then
+            input_type="file"
+            input_hint="$CLI_FILE_PATH"
+            input_value="$CLI_FILE_PATH"
+        else
+            echo -e "${RED}${SYM_CROSS} Error: launch mode requires input via -p, -f, --from-product, or meaningful product context${RESET}"
+            return 1
+        fi
+
+        spec_output_file=$(resolve_launch_spec_output_file)
+        target_branch=$(resolve_launch_branch_name)
+
+        launch_log "Product phase decision: ${run_product} (${run_product_reason})"
+    fi
+
+    if [ "$DRY_RUN" = true ]; then
+        local product_label
+        if [ "$run_product" = "true" ]; then
+            product_label="run (max 15)"
+        else
+            product_label="skip"
+        fi
+        echo -e "${DIM}Launch Pipeline Preview:${RESET}"
+        echo -e "  ${DIM}${SYM_DOT}${RESET} Branch: ${target_branch}"
+        echo -e "  ${DIM}${SYM_DOT}${RESET} Product: ${product_label}"
+        echo -e "  ${DIM}${SYM_DOT}${RESET} Spec: run (max 5) -> ${spec_output_file}"
+        echo -e "  ${DIM}${SYM_DOT}${RESET} Build: run (dynamic tasks + buffer ${LAUNCH_BUFFER})"
+        return 0
+    fi
+
+    if [ "$RESUME_SESSION" != true ]; then
+        init_launch_state "$target_branch" "$input_type" "$input_hint" "$input_value" "$run_product" "$spec_output_file"
+    fi
+
+    if ! create_or_switch_launch_branch "$target_branch"; then
+        set_launch_state_field '.status = "failed" | .failure_reason = "branch_setup_failed"'
+        return 1
+    fi
+
+    if [ "$run_product" = "true" ]; then
+        local product_status
+        product_status=$(jq -r '.phases.product.status // "pending"' "$LAUNCH_SESSION_FILE")
+        if [ "$product_status" != "complete" ]; then
+            set_launch_state_field '.current_phase = "product" | .phases.product.status = "in_progress"'
+            if ! run_launch_phase_command "product" 15 "--context" "$PRODUCT_CONTEXT_DIR" "--output" "$PRODUCT_OUTPUT_DIR" "--artifact-spec" "$ARTIFACT_SPEC_FILE"; then
+                set_launch_state_field '.status = "failed" | .phases.product.status = "failed" | .failure_reason = "product_phase_failed"'
+                return 1
+            fi
+            set_launch_state_field '.phases.product.status = "complete"'
+        fi
+    else
+        set_launch_state_field '.phases.product.status = "skipped"'
+    fi
+
+    local spec_status
+    spec_status=$(jq -r '.phases.spec.status // "pending"' "$LAUNCH_SESSION_FILE")
+    if [ "$spec_status" != "complete" ]; then
+        set_launch_state_field '.current_phase = "spec" | .phases.spec.status = "in_progress"'
+
+        if [ "$input_type" = "product" ]; then
+            if ! run_launch_phase_command "spec" 5 "--from-product" "--output" "$input_value" "-o" "$spec_output_file" "--force"; then
+                set_launch_state_field '.status = "failed" | .phases.spec.status = "failed" | .failure_reason = "spec_phase_failed"'
+                return 1
+            fi
+        elif [ "$input_type" = "file" ]; then
+            if ! run_launch_phase_command "spec" 5 "-f" "$input_value" "-o" "$spec_output_file" "--force"; then
+                set_launch_state_field '.status = "failed" | .phases.spec.status = "failed" | .failure_reason = "spec_phase_failed"'
+                return 1
+            fi
+        else
+            if ! run_launch_phase_command "spec" 5 "-p" "$input_value" "-o" "$spec_output_file" "--force"; then
+                set_launch_state_field '.status = "failed" | .phases.spec.status = "failed" | .failure_reason = "spec_phase_failed"'
+                return 1
+            fi
+        fi
+
+        if [ ! -f "$spec_output_file" ] || ! jq empty "$spec_output_file" >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: Launch spec handoff is invalid: ${spec_output_file}${RESET}"
+            set_launch_state_field '.status = "failed" | .phases.spec.status = "failed" | .failure_reason = "invalid_spec_output"'
+            return 1
+        fi
+
+        set_launch_state_field '.phases.spec.status = "complete"'
+    fi
+
+    local build_status
+    build_status=$(jq -r '.phases.build.status // "pending"' "$LAUNCH_SESSION_FILE")
+    if [ "$build_status" != "complete" ]; then
+        set_launch_state_field '.current_phase = "build" | .phases.build.status = "in_progress"'
+
+        local build_iterations
+        build_iterations=$(calculate_launch_build_iterations "$spec_output_file") || {
+            set_launch_state_field '.status = "failed" | .phases.build.status = "failed" | .failure_reason = "invalid_build_budget"'
+            return 1
+        }
+
+        launch_log "Build iterations resolved to ${build_iterations} (tasks + buffer ${LAUNCH_BUFFER})"
+        if ! run_launch_phase_command "build" "$build_iterations" "-s" "$spec_output_file"; then
+            set_launch_state_field '.status = "failed" | .phases.build.status = "failed" | .failure_reason = "build_phase_failed"'
+            return 1
+        fi
+
+        set_launch_state_field '.phases.build.status = "complete"'
+    fi
+
+    set_launch_state_field '.status = "complete" | .current_phase = "complete" | .completed_at = now'
+    rm -f "$LAUNCH_SESSION_FILE"
+    launch_log "Pipeline completed successfully"
+    return 0
+}
+
+# ═══════════════════════════════════════════════════════════════════════════════
 # UTILITY FUNCTIONS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -2688,6 +3235,16 @@ print_config() {
         echo -e "${DIM}│${RESET} ${BOLD}Context${RESET}  ${SYM_ARROW} ${DIM}$PRODUCT_CONTEXT_DIR${RESET}"
         echo -e "${DIM}│${RESET} ${BOLD}Output${RESET}   ${SYM_ARROW} ${DIM}$PRODUCT_OUTPUT_DIR${RESET}"
         echo -e "${DIM}│${RESET} ${BOLD}ArtSpec${RESET}  ${SYM_ARROW} ${DIM}$ARTIFACT_SPEC_FILE${RESET}"
+    elif [ "$MODE" = "launch" ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Pipeline${RESET} ${SYM_ARROW} ${DIM}product(optional) -> spec -> build${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Context${RESET}  ${SYM_ARROW} ${DIM}$PRODUCT_CONTEXT_DIR${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Output${RESET}   ${SYM_ARROW} ${DIM}$PRODUCT_OUTPUT_DIR${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Buffer${RESET}   ${SYM_ARROW} ${DIM}${LAUNCH_BUFFER}${RESET}"
+        if [ "$FULL_PRODUCT" = true ]; then
+            echo -e "${DIM}│${RESET} ${BOLD}Product${RESET}  ${SYM_ARROW} ${YELLOW}forced (--full-product)${RESET}"
+        elif [ "$SKIP_PRODUCT" = true ]; then
+            echo -e "${DIM}│${RESET} ${BOLD}Product${RESET}  ${SYM_ARROW} ${YELLOW}skipped (--skip-product)${RESET}"
+        fi
     else
         # Build/plan mode config
         echo -e "${DIM}│${RESET} ${BOLD}Spec${RESET}     ${SYM_ARROW} ${DIM}$SPEC_FILE${RESET}"
@@ -3115,6 +3672,17 @@ trap cleanup INT TERM
 # Run pre-flight checks (unless skipped)
 if [ "$SKIP_CHECKS" = false ]; then
     preflight_checks
+fi
+
+if [ "$MODE" = "launch" ]; then
+    print_header
+    print_config
+    show_config_precedence
+
+    if run_launch_pipeline; then
+        exit 0
+    fi
+    exit 1
 fi
 
 # Handle session resume

@@ -173,9 +173,16 @@ return Response.json({error: "Invalid request", details: "..."}, {status: 400})
 The recommended workflow for implementing features with Ralph:
 
 ```
-1. Create Spec (JSON)     →  specs/{feature}.json     (the "what & why" + tasks)
-2. Run Build Mode         →  Implementation complete   (the code)
-3. (Optional) Plan Mode   →  plans/{feature}_PLAN.md  (human-readable view)
+1. (Optional) Product Mode → product-output/*          (discovery artifacts)
+2. Create Spec (JSON)      → specs/{feature}.json      (the "what & why" + tasks)
+3. Run Build Mode          → Implementation complete   (the code)
+4. (Optional) Plan Mode    → plans/{feature}_PLAN.md  (human-readable view)
+```
+
+For one-shot execution, use launch mode:
+
+```bash
+./ralph.sh launch -p "Add user authentication with OAuth"
 ```
 
 ## Creating Specs
@@ -277,6 +284,10 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ## Quick Start
 
 ```bash
+# Launch mode (one-shot: product optional -> spec -> build)
+./ralph.sh launch -p "Add dark mode"
+./ralph.sh launch --full-product -p "Build a new SaaS app"
+
 # Spec mode (generate specs)
 ./ralph.sh spec -p "Add dark mode"      # From inline description
 ./ralph.sh spec -f ./requirements.md    # From requirements file
@@ -297,10 +308,11 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh -i                           # Interactive mode (confirm between iterations)
 ```
 
-## Four Modes
+## Five Modes
 
 | Mode        | Purpose                                         | Command              |
 | ----------- | ----------------------------------------------- | -------------------- |
+| **launch**  | One-shot pipeline: product(optional) -> spec -> build | `./ralph.sh launch` |
 | **spec**    | Generate specs from input/files/product         | `./ralph.sh spec`    |
 | **plan**    | Create human-readable plan (optional for tasks) | `./ralph.sh plan`    |
 | **build**   | Execute tasks one at a time                     | `./ralph.sh build`   |

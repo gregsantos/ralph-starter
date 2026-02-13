@@ -19,6 +19,7 @@ _ralph() {
     local -a presets models log_formats
 
     presets=(
+        'launch:Run one-shot product (optional) -> spec -> build pipeline'
         'spec:Use PROMPT_spec.md for generating JSON specs from input'
         'plan:Use PROMPT_plan.md for architecture and planning tasks'
         'build:Use PROMPT_build.md for implementation tasks'
@@ -68,6 +69,9 @@ _ralph() {
         '--context[Product context directory]:directory:_files -/' \
         '--output[Product output directory]:directory:_files -/' \
         '--artifact-spec[Artifact spec file path]:file:_files' \
+        '--full-product[Force product phase in launch mode]' \
+        '--skip-product[Skip product phase in launch mode]' \
+        '--launch-buffer[Build phase buffer added to task count]:number:' \
         '--from-product[Read input from product-output/ artifacts]' \
         '(-o --spec-output)'{-o,--spec-output}'[Output spec file path]:file:_files' \
         '--force[Overwrite existing output file]' \

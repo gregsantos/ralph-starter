@@ -1,0 +1,215 @@
+{
+  "project": "Launch Smoke Test: Add Launch Mode Usage Section to README",
+  "branchName": "feature/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage",
+  "version": "1.0.0",
+  "description": "Add a minimal README section describing launch mode usage with examples and workflow details",
+  "context": {
+    "currentState": "README documents spec, plan, build, and product modes but launch mode (one-shot pipeline) is missing from documentation. Users don't have clear guidance on when to use launch vs spec->build workflow.",
+    "targetState": "README includes comprehensive launch mode documentation with quick start examples, workflow explanation, launch defaults, and guidance on when to use launch vs manual workflow.",
+    "constraints": [
+      "Launch mode is new functionality combining product(optional)->spec->build in one command",
+      "Documentation must cover: basic usage, examples, defaults, when to use, dependencies",
+      "Updates needed across multiple files: README, RALPH_LOOP_REF.md, completions"
+    ],
+    "verificationCommands": [
+      "shellcheck ralph.sh",
+      "grep -q 'launch mode' README.md",
+      "grep -q './ralph.sh launch' README.md",
+      "test -f specs/launch-smoke-test-add-a-minimal-readme-section-describing-launch-mode-usage.json"
+    ]
+  },
+  "phases": [
+    {
+      "id": "P1",
+      "name": "Documentation Updates",
+      "description": "Add launch mode documentation to README and reference docs",
+      "rationale": "Users need clear guidance on launch mode, examples, and when to use it"
+    },
+    {
+      "id": "P2",
+      "name": "CLI Reference & Completions",
+      "description": "Update RALPH_LOOP_REF.md with launch commands and shell completions",
+      "rationale": "Shell completions and full CLI reference ensure discoverability and usability"
+    },
+    {
+      "id": "P3",
+      "name": "Script & Configuration",
+      "description": "Implement launch mode in ralph.sh with proper defaults and validation",
+      "rationale": "Functional implementation of launch mode with sensible defaults"
+    }
+  ],
+  "tasks": [
+    {
+      "id": "T-001",
+      "phase": "P1",
+      "title": "Add launch mode example to Quick Start",
+      "description": "Add a launch mode example to the Quick Start section showing one-shot pipeline usage",
+      "acceptanceCriteria": [
+        "README Quick Start includes './ralph.sh launch -p' example",
+        "Example shows simple feature description",
+        "Commented to explain one-shot behavior"
+      ],
+      "dependsOn": [],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "Added example showing launch mode with inline prompt in Quick Start section"
+    },
+    {
+      "id": "T-002",
+      "phase": "P1",
+      "title": "Update Modes table to include Launch",
+      "description": "Add Launch mode to the Core Concepts Modes table with description",
+      "acceptanceCriteria": [
+        "Modes table lists Launch as first entry",
+        "Description: 'One-shot pipeline: product(optional) → spec → build'",
+        "Command shows './ralph.sh launch'",
+        "Workflow recommendation updated to mention launch option"
+      ],
+      "dependsOn": [],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "Updated modes table and workflow recommendation"
+    },
+    {
+      "id": "T-003",
+      "phase": "P1",
+      "title": "Add launch command examples to Common Commands",
+      "description": "Document launch command variations with different options in Common Commands section",
+      "acceptanceCriteria": [
+        "Section includes 'Launch pipeline (one-shot)' comment",
+        "Examples cover: inline prompt, file input, full-product, skip-product",
+        "Each example shows expected behavior",
+        "Examples: launch -p, launch -f, launch --full-product, launch --skip-product"
+      ],
+      "dependsOn": [],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "Added comprehensive launch command examples to Common Commands section"
+    },
+    {
+      "id": "T-004",
+      "phase": "P1",
+      "title": "Create One-Shot Workflow subsection",
+      "description": "Add detailed explanation of launch mode workflow between workflow diagram and Step 0",
+      "acceptanceCriteria": [
+        "Section titled 'One-Shot Workflow (launch)'",
+        "Explains basic usage and examples",
+        "Documents launch defaults (optional product, dynamic iterations, no plan)",
+        "Explains when product phase runs (--full-product or meaningful product-input)",
+        "Explains iteration computation (task_count + launch_buffer)"
+      ],
+      "dependsOn": ["T-002"],
+      "status": "complete",
+      "passes": true,
+      "effort": "medium",
+      "notes": "Added detailed One-Shot Workflow subsection with examples and defaults documentation"
+    },
+    {
+      "id": "T-005",
+      "phase": "P2",
+      "title": "Update RALPH_LOOP_REF.md with launch commands",
+      "description": "Add launch mode documentation to full CLI reference",
+      "acceptanceCriteria": [
+        "RALPH_LOOP_REF.md includes launch mode command reference",
+        "Documents all launch flags and options",
+        "Explains launch defaults and behavior",
+        "Shows command examples with explanations"
+      ],
+      "dependsOn": ["T-003"],
+      "status": "complete",
+      "passes": true,
+      "effort": "medium",
+      "notes": "Updated RALPH_LOOP_REF.md with comprehensive launch mode reference"
+    },
+    {
+      "id": "T-006",
+      "phase": "P2",
+      "title": "Add launch to shell completions",
+      "description": "Update bash and zsh completion files to include launch mode preset",
+      "acceptanceCriteria": [
+        "completions/ralph.bash includes launch in preset list",
+        "completions/ralph.zsh includes launch in preset list",
+        "Launch preset has proper help text",
+        "Completions still work for other presets"
+      ],
+      "dependsOn": [],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "Updated both bash and zsh completion files to include launch mode"
+    },
+    {
+      "id": "T-007",
+      "phase": "P3",
+      "title": "Implement launch mode in ralph.sh",
+      "description": "Add launch mode implementation with proper argument parsing, product phase handling, and iteration computation",
+      "acceptanceCriteria": [
+        "ralph.sh recognizes 'launch' preset argument",
+        "Product phase is optional (runs with --full-product or meaningful product-input)",
+        "Build iterations computed as task_count + launch_buffer",
+        "Proper error handling for missing requirements",
+        "shellcheck ralph.sh passes"
+      ],
+      "dependsOn": ["T-006"],
+      "status": "complete",
+      "passes": true,
+      "effort": "large",
+      "notes": "Implemented full launch mode with optional product phase, dynamic iteration computation, and proper validation"
+    },
+    {
+      "id": "T-008",
+      "phase": "P3",
+      "title": "Add launch mode to CLAUDE.md Ralph Loop section",
+      "description": "Document launch mode in project's CLAUDE.md Quick Start commands",
+      "acceptanceCriteria": [
+        "CLAUDE.md includes launch mode commands in Quick Start",
+        "Examples show different launch scenarios",
+        "Explains launch defaults in context"
+      ],
+      "dependsOn": ["T-004"],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "Updated CLAUDE.md with launch mode examples in Ralph Loop Quick Start section"
+    },
+    {
+      "id": "T-009",
+      "phase": "P1",
+      "title": "Verify README smoke test completion",
+      "description": "Final verification that launch mode documentation is minimal yet complete and working",
+      "acceptanceCriteria": [
+        "README Quick Start includes launch example",
+        "Core Concepts Modes section has Launch entry",
+        "Common Commands section has launch examples",
+        "One-Shot Workflow subsection explains launch defaults and usage",
+        "All verification commands pass successfully"
+      ],
+      "dependsOn": [
+        "T-001",
+        "T-002",
+        "T-003",
+        "T-004",
+        "T-005",
+        "T-006",
+        "T-007",
+        "T-008"
+      ],
+      "status": "complete",
+      "passes": true,
+      "effort": "small",
+      "notes": "All documentation, implementation, and verification tasks complete. Smoke test passed successfully."
+    }
+  ],
+  "dependencies": {
+    "T-002": ["T-001"],
+    "T-004": ["T-002"],
+    "T-005": ["T-003"],
+    "T-006": [],
+    "T-007": ["T-006"],
+    "T-008": ["T-004"],
+    "T-009": ["T-001", "T-002", "T-003", "T-004", "T-005", "T-006", "T-007", "T-008"]
+  }
+}
