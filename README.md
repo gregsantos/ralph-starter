@@ -568,9 +568,9 @@ The AI should fix failures, but if stuck:
 ### View session logs
 
 ```bash
-# Full logs saved to /tmp
-ls -la /tmp/ralph_*.log
-tail -f /tmp/ralph_build_*.log
+# Full logs saved to ~/.ralph/logs/
+ls -la ~/.ralph/logs/
+tail -f ~/.ralph/logs/latest.log
 ```
 
 ## License

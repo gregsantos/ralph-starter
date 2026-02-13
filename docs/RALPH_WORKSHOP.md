@@ -8,14 +8,19 @@ A comprehensive guide to autonomous AI-assisted development with Ralph Loop.
 
 1. [What is Ralph Loop?](#what-is-ralph-loop)
 2. [Core Concepts](#core-concepts)
-3. [Minimum Setup](#minimum-setup)
-4. [Configuration](#configuration)
-5. [Planning Mode](#planning-mode)
-6. [Build Mode](#build-mode)
-7. [The Iteration Cycle](#the-iteration-cycle)
-8. [Best Practices](#best-practices)
-9. [Advanced Usage](#advanced-usage)
-10. [Troubleshooting](#troubleshooting)
+3. [Quick Start](#quick-start)
+4. [The Four Modes](#the-four-modes)
+5. [The Recommended Workflow](#the-recommended-workflow)
+6. [Configuration](#configuration)
+7. [Spec Mode](#spec-mode)
+8. [Plan Mode](#plan-mode)
+9. [Build Mode](#build-mode)
+10. [Product Mode](#product-mode)
+11. [The Iteration Cycle](#the-iteration-cycle)
+12. [Best Practices](#best-practices)
+13. [Advanced Usage](#advanced-usage)
+14. [Troubleshooting](#troubleshooting)
+15. [Quick Reference](#quick-reference)
 
 ---
 
@@ -29,6 +34,7 @@ Ralph Loop is an **autonomous AI agent runner** that breaks software development
 - **Quality gates**: Every iteration must pass tests and type checks before proceeding
 - **Knowledge preservation**: Learnings persist in files, not AI memory
 - **Hands-off execution**: Start a session, walk away, return to completed work
+- **Autonomous recovery**: Automatic retry with exponential backoff for transient failures
 
 ### How It Works
 
@@ -57,39 +63,37 @@ Each iteration starts with **zero memory** of previous runs. The AI reads its st
 
 | File                           | Purpose                                        |
 | ------------------------------ | ---------------------------------------------- |
-| `specs/{feature}.md`           | Feature specification (the "what & why")       |
-| `plans/IMPLEMENTATION_PLAN.md` | Checklist of tasks (`[ ]` pending, `[x]` done) |
+| `specs/{feature}.json`         | Feature specification with tasks (source of truth) |
+| `plans/{feature}_PLAN.md`      | Human-readable plan (optional, derived from spec) |
 | `progress.txt`                 | Append-only log of decisions and learnings     |
 | `CLAUDE.md`                    | Project context and discovered patterns        |
 
-### Specs vs Plans
+### 2. Specs vs Plans
 
 | Directory | Contains                  | Purpose                               | Lifecycle      |
 | --------- | ------------------------- | ------------------------------------- | -------------- |
-| `specs/`  | Feature specifications    | Requirements, architecture, rationale | Semi-permanent |
-| `plans/`  | Implementation checklists | Step-by-step tasks                    | Disposable     |
+| `specs/`  | JSON feature specifications | Requirements + tasks (source of truth) | Semi-permanent |
+| `plans/`  | Markdown checklists       | Human-readable view (optional)        | Disposable     |
 
-**When to use each:**
+**The key insight**: Specs with a `tasks` array are the single source of truth. Build mode works directly from the spec—no separate plan file needed. Plan mode is optional for generating human-readable views.
 
-- **Inline prompts** (`-p "Fix X"`) — Quick fixes, no spec/plan needed
-- **Single plan file** — Small features where a checklist is sufficient
-- **Spec + Plan** — Major features needing stable requirements doc
-
-### 2. Two Modes
+### 3. Four Modes
 
 | Mode      | Purpose                                 | When to Use                                  |
 | --------- | --------------------------------------- | -------------------------------------------- |
-| **Plan**  | Analyze codebase, create task checklist | Starting a new feature, investigating issues |
-| **Build** | Execute tasks one at a time             | Implementing the plan                        |
+| **Spec**  | Generate JSON specs from input          | Starting from requirements, PRD, or idea     |
+| **Plan**  | Create human-readable plan (optional)   | When you need a readable checklist view      |
+| **Build** | Execute tasks one at a time             | Implementing the spec                        |
+| **Product** | Generate product documentation        | Product discovery and planning               |
 
-### 3. One Task Per Iteration
+### 4. One Task Per Iteration
 
-**Critical rule**: Complete exactly ONE checklist item per iteration.
+**Critical rule**: Complete exactly ONE task per iteration.
 
 - Too much? AI loses context, makes mistakes
 - Too little? Wastes iterations on trivial progress
 
-### 4. Completion Signal
+### 5. Completion Signal
 
 When ALL tasks are done, the AI outputs:
 
@@ -99,7 +103,7 @@ When ALL tasks are done, the AI outputs:
 
 This tells the loop to exit successfully. Without this marker, the loop continues until max iterations.
 
-### 5. Quality Gates (Backpressure)
+### 6. Quality Gates (Backpressure)
 
 Tests and type checks are your **rejection mechanism**. They push back on bad changes:
 
@@ -109,7 +113,7 @@ Tests and type checks are your **rejection mechanism**. They push back on bad ch
 
 ---
 
-## Minimum Setup
+## Quick Start
 
 ### Prerequisites
 
@@ -120,220 +124,160 @@ jq --version        # JSON parsing
 git --version       # Version control
 ```
 
-### Required Files
+### Installation
 
-```
-project-root/
-├── ralph.sh                      # The loop script
-├── ralph.conf                    # Configuration (optional)
-├── prompts/
-│   ├── PROMPT_plan.md           # Planning mode instructions
-│   └── PROMPT_build.md          # Build mode instructions
-├── specs/
-│   ├── INDEX.md                 # Feature catalog
-│   └── {feature}.md             # Feature specifications (the "what & why")
-├── plans/
-│   └── IMPLEMENTATION_PLAN.md   # Task checklist (the "how")
-├── progress.txt                  # Iteration history (auto-created)
-└── CLAUDE.md                     # Project context
-```
+Ralph runs pre-flight checks automatically to verify dependencies. Use `--skip-checks` to bypass if needed.
 
-### Step 1: Create the Prompts Directory
+### Your First Run
 
 ```bash
-mkdir -p prompts specs
+# 1. Generate a spec from an idea
+./ralph.sh spec -p "Add dark mode toggle to settings"
+
+# 2. Build the feature (executes tasks from spec)
+./ralph.sh build -s ./specs/new-spec.json
+
+# Done! Ralph handles the rest autonomously.
 ```
 
-### Step 2: Create PROMPT_plan.md
-
-This prompt tells the AI how to analyze and plan:
-
-```markdown
-# Plan Mode Instructions
-
-## Context
-
-- **Specs**: `{{SPEC_FILE}}` (primary spec file)
-- **Progress**: `{{PROGRESS_FILE}}` (if present)
-- **Source**: `{{SOURCE_DIR}}`
-- **CLAUDE.md**: Consult for project context
-
-## Philosophy
-
-**Plans are disposable.** If a plan becomes wrong or stale—regenerate it.
-
-## Workflow (Per Iteration)
-
-### 1. Research
-
-**Don't assume functionality is missing.** Search first.
-
-- Study the codebase—don't just read, understand intent
-- Study progress file for context from previous iterations
-- Confirm what exists vs what's actually missing
-
-### 2. Gap Analysis
-
-- What exists?
-- What's incomplete? (TODOs, placeholders, skipped tests)
-- What's inconsistent with codebase patterns?
-- What's the precise delta?
-
-### 3. Plan
-
-- Create/update specs with prioritized checklist
-- Each item must be atomic and verifiable
-- Document reasoning for priorities
-
-### 4. Document
-
-- Append decisions to progress file
-- Update CLAUDE.md with discovered patterns
-
-## Completion Protocol
-
-When planning is complete, output exactly:
-
-\`\`\`
-<ralph>COMPLETE</ralph>
-\`\`\`
-```
-
-### Step 3: Create PROMPT_build.md
-
-This prompt tells the AI how to implement:
-
-```markdown
-# Build Mode Instructions
-
-## Context
-
-- **Specs**: `{{SPEC_FILE}}` (primary checklist)
-- **Progress**: `{{PROGRESS_FILE}}` (append-only history)
-- **Source**: `{{SOURCE_DIR}}`
-- **CLAUDE.md**: Consult and update with patterns
-
-## Iteration Model
-
-Each iteration:
-
-1. Complete **ONE** checklist item
-2. Mark it `[x]` and document in progress file
-3. Commit and push
-4. Loop calls you again for next task
-
-**Do NOT complete all tasks in one iteration.** Work incrementally.
-
-## Workflow (Per Iteration)
-
-### 1. Understand State
-
-- Study specs for checklist items (understand intent)
-- Study progress for previous iteration context
-- Identify next incomplete item
-
-### 2. Implement ONE Task
-
-**Don't assume missing.** Search first—the codebase likely has what you need.
-
-- Implement completely—no placeholders or TODOs
-- Capture the why in code comments for non-obvious decisions
-
-### 3. Verify (Backpressure)
-
-- Run tests: `npm run test`
-- Run typecheck: `npm run typecheck`
-- Fix ALL failures before proceeding
-
-### 4. Document
-
-- Mark item `[x]` in specs
-- Append to progress: task, decisions, files changed
-- Update CLAUDE.md with discovered patterns
-
-### 5. Commit
-
-- `git add -A && git commit -m "feat/fix: description" && git push`
-
-## Completion Protocol
-
-When ALL items are `[x]` and tests pass, output:
-
-\`\`\`
-<ralph>COMPLETE</ralph>
-\`\`\`
-```
-
-### Step 4: Create CLAUDE.md
-
-Project context the AI reads each iteration:
-
-```markdown
-# CLAUDE.md
-
-## Project Overview
-
-[Brief description of your project]
-
-## Key Commands
-
-\`\`\`bash
-npm run test # Run tests
-npm run typecheck # Type checking
-npm run build # Build project
-\`\`\`
-
-## Architecture
-
-[Key files and their purposes]
-
-## Codebase Patterns (Ralph-discovered)
-
-_Update this section as you learn the codebase._
-
-### Conventions
-
-- (discovered patterns go here)
-
-### Gotchas
-
-- (pitfalls to avoid go here)
-```
-
-### Step 5: Verify Setup
+### Verify Setup
 
 ```bash
 ./ralph.sh --help
 ```
 
-You should see the help output with available options.
+You should see the help output with all available options.
+
+---
+
+## The Four Modes
+
+### Mode Overview
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│     PRODUCT (optional) → SPEC MODE → BUILD MODE                             │
+│                                                                             │
+│  ┌──────────┐    ┌──────────┐    ┌──────────┐                               │
+│  │ Product  │ -> │   Spec   │ -> │  Build   │                               │
+│  │   Mode   │    │   Mode   │    │   Mode   │                               │
+│  │(discover)│    │(generate)│    │ (execute)│                               │
+│  └──────────┘    └──────────┘    └──────────┘                               │
+│       │               │               │                                     │
+│  product-output/  specs/*.json    Code changes                              │
+│  12 artifacts     with tasks      Implementation                            │
+│                                                                             │
+│  Optional: Plan mode generates human-readable view from spec                │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Mode Defaults
+
+| Mode          | Default Model | Rationale                                    |
+| ------------- | ------------- | -------------------------------------------- |
+| `spec`        | opus          | Requires deep understanding for spec design  |
+| `plan`        | opus          | Complex reasoning for architecture decisions |
+| `build`       | opus          | Quality implementation with full context     |
+| `product`     | opus          | Comprehensive product artifact generation    |
+| `inline` (-p) | sonnet        | Faster for quick, focused tasks              |
+| `custom` (-f) | opus          | Assumes complex task unless specified        |
+
+---
+
+## The Recommended Workflow
+
+### Spec → Build (Simplest)
+
+For most features, you only need two steps:
+
+```bash
+# 1. Create a spec with tasks
+./ralph.sh spec -p "Add user authentication with OAuth"
+#    → specs/new-spec.json
+
+# 2. Execute the tasks
+./ralph.sh build -s ./specs/new-spec.json
+#    → Implementation complete
+```
+
+### Product → Spec → Build (Full Discovery)
+
+For new projects or major features, start with product mode:
+
+```bash
+# 1. Add context files to product-input/
+mkdir -p product-input
+# Add: vision.md, research.md, requirements.md
+
+# 2. Generate product artifacts (12 documents)
+./ralph.sh product
+#    → product-output/7_prd.md (and 11 others)
+
+# 3. Generate spec from product artifacts
+./ralph.sh spec --from-product
+#    → specs/new-spec.json
+
+# 4. Build the feature
+./ralph.sh build -s ./specs/new-spec.json
+```
+
+### When to Use Each Workflow
+
+| Scenario | Workflow |
+|----------|----------|
+| Quick bug fix | `./ralph.sh -p "Fix the null pointer in UserCard"` |
+| Small feature | `./ralph.sh spec -p "..." && ./ralph.sh build -s ...` |
+| Major feature | `./ralph.sh product && ./ralph.sh spec --from-product && ./ralph.sh build -s ...` |
+| Existing requirements doc | `./ralph.sh spec -f ./requirements.md && ./ralph.sh build -s ...` |
 
 ---
 
 ## Configuration
 
-### Config File (Optional)
+### Config File Locations
 
-Create `ralph.conf` for project defaults:
+1. **Global config**: `~/.ralph/config` (user-wide defaults)
+2. **Project config**: `./ralph.conf` (project-specific overrides)
+
+### Example `ralph.conf`
 
 ```bash
-# ralph.conf - Project defaults
+# Ralph Loop Configuration
+# Use standard KEY=VALUE syntax (no shell execution for security)
 
-# Spec file location
-SPEC_FILE="./specs/IMPLEMENTATION_PLAN.md"
+# Path Configuration
+SPEC_FILE=./specs/IMPLEMENTATION_PLAN.md
+PLAN_FILE=./plans/IMPLEMENTATION_PLAN.md
+PROGRESS_FILE=progress.txt
+SOURCE_DIR=src/*
 
-# Progress tracking
-PROGRESS_FILE="progress.txt"
-
-# Source directory for context
-SOURCE_DIR="src/*"
-
-# Default iterations
+# Execution Settings
+MODEL=opus
 MAX_ITERATIONS=10
-
-# Auto-push after each iteration
 PUSH_ENABLED=true
+
+# Logging
+LOG_DIR=~/.ralph/logs
+LOG_FORMAT=text
 ```
+
+### Configuration Precedence
+
+CLI flags > Environment variables > Config file > Defaults
+
+### Environment Variables
+
+| Variable               | Description                             | Example                       |
+| ---------------------- | --------------------------------------- | ----------------------------- |
+| `RALPH_MODEL`          | Default model (opus, sonnet, haiku)     | `RALPH_MODEL=sonnet`          |
+| `RALPH_MAX_ITERATIONS` | Maximum iterations limit                | `RALPH_MAX_ITERATIONS=20`     |
+| `RALPH_PUSH_ENABLED`   | Git push toggle (true/false/yes/no/1/0) | `RALPH_PUSH_ENABLED=false`    |
+| `RALPH_SPEC_FILE`      | Path to spec file                       | `RALPH_SPEC_FILE=./spec.json` |
+| `RALPH_PLAN_FILE`      | Path to plan file                       | `RALPH_PLAN_FILE=./plan.md`   |
+| `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
+| `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
+| `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
+| `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
 
 ### Template Variables
 
@@ -341,116 +285,195 @@ Prompts support these placeholders (automatically substituted):
 
 | Variable            | Default                          | Description                              |
 | ------------------- | -------------------------------- | ---------------------------------------- |
-| `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification (the "what & why") |
-| `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist (the "how")     |
+| `{{SPEC_FILE}}`     | `./specs/IMPLEMENTATION_PLAN.md` | Feature specification                    |
+| `{{PLAN_FILE}}`     | `./plans/IMPLEMENTATION_PLAN.md` | Implementation checklist                 |
 | `{{PROGRESS_FILE}}` | `progress.txt`                   | Iteration log                            |
 | `{{SOURCE_DIR}}`    | `src/*`                          | Source code location                     |
 
-### CLI Overrides
+---
 
-Any config can be overridden via command line:
+## Spec Mode
+
+Spec mode generates structured JSON specifications from various input sources. The generated specs can then be executed directly by build mode.
+
+### Input Sources
+
+You need exactly one input source:
+
+| Flag | Description |
+|------|-------------|
+| `-p, --prompt STR` | Inline feature description |
+| `-f, --file PATH` | Requirements file (markdown, text) |
+| `--from-product` | Read from product-output/ artifacts |
+
+### Running Spec Mode
 
 ```bash
-./ralph.sh -s ./specs/feature-x.md    # Spec file (plan auto-derived)
-./ralph.sh -l ./plans/custom_PLAN.md  # Override derived plan
-./ralph.sh --progress ./logs/prog.txt # Different progress file
-./ralph.sh --source lib/*             # Different source dir
-./ralph.sh --dry-run                  # Preview config without running
+# From inline description
+./ralph.sh spec -p "Add dark mode toggle to settings"
+
+# From requirements file
+./ralph.sh spec -f ./requirements/dark-mode.md
+
+# From product artifacts (reads 7_prd.md, etc.)
+./ralph.sh spec --from-product
+
+# Specify custom output path
+./ralph.sh spec -p "Add user auth" -o ./specs/auth.json
+
+# Overwrite existing spec file
+./ralph.sh spec -p "Update auth flow" -o ./specs/auth.json --force
 ```
 
-### Plan Derivation
+### What Spec Mode Does
 
-When you specify a spec file without a plan file, the plan is automatically derived:
+1. **Reads the skill**: Consults `.claude/skills/writing-ralph-specs/SKILL.md`
+2. **Understands input**: Parses requirements from your chosen source
+3. **Researches codebase**: Finds existing patterns and utilities
+4. **Designs tasks**: Creates atomic, verifiable tasks with dependencies
+5. **Generates JSON**: Writes spec to output file
 
-| Spec File                | Derived Plan File             |
-| ------------------------ | ----------------------------- |
-| `./specs/feature.md`     | `./plans/feature_PLAN.md`     |
-| `./specs/auth-system.md` | `./plans/auth-system_PLAN.md` |
+### The Tasks Array Format (Recommended)
 
-This keeps spec and plan files paired by naming convention.
+```json
+{
+  "project": "Feature Name",
+  "branchName": "feature/branch-name",
+  "description": "One-line description of the feature",
+  "context": {
+    "currentState": "What exists today",
+    "targetState": "What we want to achieve",
+    "verificationCommands": ["pnpm test", "pnpm typecheck"]
+  },
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Short action title",
+      "description": "What this task accomplishes and why",
+      "acceptanceCriteria": [
+        "Specific, testable criterion 1",
+        "Specific, testable criterion 2",
+        "pnpm test passes"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
+      "effort": "small",
+      "notes": ""
+    },
+    {
+      "id": "T-002",
+      "title": "Depends on T-001",
+      "description": "This task builds on T-001",
+      "acceptanceCriteria": ["..."],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "passes": false,
+      "effort": "medium",
+      "notes": ""
+    }
+  ]
+}
+```
+
+### Task Fields
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `id` | string | Yes | Unique identifier (e.g., "T-001") |
+| `title` | string | Yes | Short action title |
+| `description` | string | Yes | What needs to be done |
+| `acceptanceCriteria` | string[] | Yes | Specific, testable criteria |
+| `dependsOn` | string[] | Yes | Task IDs this depends on (empty if none) |
+| `status` | string | Yes | pending, in_progress, complete, blocked |
+| `passes` | boolean | Yes | `false` initially; `true` when done |
+| `effort` | string | Yes | small, medium, large |
+| `notes` | string | No | Implementation notes (populated by build) |
 
 ---
 
-## Planning Mode
+## Plan Mode
 
-Planning mode analyzes your codebase and creates an implementation checklist.
+Plan mode creates a human-readable Markdown view of your spec. It's **optional** when using specs with tasks—build mode works directly from the spec.
 
 ### When to Use Plan Mode
 
-- Starting a new feature
-- Investigating a bug
-- Refactoring existing code
-- Understanding unfamiliar codebase
+- You want a readable checklist to share with teammates
+- You prefer reviewing tasks in Markdown format
+- You're using the legacy `userStories` format (requires plan for build)
 
 ### Running Plan Mode
 
 ```bash
-# Basic: Plan until complete (up to 10 iterations)
+# Generate plan from spec
+./ralph.sh plan -s ./specs/my-feature.json
+#    → plans/my-feature_PLAN.md
+
+# Default behavior (when no spec specified)
 ./ralph.sh plan
-
-# Limit iterations
-./ralph.sh plan 3
-
-# Use specific model
-./ralph.sh plan --model opus
+#    → Uses ./specs/IMPLEMENTATION_PLAN.md
 ```
 
 ### What Plan Mode Does
 
-1. **Research**: Reads codebase, understands existing patterns
-2. **Gap Analysis**: Compares requirements vs current implementation
-3. **Creates Checklist**: Writes prioritized tasks to specs file
-4. **Documents Findings**: Appends learnings to progress file
+1. **Reads** the spec's `tasks` array
+2. **Generates** a Markdown plan with checkboxes
+3. **Groups** tasks by phase (if phases defined)
+4. **Shows** dependencies clearly
+5. **Marks** completion status: `[ ]` for pending, `[x]` for complete
 
-### Example Output: specs/IMPLEMENTATION_PLAN.md
+### Generated Plan Format
 
 ```markdown
-# Implementation Plan: User Authentication
+# Implementation Plan: Feature Name
+
+> ⚠️ **This is a derived view.** Edit the spec, not this file.
+> Build mode works directly from the spec's tasks array.
 
 ## Overview
 
-Add JWT-based authentication to the API.
+Brief description from spec
 
-## Checklist
+## Tasks
 
-- [ ] Add `jsonwebtoken` dependency
-- [ ] Create `src/lib/auth.ts` with token utilities
-- [ ] Add auth middleware to `src/middleware/`
-- [ ] Protect `/api/users/*` routes
-- [ ] Add login endpoint `POST /api/auth/login`
-- [ ] Add tests for auth utilities
-- [ ] Add integration tests for protected routes
+### Phase: Setup
 
-## Dependencies
+- [ ] **T-001**: Configure infrastructure
+  - Install required dependencies
+  - Add configuration to project
+  - Dependencies: None
 
-- Items 3-5 depend on item 2
-- Items 6-7 can run in parallel after item 5
+- [ ] **T-002**: Implement core functionality
+  - Feature works as specified
+  - Tests added and passing
+  - Dependencies: T-001
 
-## Notes
+## Progress Summary
 
-- Existing `src/lib/crypto.ts` has hashing utilities—reuse
-- Follow middleware pattern in `src/middleware/logging.ts`
+- **Completed**: 0 of 2 tasks
+- **Ready**: T-001
 ```
 
-### Planning Philosophy
+### Plan Derivation from Spec
 
-**Plans are disposable.** If your plan becomes wrong or stale:
+When you specify a spec file, the plan file is automatically derived:
 
-- Don't patch it with amendments
-- Regenerate from scratch with new understanding
-- A fresh plan with current knowledge beats a patched old plan
+| Spec File                | Derived Plan File             |
+| ------------------------ | ----------------------------- |
+| `./specs/feature.json`   | `./plans/feature_PLAN.md`     |
+| `./specs/auth-system.md` | `./plans/auth-system_PLAN.md` |
 
 ---
 
 ## Build Mode
 
-Build mode executes the plan one task at a time.
+Build mode executes the spec one task at a time. It's where the actual implementation happens.
 
 ### When to Use Build Mode
 
-- After planning is complete
-- Task checklist exists and is clear
+- Spec exists with clear tasks
 - Ready for autonomous implementation
+- After planning is complete (for legacy workflow)
 
 ### Running Build Mode
 
@@ -461,43 +484,48 @@ Build mode executes the plan one task at a time.
 # Equivalent (build is default)
 ./ralph.sh
 
+# With specific spec file
+./ralph.sh build -s ./specs/my-feature.json
+
 # Limit iterations
 ./ralph.sh build 5
 
-# Different model for faster/cheaper iterations
+# Different model for faster iterations
 ./ralph.sh build --model sonnet
 ```
 
 ### What Build Mode Does (Each Iteration)
 
-1. **Read State**: Check specs for next `[ ]` item
-2. **Search First**: Verify functionality doesn't already exist
-3. **Implement**: Complete exactly ONE task
-4. **Verify**: Run tests and type checks
-5. **Document**: Mark `[x]`, update progress
-6. **Commit**: Push changes to remote
-7. **Check**: All done? Signal completion. Otherwise, loop continues.
+1. **Read State**: Find next task where `passes: false` and all `dependsOn` tasks have `passes: true`
+2. **Set Status**: Mark task `"in_progress"` in spec
+3. **Search First**: Verify functionality doesn't already exist
+4. **Implement**: Complete exactly ONE task
+5. **Verify**: Run tests and type checks
+6. **Update Spec**: Set `passes: true` and `status: "complete"`, add notes
+7. **Document**: Update progress.txt
+8. **Commit**: Push changes with task ID in message: `feat(T-001): description`
+9. **Check**: All done? Signal completion. Otherwise, loop continues.
 
 ### The One-Task Rule
 
-Each iteration completes **exactly one** checklist item:
+Each iteration completes **exactly one** task:
 
 ```markdown
 Before iteration 3:
 
-- [x] Add dependency
-- [x] Create auth utilities
-- [ ] Add middleware <- This iteration works on this
-- [ ] Protect routes
-- [ ] Add login endpoint
+Task T-001: [x] passes: true
+Task T-002: [x] passes: true
+Task T-003: [ ] passes: false  <- This iteration works on this
+Task T-004: [ ] passes: false
+Task T-005: [ ] passes: false
 
 After iteration 3:
 
-- [x] Add dependency
-- [x] Create auth utilities
-- [x] Add middleware <- Now complete
-- [ ] Protect routes <- Next iteration
-- [ ] Add login endpoint
+Task T-001: [x] passes: true
+Task T-002: [x] passes: true
+Task T-003: [x] passes: true  <- Now complete
+Task T-004: [ ] passes: false <- Next iteration
+Task T-005: [ ] passes: false
 ```
 
 ### Build Mode Rules
@@ -508,6 +536,92 @@ After iteration 3:
 | **Fix all failures**     | Never leave broken builds for next iteration |
 | **Capture the why**      | Document reasoning, not just what            |
 | **No placeholders**      | Implement completely or don't start          |
+| **Update spec**          | Set `passes: true` when task is done         |
+
+---
+
+## Product Mode
+
+Product mode generates comprehensive product documentation—12 artifacts that cover everything from executive summary to go-to-market strategy.
+
+### When to Use Product Mode
+
+- Starting a new project
+- Major feature requiring stakeholder alignment
+- Need comprehensive product documentation
+- Want to generate PRD before specs
+
+### Running Product Mode
+
+```bash
+# Basic: Generate all 12 artifacts
+./ralph.sh product
+
+# Custom input/output directories
+./ralph.sh product --context ./my-context/ --output ./my-output/
+
+# Custom artifact specification
+./ralph.sh product --artifact-spec ./docs/MY_SPEC.md
+```
+
+### Product Mode Workflow
+
+1. **Add context files** to `product-input/`:
+   - `vision.md` - Product vision and goals
+   - `research.md` - User research, market data
+   - `requirements.md` - High-level requirements
+
+2. **Run product mode**:
+   ```bash
+   ./ralph.sh product
+   ```
+
+3. **Review generated artifacts** in `product-output/`:
+   - `1_executive_summary.md`
+   - `2_charter.md`
+   - `3_market_analysis.md`
+   - `4_personas.md`
+   - `5_journey_map.md`
+   - `6_positioning.md`
+   - `7_prd.md` ← Use this to inform your spec
+   - `8_product_roadmap.md`
+   - `9_technical_requirements.md`
+   - `10_ux_copy_deck.md`
+   - `11_wireflow.md`
+   - `12_go_to_market.md`
+
+4. **Generate spec from PRD**:
+   ```bash
+   ./ralph.sh spec --from-product
+   ```
+
+### Artifact Dependencies
+
+Artifacts are generated in dependency order:
+
+```
+Phase 1: Strategic Foundation
+  └─▶ 1_executive_summary.md
+  └─▶ 2_charter.md
+
+Phase 2: Market & User Discovery
+  └─▶ 3_market_analysis.md
+  └─▶ 4_personas.md
+  └─▶ 5_journey_map.md
+
+Phase 3: Product Definition
+  └─▶ 6_positioning.md
+  └─▶ 7_prd.md
+  └─▶ 8_product_roadmap.md
+
+Phase 4: Solution Design
+  └─▶ 9_technical_requirements.md
+  └─▶ 10_ux_copy_deck.md
+  └─▶ 11_wireflow.md
+
+Phase 5: Go-to-Market
+  └─▶ 12_go_to_market.md
+```
 
 ---
 
@@ -521,31 +635,32 @@ After iteration 3:
 ├─────────────────────────────────────────────────────────────────┤
 │                                                                  │
 │  1. READ STATE                                                   │
-│     ├── specs/IMPLEMENTATION_PLAN.md (what's left?)             │
+│     ├── specs/{feature}.json (find next task)                   │
 │     ├── progress.txt (what happened before?)                    │
 │     └── CLAUDE.md (project context)                             │
 │                                                                  │
 │  2. EXECUTE                                                      │
+│     ├── Set task status: "in_progress"                          │
 │     ├── Search codebase (don't assume missing)                  │
 │     ├── Implement ONE task                                       │
 │     └── Write tests if needed                                    │
 │                                                                  │
 │  3. VERIFY (Backpressure)                                       │
-│     ├── npm run test                                             │
-│     ├── npm run typecheck                                        │
+│     ├── pnpm test                                                │
+│     ├── pnpm typecheck                                           │
 │     └── Fix failures before continuing                           │
 │                                                                  │
 │  4. DOCUMENT                                                     │
-│     ├── Mark [x] in specs                                        │
+│     ├── Update spec: passes: true, status: "complete"           │
 │     ├── Append to progress.txt                                   │
 │     └── Update CLAUDE.md with patterns                          │
 │                                                                  │
 │  5. COMMIT                                                       │
-│     └── git add -A && git commit && git push                    │
+│     └── git add -A && git commit -m "feat(T-XXX): ..." && push  │
 │                                                                  │
 │  6. CHECK COMPLETION                                             │
-│     ├── All [x]? → Output <ralph>COMPLETE</ralph> → EXIT        │
-│     └── More [ ]? → END ITERATION → LOOP CONTINUES              │
+│     ├── All tasks pass? → Output <ralph>COMPLETE</ralph> → EXIT │
+│     └── More tasks? → END ITERATION → LOOP CONTINUES            │
 │                                                                  │
 ├─────────────────────────────────────────────────────────────────┤
 │ ITERATION END                                                    │
@@ -558,7 +673,7 @@ After iteration 3:
 ## Iteration 3 - 2024-01-15 14:32
 
 ### Task
-- [x] Add auth middleware (specs item 3)
+- [x] T-003: Add auth middleware
 
 ### Decisions
 - Placed in `src/middleware/auth.ts` following existing pattern
@@ -571,7 +686,7 @@ After iteration 3:
 - tests/middleware/auth.test.ts (new)
 
 ### Notes for Next Iteration
-- Ready to protect routes (item 4)
+- Ready for T-004: Protect routes
 - Consider rate limiting for auth endpoints
 ```
 
@@ -579,9 +694,9 @@ After iteration 3:
 
 ## Best Practices
 
-### Writing Good Checklist Items
+### Writing Good Tasks
 
-**Good items are:**
+**Good tasks are:**
 
 - Atomic (one thing)
 - Verifiable (clear done/not-done)
@@ -593,6 +708,26 @@ After iteration 3:
 | "Fix bugs"                 | "Fix null pointer in UserCard component"          |
 | "Add tests"                | "Add unit tests for auth.ts"                      |
 | "Refactor code"            | "Extract validation logic to src/lib/validate.ts" |
+
+### Writing Good Acceptance Criteria
+
+**Bad** (vague):
+
+```json
+"acceptanceCriteria": ["Works correctly", "Is fast"]
+```
+
+**Good** (specific, testable):
+
+```json
+"acceptanceCriteria": [
+  "Retry on HTTP 429, 500, 502, 503, 504",
+  "Exponential backoff: 1s, 2s, 4s",
+  "Add --max-retries flag (default: 3)",
+  "Update --help text with new flag",
+  "pnpm test passes"
+]
+```
 
 ### The "Don't Assume Missing" Rule
 
@@ -616,30 +751,99 @@ The AI discovers things each iteration. Capture them:
 | -------------------------------------- | ----------------------------- |
 | "This test is flaky"                   | progress.txt (immediate note) |
 | "Always use `api.fetch` not raw fetch" | CLAUDE.md (permanent pattern) |
-| "Item 5 depends on item 3"             | specs file (plan update)      |
+| "Item 5 depends on item 3"             | spec file (update dependsOn)  |
 
-### When to Regenerate Plans
+### When to Regenerate Specs
 
 Regenerate (don't patch) when:
 
 - Current approach isn't working after 3+ iterations
 - Discovered codebase is structured differently than assumed
 - Better approach became apparent
-- Plan has too many amendments
-
-### Subagent Strategy
-
-The AI can spawn subagents for parallel work:
-
-| Task                    | Subagent Strategy             |
-| ----------------------- | ----------------------------- |
-| Reading/searching files | Many parallel (up to 500)     |
-| Building/testing        | Single sequential             |
-| Complex reasoning       | Opus for "Ultrathink" moments |
+- Spec has too many amendments
 
 ---
 
 ## Advanced Usage
+
+### Test Mode
+
+Run a single iteration without pushing—ideal for validating prompts:
+
+```bash
+# Single iteration, no push, ignore completion marker
+./ralph.sh --test
+./ralph.sh -1                    # Short flag
+
+# Combine with other options
+./ralph.sh --test --model haiku  # Test with haiku
+./ralph.sh --test --dry-run      # Preview test config
+```
+
+### Interactive Mode
+
+Prompt for confirmation between iterations—great for learning or cautious sessions:
+
+```bash
+# Enable interactive mode
+./ralph.sh --interactive
+./ralph.sh -i                    # Short flag
+
+# Set custom timeout (default: 300 seconds / 5 minutes)
+./ralph.sh -i --interactive-timeout 60
+```
+
+When enabled, after each iteration Ralph will:
+1. Display an iteration summary (duration, status, files changed)
+2. Prompt: `Continue to next iteration? [Y/n/s]`
+   - **Y** (or Enter): Continue to next iteration
+   - **n**: Stop the session gracefully
+   - **s**: Show git diff, then prompt again
+3. Auto-continue after timeout
+
+### Verbose Mode
+
+Debug configuration and see where settings come from:
+
+```bash
+./ralph.sh --verbose
+./ralph.sh -v                    # Short flag
+./ralph.sh -v --dry-run          # Verbose dry run
+```
+
+Verbose mode shows:
+- Configuration precedence (cli/env/config/default)
+- Prompt preview (first 20 lines)
+- Session state updates
+- Retry logic decisions
+
+### Session Resume
+
+Resume interrupted sessions (Ctrl+C, network drop, laptop sleep):
+
+```bash
+# List all resumable sessions
+./ralph.sh --list-sessions
+
+# Resume the interrupted session
+./ralph.sh --resume
+```
+
+Session state is saved to `.ralph-session.json` during execution. On successful completion, it's archived to `~/.ralph/logs/`. On interrupt or failure, it's preserved for resume.
+
+### Retry Logic
+
+Ralph automatically retries on transient failures:
+
+```bash
+# Disable automatic retry (fail immediately on errors)
+./ralph.sh --no-retry
+
+# Set custom max retries (default: 3)
+./ralph.sh --max-retries 5
+```
+
+Retry uses exponential backoff (5s → 15s → 45s) for transient errors like rate limits (429), server errors (500, 502, 503, 504), and network issues. Fatal errors (auth failures, 401, 403) are not retried.
 
 ### Model Selection
 
@@ -650,7 +854,6 @@ The AI can spawn subagents for parallel work:
 | `haiku`  | Fastest | Lowest  | Simple fixes, documentation     |
 
 ```bash
-# Override default model
 ./ralph.sh build --model sonnet
 ./ralph.sh plan --model opus
 ./ralph.sh -p "Fix typo" --model haiku
@@ -680,23 +883,68 @@ The AI can spawn subagents for parallel work:
 ./ralph.sh build --push
 ```
 
-### Custom Prompts
+### Webhook Notifications
+
+Get notified when sessions complete:
 
 ```bash
-# Use custom prompt file
-./ralph.sh -f ./prompts/security-audit.md
+# Send notifications to a webhook endpoint
+./ralph.sh --notify-webhook "https://hooks.slack.com/services/xxx/yyy/zzz" build
 
-# Inline prompt (creates temp file)
-./ralph.sh -p "Fix all TypeScript errors"
+# Or via environment variable
+RALPH_NOTIFY_WEBHOOK="https://example.com/webhook" ./ralph.sh build
 ```
 
-### Different Spec Files
+Webhooks send a JSON POST with:
+- `event`: session_complete, session_max_iterations, session_interrupted
+- `session_id`, `status`, `iterations`, `duration_seconds`
+- `branch`, `mode`, `model`, `summary`, `last_commit`
+
+### Structured JSON Logging
+
+For log aggregation systems (ELK, Datadog, Splunk):
 
 ```bash
-# Use different spec file
-./ralph.sh -s ./specs/feature-auth.md
-./ralph.sh -s ./specs/bugfix-123.md
+./ralph.sh --log-format json build
 ```
+
+JSON log events include:
+- `session_start`, `iteration_start`, `tool_call`, `iteration_end`, `error`, `session_end`
+- Each with `timestamp`, `session_id`, `event`, `data`
+
+### Session Summary Reports
+
+Ralph auto-generates a markdown summary after each session:
+
+```bash
+# Summaries generated by default
+./ralph.sh build
+
+# Disable summary generation
+./ralph.sh --no-summary build
+```
+
+Location: `~/.ralph/logs/{session_id}_summary.md`
+
+Includes:
+- Session overview (status, duration, iterations)
+- Per-iteration table (duration, exit code, files, commit message)
+- Files modified, commits made
+- Troubleshooting section for failed sessions
+
+### Custom Log Locations
+
+```bash
+# Use custom log directory
+./ralph.sh --log-dir /path/to/logs build
+
+# Use explicit log file path
+./ralph.sh --log-file /path/to/session.log build
+```
+
+Default: `~/.ralph/logs/{mode}_{branch}_{timestamp}.log`
+
+A symlink `~/.ralph/logs/latest.log` always points to the current session log.
 
 ### Branch Archiving
 
@@ -707,29 +955,6 @@ When you switch branches, Ralph automatically archives:
 - Saved to `archive/YYYY-MM-DD-branch-name/`
 
 This preserves history when context-switching between features.
-
-### Logging
-
-Full session logs saved to `/tmp/ralph_<mode>_<timestamp>.log`:
-
-```bash
-# View recent logs
-ls -la /tmp/ralph_*.log
-
-# Tail running session
-tail -f /tmp/ralph_build_*.log
-
-# Search for errors
-grep -i error /tmp/ralph_*.log
-```
-
-### Exit Codes
-
-| Code  | Meaning                                |
-| ----- | -------------------------------------- |
-| `0`   | Success—all tasks complete             |
-| `1`   | Max iterations reached—work may remain |
-| `130` | Interrupted (Ctrl+C)                   |
 
 ### Background Execution
 
@@ -747,6 +972,22 @@ screen -S ralph
 # screen -r ralph to reattach
 ```
 
+### Shell Completion
+
+Tab completion is available for bash and zsh:
+
+**Bash:**
+```bash
+source completions/ralph.bash
+# Or copy to /etc/bash_completion.d/ralph
+```
+
+**Zsh:**
+```bash
+fpath=(/path/to/ralph-starter/completions $fpath)
+autoload -Uz compinit && compinit
+```
+
 ---
 
 ## Troubleshooting
@@ -756,14 +997,14 @@ screen -S ralph
 Ensure prompt files exist:
 
 ```bash
-ls prompts/PROMPT_plan.md prompts/PROMPT_build.md
+ls prompts/PROMPT_plan.md prompts/PROMPT_build.md prompts/PROMPT_spec.md
 ```
 
 ### Loop runs but no progress
 
 Check that:
 
-1. Spec file has `[ ]` items (unchecked)
+1. Spec file has tasks with `passes: false`
 2. AI can understand the task (not too vague)
 3. Tests aren't failing immediately
 
@@ -777,17 +1018,24 @@ The AI should fix failures, but if stuck:
 
 ### AI keeps "searching" but not implementing
 
-Common when tasks are too vague. Improve checklist:
+Common when tasks are too vague. Improve the task:
 
-```markdown
-# Bad
+```json
+// Bad
+{
+  "title": "Add authentication",
+  "acceptanceCriteria": ["Auth works"]
+}
 
-- [ ] Add authentication
-
-# Good
-
-- [ ] Create JWT token utility in src/lib/auth.ts
-- [ ] Add login endpoint POST /api/auth/login
+// Good
+{
+  "title": "Create JWT token utility in src/lib/auth.ts",
+  "acceptanceCriteria": [
+    "generateToken(payload) returns signed JWT",
+    "verifyToken(token) returns payload or throws",
+    "pnpm typecheck passes"
+  ]
+}
 ```
 
 ### Session seems stuck
@@ -795,11 +1043,10 @@ Common when tasks are too vague. Improve checklist:
 Check the log file:
 
 ```bash
-tail -100 /tmp/ralph_build_*.log | less
+tail -100 ~/.ralph/logs/latest.log | less
 ```
 
 Look for:
-
 - Rate limiting messages
 - Error responses
 - Repeated tool calls
@@ -808,10 +1055,19 @@ Look for:
 
 Verify:
 
-1. ALL checklist items are `[x]`
-2. Tests pass (`npm run test`)
-3. Type checks pass (`npm run typecheck`)
+1. ALL tasks have `passes: true`
+2. Tests pass (`pnpm test`)
+3. Type checks pass (`pnpm typecheck`)
 4. The prompt includes the completion protocol
+
+### Session was interrupted
+
+Resume it:
+
+```bash
+./ralph.sh --list-sessions
+./ralph.sh --resume
+```
 
 ---
 
@@ -823,28 +1079,55 @@ Verify:
 # Help
 ./ralph.sh --help
 
-# Plan mode
-./ralph.sh plan           # Plan until complete
-./ralph.sh plan 5         # Max 5 iterations
+# Spec mode (generate specs)
+./ralph.sh spec -p "Add dark mode"       # From inline description
+./ralph.sh spec -f ./requirements.md     # From requirements file
+./ralph.sh spec --from-product           # From product artifacts
+./ralph.sh spec -p "X" -o ./specs/x.json # Custom output path
+./ralph.sh spec --force                  # Overwrite existing
 
-# Build mode
-./ralph.sh                # Build (default)
-./ralph.sh build 10       # Max 10 iterations
+# Plan mode (optional human-readable view)
+./ralph.sh plan                          # Default spec
+./ralph.sh plan -s ./specs/feature.json  # Specific spec
+
+# Build mode (implementation)
+./ralph.sh                               # Build (default)
+./ralph.sh build 10                      # Max 10 iterations
+./ralph.sh build -s ./specs/feature.json # Specific spec
+
+# Product mode (12 artifacts)
+./ralph.sh product                       # Generate all artifacts
+./ralph.sh product --context ./input/    # Custom input directory
 
 # Model selection
 ./ralph.sh --model sonnet
 ./ralph.sh -m haiku
 
-# Custom prompts
-./ralph.sh -f custom.md
-./ralph.sh -p "Fix the bug"
+# Testing and debugging
+./ralph.sh --test                        # Single iteration, no push
+./ralph.sh --interactive                 # Confirm between iterations
+./ralph.sh --verbose                     # Show detailed output
+./ralph.sh --dry-run                     # Preview config
 
-# Options
-./ralph.sh --no-push      # Don't auto-push
-./ralph.sh --unlimited    # No iteration limit
-./ralph.sh --dry-run      # Preview config without running
-./ralph.sh -s specs/x.md  # Spec file (plan auto-derived)
-./ralph.sh -s specs/x.md -l plans/custom.md  # Override derived plan
+# Session management
+./ralph.sh --resume                      # Resume interrupted session
+./ralph.sh --list-sessions               # List resumable sessions
+
+# Push and iteration control
+./ralph.sh --no-push                     # Don't auto-push
+./ralph.sh --unlimited                   # No iteration limit
+./ralph.sh -n 50                         # Custom iteration limit
+
+# Retry control
+./ralph.sh --no-retry                    # Disable retry
+./ralph.sh --max-retries 5               # Custom retry limit
+
+# Logging
+./ralph.sh --log-format json             # Structured logging
+./ralph.sh --log-dir /custom/logs        # Custom log directory
+
+# Notifications
+./ralph.sh --notify-webhook "https://..." # Webhook on completion
 ```
 
 ### Key Files
@@ -852,30 +1135,77 @@ Verify:
 | File                           | Purpose                                  |
 | ------------------------------ | ---------------------------------------- |
 | `ralph.sh`                     | Loop script                              |
-| `ralph.conf`                   | Optional defaults                        |
-| `prompts/PROMPT_plan.md`       | Planning instructions                    |
-| `prompts/PROMPT_build.md`      | Build instructions                       |
+| `ralph.conf`                   | Project configuration                    |
+| `~/.ralph/config`              | Global configuration                     |
+| `prompts/PROMPT_spec.md`       | Spec mode instructions                   |
+| `prompts/PROMPT_plan.md`       | Plan mode instructions                   |
+| `prompts/PROMPT_build.md`      | Build mode instructions                  |
+| `prompts/PROMPT_product.md`    | Product mode instructions                |
 | `specs/INDEX.md`               | Feature catalog                          |
-| `specs/{feature}.md`           | Feature specification (the "what & why") |
-| `plans/IMPLEMENTATION_PLAN.md` | Task checklist (the "how")               |
+| `specs/{feature}.json`         | Feature specification (source of truth)  |
+| `plans/{feature}_PLAN.md`      | Human-readable plan (optional, derived)  |
 | `progress.txt`                 | Iteration history                        |
 | `CLAUDE.md`                    | Project context                          |
+| `.ralph-session.json`          | Active session state                     |
+| `~/.ralph/logs/latest.log`     | Current session log                      |
+
+### Project Structure
+
+```
+project-root/
+├── ralph.sh                      # The loop script
+├── ralph.conf                    # Project configuration
+├── CLAUDE.md                     # Project context
+├── progress.txt                  # Iteration history
+├── prompts/
+│   ├── PROMPT_spec.md           # Spec generation instructions
+│   ├── PROMPT_plan.md           # Planning mode instructions
+│   ├── PROMPT_build.md          # Build mode instructions
+│   └── PROMPT_product.md        # Product artifact generation
+├── specs/
+│   ├── INDEX.md                 # Feature catalog
+│   └── {feature}.json           # JSON specs with tasks
+├── plans/
+│   └── {feature}_PLAN.md        # Human-readable plans (optional)
+├── product-input/               # Product context files
+├── product-output/              # Generated product artifacts
+├── .claude/
+│   └── skills/
+│       └── writing-ralph-specs/ # Skill for creating JSON specs
+├── archive/                     # Auto-archived branch state
+├── docs/
+│   ├── RALPH_LOOP_REF.md        # CLI reference
+│   ├── RALPH_WORKSHOP.md        # This guide
+│   └── PRODUCT_ARTIFACT_SPEC.md # Product artifact specifications
+└── completions/
+    ├── ralph.bash               # Bash completion
+    └── ralph.zsh                # Zsh completion
+```
+
+### Exit Codes
+
+| Code  | Meaning                                |
+| ----- | -------------------------------------- |
+| `0`   | Success—all tasks complete             |
+| `1`   | Max iterations reached—work may remain |
+| `130` | Interrupted (Ctrl+C)                   |
 
 ### The Golden Rules
 
 1. **One task per iteration**
 2. **Don't assume missing—search first**
 3. **Tests are your rejection mechanism**
-4. **Plans are disposable—regenerate if wrong**
-5. **Capture the why, not just the what**
+4. **Specs are the source of truth**
+5. **Plans are optional and derived**
+6. **Capture the why, not just the what**
 
 ---
 
 ## Next Steps
 
-1. **Set up minimum files** in your project
-2. **Run plan mode** to create your first checklist
-3. **Run build mode** and watch it work
-4. **Iterate** on your prompts as you learn what works
+1. **Try spec mode**: `./ralph.sh spec -p "Add dark mode toggle"`
+2. **Run build mode**: `./ralph.sh build -s ./specs/new-spec.json`
+3. **Watch it work**: Use `--interactive` to see each iteration
+4. **Iterate on specs**: Refine tasks as you learn what works
 
 Happy automating!

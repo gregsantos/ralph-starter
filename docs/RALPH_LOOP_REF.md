@@ -326,8 +326,8 @@ When using `--from-product`, Ralph reads product artifacts in priority order:
 1. `product-output/7_prd.md` (PRD - primary source)
 2. `product-output/9_technical_requirements.md`
 3. `product-output/4_personas.md`
-4. `product-output/6_user_journey_map.md`
-5. `product-output/8_feature_specifications.md`
+4. `product-output/5_journey_map.md`
+5. `product-output/8_product_roadmap.md`
 
 If none of these exist, it falls back to reading all `.md` files in `product-output/`.
 
@@ -1142,9 +1142,9 @@ mkdir -p product-input
 #    → product-output/6_positioning.md
 #    → product-output/7_prd.md              ← Use this to inform your spec
 #    → product-output/8_product_roadmap.md
-#    → product-output/9_solution_architecture.md
-#    → product-output/10_metrics_framework.md
-#    → product-output/11_risk_assessment.md
+#    → product-output/9_technical_requirements.md
+#    → product-output/10_ux_copy_deck.md
+#    → product-output/11_wireflow.md
 #    → product-output/12_go_to_market.md
 
 # 3. Review artifacts, especially 7_prd.md, to inform spec creation
