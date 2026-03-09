@@ -24,6 +24,7 @@ _ralph() {
         'plan:Use PROMPT_plan.md for architecture and planning tasks'
         'build:Use PROMPT_build.md for implementation tasks'
         'product:Use PROMPT_product.md for product artifact generation'
+        'review:Codebase analysis producing findings JSON + Markdown report'
     )
 
     models=(
@@ -75,6 +76,12 @@ _ralph() {
         '--from-product[Read input from product-output/ artifacts]' \
         '(-o --spec-output)'{-o,--spec-output}'[Output spec file path]:file:_files' \
         '--force[Overwrite existing output file]' \
+        '--review-target[Target directory/glob to review]:directory:_files -/' \
+        '--diff-base[Only review files changed since git ref]:ref:' \
+        '--findings[Findings JSON output path]:file:_files' \
+        '--report[Report Markdown output path]:file:_files' \
+        '--fix-spec[Generate fix-spec tasks from findings]:file:_files' \
+        '--focus[Comma-separated categories to analyze]:categories:' \
         '*:preset or iterations:(($presets))'
 }
 

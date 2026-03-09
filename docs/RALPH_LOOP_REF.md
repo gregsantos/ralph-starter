@@ -381,6 +381,67 @@ Launch mode defaults:
 - Build phase iterations are computed dynamically from generated spec tasks plus buffer (`--launch-buffer`, default 5).
 - Plan mode is intentionally not part of launch.
 
+### Review Mode
+
+Review mode performs structured, iterative codebase analysis. It produces JSON findings (source of truth) and a generated Markdown report. Optionally generates a fix-spec that feeds into `./ralph.sh build`.
+
+```bash
+# Review entire src/ for all categories
+./ralph.sh review
+
+# Review a specific directory
+./ralph.sh review --review-target ./lib/
+
+# Review only files changed since main
+./ralph.sh review --diff-base main
+
+# Focus on specific categories
+./ralph.sh review --focus security,test-coverage
+
+# Custom output paths
+./ralph.sh review --findings ./custom/findings.json --report ./custom/report.md
+
+# Generate fix spec from findings (feeds into build mode)
+./ralph.sh review --fix-spec ./specs/review-fixes.json
+
+# Combined: diff-based, security-focused, with fix spec
+./ralph.sh review --diff-base main --focus security --fix-spec ./specs/security-fixes.json
+```
+
+**Review Mode Options:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--review-target PATH` | Directory/glob to review | `src/*` |
+| `--diff-base REF` | Only review files changed since git ref | (none — full target) |
+| `--findings PATH` | Findings JSON output path | `review-output/findings.json` |
+| `--report PATH` | Report Markdown output path | `review-output/REVIEW_REPORT.md` |
+| `--fix-spec PATH` | Generate fix-spec tasks from findings | (none — disabled) |
+| `--focus CATS` | Comma-separated categories to analyze | `code-quality,test-coverage,architecture,security` |
+
+**Categories:**
+
+| Category | What It Analyzes |
+|----------|-----------------|
+| `security` | OWASP Top 10, auth/authz, input validation, secrets, CVEs |
+| `bug` | Error handling, race conditions, type safety, edge cases |
+| `code-quality` | Function complexity, naming, duplication, code smells |
+| `test-coverage` | Untested paths, mock quality, assertion quality |
+| `architecture` | Coupling, layering, single responsibility, consistency |
+
+**Iteration Strategy:**
+
+Review mode uses a hybrid approach:
+1. **Phase 1 (module passes)**: One module per iteration, all focused categories
+2. **Phase 2 (cross-cutting passes)**: One category per iteration across full scope
+3. **Final iteration**: Generate Markdown report (and optional fix spec) from findings
+
+**Key behaviors:**
+- Push is always disabled (read-only analysis)
+- No source code modifications — only writes findings, report, and fix spec files
+- No auto-commit — findings are for human review first
+- Output goes to `review-output/` directory by default
+
 ### Model Selection
 
 ```bash
@@ -968,6 +1029,10 @@ Ralph supports environment variables for CI/CD integration and user defaults. Pr
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
 | `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
 | `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
+| `RALPH_REVIEW_TARGET`  | Review target directory/glob            | `RALPH_REVIEW_TARGET=./lib/`  |
+| `RALPH_DIFF_BASE`      | Git ref for diff-based review scope     | `RALPH_DIFF_BASE=main`        |
+| `RALPH_FINDINGS_FILE`  | Review findings JSON output path        | `RALPH_FINDINGS_FILE=...`     |
+| `RALPH_REPORT_FILE`    | Review report Markdown output path      | `RALPH_REPORT_FILE=...`       |
 
 ### Example: CI/CD Usage
 
@@ -1017,6 +1082,19 @@ Prompts support these placeholders (automatically substituted):
 | `{{PRODUCT_OUTPUT_DIR}}`  | `./product-output/`               | Product artifact output directory |
 | `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specification file       |
 | `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history log             |
+
+### Review Mode
+
+| Variable                    | Default                              | Description                                 |
+| --------------------------- | ------------------------------------ | ------------------------------------------- |
+| `{{REVIEW_TARGET}}`         | `src/*`                              | Directory/glob to review                    |
+| `{{DIFF_BASE}}`             | (none)                               | Git ref for changed-files scope             |
+| `{{REVIEW_FINDINGS_FILE}}`  | `review-output/findings.json`        | Findings JSON output path                   |
+| `{{REVIEW_REPORT_FILE}}`    | `review-output/REVIEW_REPORT.md`     | Report Markdown output path                 |
+| `{{REVIEW_FIX_SPEC_FILE}}`  | (none)                               | Fix spec output path (optional)             |
+| `{{REVIEW_FOCUS}}`          | `code-quality,test-coverage,architecture,security` | Categories to analyze    |
+| `{{PROGRESS_FILE}}`         | `progress.txt`                       | Iteration history log                       |
+| `{{SOURCE_DIR}}`            | `src/*`                              | Source code location                        |
 
 ## Configuration File
 

@@ -35,7 +35,8 @@ ralph-starter/
 │   ├── PROMPT_spec.md            # Spec generation instructions
 │   ├── PROMPT_plan.md            # Planning mode instructions (optional)
 │   ├── PROMPT_build.md           # Build mode instructions
-│   └── PROMPT_product.md         # Product artifact generation
+│   ├── PROMPT_product.md         # Product artifact generation
+│   └── PROMPT_review.md          # Codebase analysis and review
 ├── specs/
 │   ├── INDEX.md                  # Feature catalog
 │   ├── {feature}.json            # JSON specs (recommended)
@@ -44,9 +45,11 @@ ralph-starter/
 │   └── IMPLEMENTATION_PLAN.md    # Task checklist
 ├── .claude/
 │   └── skills/
-│       └── writing-ralph-specs/  # Skill for creating JSON specs
+│       ├── writing-ralph-specs/  # Skill for creating JSON specs
+│       └── reviewing-codebase/   # Skill for codebase analysis
 ├── product-input/                # Product context files
 ├── product-output/               # Generated artifacts
+├── review-output/                # Review findings and reports
 ├── progress.txt                  # Iteration history
 ├── archive/                      # Auto-archived branch state
 └── docs/
@@ -166,7 +169,9 @@ return Response.json({error: "Invalid request", details: "..."}, {status: 400})
 - Use `frontend-design` skill for creative aesthetics (typography choices, color palettes, animations, visual style)
 - Use `ui-quality` skill for implementation correctness (accessibility, performance, forms, loading states)
 - Use `writing-ralph-specs` skill for creating structured JSON specs with tasks array (see `.claude/skills/`)
+- Use `reviewing-codebase` skill for structured codebase analysis with JSON findings (see `.claude/skills/`)
 - Spec mode (`./ralph.sh spec`) automatically uses the writing-ralph-specs skill
+- Review mode (`./ralph.sh review`) automatically uses the reviewing-codebase skill
 
 # Spec → Build Workflow
 
@@ -300,6 +305,11 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh build -s ./specs/feature.json  # Build from specific spec
 ./ralph.sh build --model sonnet         # Build with sonnet
 
+# Review mode (codebase analysis)
+./ralph.sh review                       # Review src/* for all categories
+./ralph.sh review --diff-base main      # Review only changed files since main
+./ralph.sh review --fix-spec ./specs/fixes.json  # Generate fix spec from findings
+
 # Other modes and options
 ./ralph.sh plan -s ./specs/feature.json # Generate human-readable plan (optional)
 ./ralph.sh product                      # Product artifact generation (12 docs)
@@ -310,7 +320,7 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh -i                           # Interactive mode (confirm between iterations)
 ```
 
-## Five Modes
+## Six Modes
 
 | Mode        | Purpose                                         | Command              |
 | ----------- | ----------------------------------------------- | -------------------- |
@@ -319,6 +329,7 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 | **plan**    | Create human-readable plan (optional for tasks) | `./ralph.sh plan`    |
 | **build**   | Execute tasks one at a time                     | `./ralph.sh build`   |
 | **product** | Generate product documentation (12 artifacts)   | `./ralph.sh product` |
+| **review**  | Codebase analysis producing findings + report   | `./ralph.sh review`  |
 
 ## Prompt Files
 
@@ -326,6 +337,7 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 - `./prompts/PROMPT_plan.md` - Architecture and planning tasks (optional when using tasks)
 - `./prompts/PROMPT_build.md` - Implementation tasks
 - `./prompts/PROMPT_product.md` - Product artifact generation
+- `./prompts/PROMPT_review.md` - Codebase analysis and review
 
 ## Completion Marker
 

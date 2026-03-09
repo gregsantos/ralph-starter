@@ -19,7 +19,7 @@ _ralph_completions() {
     prev="${COMP_WORDS[COMP_CWORD-1]}"
 
     # Presets
-    presets="launch spec plan build product"
+    presets="launch spec plan build product review"
 
     # Models
     models="opus sonnet haiku"
@@ -66,6 +66,12 @@ _ralph_completions() {
         --from-product
         -o --spec-output
         --force
+        --review-target
+        --diff-base
+        --findings
+        --report
+        --fix-spec
+        --focus
     "
 
     # Handle options that take file paths
@@ -98,9 +104,18 @@ _ralph_completions() {
             # These take strings, no completion
             return 0
             ;;
-        -o|--spec-output)
-            # Complete file paths for spec output
+        -o|--spec-output|--findings|--report|--fix-spec)
+            # Complete file paths for spec output and review files
             mapfile -t COMPREPLY < <(compgen -f -- "${cur}")
+            return 0
+            ;;
+        --review-target)
+            # Complete directory paths for review target
+            mapfile -t COMPREPLY < <(compgen -d -- "${cur}")
+            return 0
+            ;;
+        --diff-base|--focus)
+            # These take strings, no completion
             return 0
             ;;
         --from-product|--force|--full-product|--skip-product)
@@ -119,7 +134,7 @@ _ralph_completions() {
     local has_preset=false
     for word in "${COMP_WORDS[@]}"; do
         case "${word}" in
-            launch|spec|plan|build|product)
+            launch|spec|plan|build|product|review)
                 has_preset=true
                 break
                 ;;

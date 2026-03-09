@@ -3,6 +3,7 @@
 .ralph-session.json
 .ralph-launch-session.json
 archive/
+review-output/
 
 # Claude settings (but not skills)
 .claude/*

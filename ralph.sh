@@ -10,6 +10,7 @@
 #   plan              Use PROMPT_plan.md (default model: opus)
 #   build             Use PROMPT_build.md (default model: opus)
 #   product           Use PROMPT_product.md for product artifact generation
+#   review            Codebase analysis producing findings JSON + Markdown report
 #
 # Options:
 #   -f, --file PATH       Use custom prompt file
@@ -45,12 +46,19 @@
 #   --full-product        Force product phase in launch mode
 #   --skip-product        Skip product phase in launch mode
 #   --launch-buffer N     Build phase buffer added to task count (default: 5)
+#   --review-target PATH  Review target directory/glob (default: src/*)
+#   --diff-base REF       Review only files changed since git ref
+#   --findings PATH       Review findings JSON output path
+#   --report PATH         Review report Markdown output path
+#   --fix-spec PATH       Generate fix-spec tasks from review findings
+#   --focus CATS          Review categories (comma-separated, default: all)
 #   -h, --help            Show this help
 #
 # Environment Variables:
 #   RALPH_MODEL, RALPH_MAX_ITERATIONS, RALPH_PUSH_ENABLED, RALPH_SPEC_FILE,
 #   RALPH_PLAN_FILE, RALPH_PROGRESS_FILE, RALPH_LOG_DIR, RALPH_LOG_FORMAT,
-#   RALPH_NOTIFY_WEBHOOK, RALPH_LAUNCH_BUFFER, RALPH_FULL_PRODUCT, RALPH_SKIP_PRODUCT
+#   RALPH_NOTIFY_WEBHOOK, RALPH_LAUNCH_BUFFER, RALPH_FULL_PRODUCT, RALPH_SKIP_PRODUCT,
+#   RALPH_REVIEW_TARGET, RALPH_DIFF_BASE, RALPH_FINDINGS_FILE, RALPH_REPORT_FILE
 #   Precedence: CLI > env vars > config file > defaults
 #
 # Examples:
@@ -886,6 +894,7 @@ show_help() {
     echo "  build             Use PROMPT_build.md (default model: opus)"
     echo "  spec              Use PROMPT_spec.md for spec generation (default model: opus)"
     echo "  product           Use PROMPT_product.md for product artifact generation"
+    echo "  review            Codebase analysis producing findings JSON + Markdown report"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
     echo "  -f, --file PATH   Use custom prompt file"
@@ -932,6 +941,15 @@ show_help() {
     echo "  --force              Overwrite existing output file"
     echo "  Note: Exactly one input source (-p, -f, or --from-product) is required for spec mode."
     echo ""
+    echo -e "${BOLD}Review Mode Options:${RESET}"
+    echo "  --review-target PATH  Target directory/glob to review (default: src/*)"
+    echo "  --diff-base REF       Only review files changed since git ref (e.g., main)"
+    echo "  --findings PATH       Findings JSON output path (default: review-output/findings.json)"
+    echo "  --report PATH         Report Markdown output path (default: review-output/REVIEW_REPORT.md)"
+    echo "  --fix-spec PATH       Generate fix-spec tasks from findings (e.g., specs/fixes.json)"
+    echo "  --focus CATEGORIES    Comma-separated categories to analyze"
+    echo "                        (default: code-quality,test-coverage,architecture,security)"
+    echo ""
     echo "  -h, --help        Show this help"
     echo ""
     echo -e "${BOLD}Examples:${RESET}"
@@ -946,6 +964,11 @@ show_help() {
     echo "  ./ralph.sh spec -p 'X' --force       # Overwrite existing spec"
     echo "  ./ralph.sh product                   # Product artifact generation"
     echo "  ./ralph.sh product --context ./ctx/ --output ./out/  # Custom product paths"
+    echo "  ./ralph.sh review                    # Review src/* for all categories"
+    echo "  ./ralph.sh review --review-target ./lib/  # Review specific directory"
+    echo "  ./ralph.sh review --diff-base main   # Review only changed files since main"
+    echo "  ./ralph.sh review --focus security   # Focus on security only"
+    echo "  ./ralph.sh review --fix-spec ./specs/fixes.json  # Generate fix spec"
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
@@ -971,10 +994,14 @@ show_help() {
     echo "  RALPH_LAUNCH_BUFFER    Build iteration buffer for launch mode"
     echo "  RALPH_FULL_PRODUCT     Force product phase in launch mode"
     echo "  RALPH_SKIP_PRODUCT     Skip product phase in launch mode"
+    echo "  RALPH_REVIEW_TARGET    Review target directory/glob"
+    echo "  RALPH_DIFF_BASE        Git ref for diff-based review scope"
+    echo "  RALPH_FINDINGS_FILE    Review findings JSON output path"
+    echo "  RALPH_REPORT_FILE      Review report Markdown output path"
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
-    echo "  Model:      opus (plan/build/spec/product), sonnet (inline)"
+    echo "  Model:      opus (plan/build/spec/product/review), sonnet (inline)"
     echo "  Push:       enabled"
     echo ""
     echo -e "${BOLD}Shell Completion:${RESET}"
@@ -993,7 +1020,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Defaults
 PROMPT_SOURCE="preset"    # preset, file, or inline
 PROMPT_CONTENT=""         # file path or inline string
-PRESET_NAME="build"       # launch, plan, build, product, spec
+PRESET_NAME="build"       # launch, plan, build, product, spec, review
 MODEL=""                  # set after parsing based on mode
 MODEL_OVERRIDE=""         # user-specified model
 PUSH_ENABLED=true
@@ -1032,6 +1059,14 @@ SPEC_INPUT_CONTENT=""      # The content/path for spec mode input
 CLI_INLINE_PROMPT=""       # Track -p value separately for spec mode
 CLI_FILE_PATH=""           # Track -f value separately for spec mode
 
+# Review mode specific variables
+REVIEW_TARGET=""
+DIFF_BASE=""
+REVIEW_FINDINGS_FILE=""
+REVIEW_REPORT_FILE=""
+REVIEW_FIX_SPEC_FILE=""
+REVIEW_FOCUS=""
+
 # Track CLI-explicit flags (set during arg parsing)
 CLI_SPEC_SET=false
 CLI_PLAN_SET=false
@@ -1047,6 +1082,12 @@ CLI_PROGRESS_SET=false
 CLI_WEBHOOK_SET=false
 CLI_SPEC_OUTPUT_SET=false
 CLI_LAUNCH_BUFFER_SET=false
+CLI_REVIEW_TARGET_SET=false
+CLI_DIFF_BASE_SET=false
+CLI_FINDINGS_SET=false
+CLI_REPORT_SET=false
+CLI_FIX_SPEC_SET=false
+CLI_FOCUS_SET=false
 
 # Parse arguments
 POSITIONAL_ARGS=()
@@ -1233,7 +1274,37 @@ while [[ $# -gt 0 ]]; do
             SPEC_FORCE_OVERWRITE=true
             shift
             ;;
-        launch|plan|build|product|spec)
+        --review-target)
+            REVIEW_TARGET="$2"
+            CLI_REVIEW_TARGET_SET=true
+            shift 2
+            ;;
+        --diff-base)
+            DIFF_BASE="$2"
+            CLI_DIFF_BASE_SET=true
+            shift 2
+            ;;
+        --findings)
+            REVIEW_FINDINGS_FILE="$2"
+            CLI_FINDINGS_SET=true
+            shift 2
+            ;;
+        --report)
+            REVIEW_REPORT_FILE="$2"
+            CLI_REPORT_SET=true
+            shift 2
+            ;;
+        --fix-spec)
+            REVIEW_FIX_SPEC_FILE="$2"
+            CLI_FIX_SPEC_SET=true
+            shift 2
+            ;;
+        --focus)
+            REVIEW_FOCUS="$2"
+            CLI_FOCUS_SET=true
+            shift 2
+            ;;
+        launch|plan|build|product|spec|review)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
             shift
@@ -1268,6 +1339,11 @@ fi
 # Handle test mode (single iteration, no push)
 if [ "$TEST_MODE" = true ]; then
     MAX_ITERATIONS=1
+    PUSH_ENABLED=false
+fi
+
+# Review mode: always disable push (read-only analysis)
+if [ "$PRESET_NAME" = "review" ]; then
     PUSH_ENABLED=false
 fi
 
@@ -1377,8 +1453,28 @@ if [ -n "${RALPH_SKIP_PRODUCT:-}" ] && [ "$SKIP_PRODUCT" != "true" ] && [ "$FULL
     esac
 fi
 
-# Force preset prompt resolution for launch/spec modes even when -p/-f are also provided.
-if [ "$PRESET_NAME" = "launch" ] || [ "$PRESET_NAME" = "spec" ]; then
+# RALPH_REVIEW_TARGET: Review target directory/glob
+if [ -n "${RALPH_REVIEW_TARGET:-}" ] && [ "$CLI_REVIEW_TARGET_SET" != "true" ]; then
+    REVIEW_TARGET="$RALPH_REVIEW_TARGET"
+fi
+
+# RALPH_DIFF_BASE: Git ref for diff-based review scope
+if [ -n "${RALPH_DIFF_BASE:-}" ] && [ "$CLI_DIFF_BASE_SET" != "true" ]; then
+    DIFF_BASE="$RALPH_DIFF_BASE"
+fi
+
+# RALPH_FINDINGS_FILE: Review findings JSON output path
+if [ -n "${RALPH_FINDINGS_FILE:-}" ] && [ "$CLI_FINDINGS_SET" != "true" ]; then
+    REVIEW_FINDINGS_FILE="$RALPH_FINDINGS_FILE"
+fi
+
+# RALPH_REPORT_FILE: Review report Markdown output path
+if [ -n "${RALPH_REPORT_FILE:-}" ] && [ "$CLI_REPORT_SET" != "true" ]; then
+    REVIEW_REPORT_FILE="$RALPH_REPORT_FILE"
+fi
+
+# Force preset prompt resolution for launch/spec/review modes even when -p/-f are also provided.
+if [ "$PRESET_NAME" = "launch" ] || [ "$PRESET_NAME" = "spec" ] || [ "$PRESET_NAME" = "review" ]; then
     PROMPT_SOURCE="preset"
 fi
 
@@ -2552,6 +2648,13 @@ substitute_template() {
     # Spec mode variables
     content="${content//\{\{INPUT_SOURCE\}\}/$SPEC_MODE_INPUT_SOURCE}"
     content="${content//\{\{OUTPUT_FILE\}\}/$SPEC_MODE_OUTPUT_FILE}"
+    # Review mode variables
+    content="${content//\{\{REVIEW_TARGET\}\}/$REVIEW_MODE_TARGET}"
+    content="${content//\{\{DIFF_BASE\}\}/$REVIEW_MODE_DIFF_BASE}"
+    content="${content//\{\{REVIEW_FINDINGS_FILE\}\}/$REVIEW_MODE_FINDINGS_FILE}"
+    content="${content//\{\{REVIEW_REPORT_FILE\}\}/$REVIEW_MODE_REPORT_FILE}"
+    content="${content//\{\{REVIEW_FIX_SPEC_FILE\}\}/$REVIEW_MODE_FIX_SPEC_FILE}"
+    content="${content//\{\{REVIEW_FOCUS\}\}/$REVIEW_MODE_FOCUS}"
     echo "$content"
 }
 
@@ -2629,6 +2732,33 @@ $(cat "$md_file")
             SPEC_MODE_INPUT_SOURCE="$product_content"
             ;;
     esac
+fi
+
+# Review mode variables (for template substitution)
+REVIEW_MODE_TARGET=""
+REVIEW_MODE_DIFF_BASE=""
+REVIEW_MODE_FINDINGS_FILE=""
+REVIEW_MODE_REPORT_FILE=""
+REVIEW_MODE_FIX_SPEC_FILE=""
+REVIEW_MODE_FOCUS=""
+
+if [ "$PRESET_NAME" = "review" ]; then
+    REVIEW_MODE_TARGET="${REVIEW_TARGET:-${SOURCE_DIR:-src/*}}"
+    REVIEW_MODE_DIFF_BASE="${DIFF_BASE:-}"
+    REVIEW_MODE_FOCUS="${REVIEW_FOCUS:-code-quality,test-coverage,architecture,security}"
+    local_review_output_dir="${SCRIPT_DIR}/review-output"
+    mkdir -p "$local_review_output_dir"
+    REVIEW_MODE_FINDINGS_FILE="${REVIEW_FINDINGS_FILE:-${local_review_output_dir}/findings.json}"
+    REVIEW_MODE_REPORT_FILE="${REVIEW_REPORT_FILE:-${local_review_output_dir}/REVIEW_REPORT.md}"
+    REVIEW_MODE_FIX_SPEC_FILE="${REVIEW_FIX_SPEC_FILE:-}"
+
+    # Validate diff-base if provided
+    if [ -n "$REVIEW_MODE_DIFF_BASE" ]; then
+        if ! git rev-parse --verify "$REVIEW_MODE_DIFF_BASE" >/dev/null 2>&1; then
+            echo -e "${RED}${SYM_CROSS} Error: Invalid --diff-base: $REVIEW_MODE_DIFF_BASE${RESET}"
+            exit 1
+        fi
+    fi
 fi
 
 # Derive plan file from spec file if spec was set via CLI but plan wasn't
@@ -3248,6 +3378,18 @@ print_config() {
         elif [ "$SKIP_PRODUCT" = true ]; then
             echo -e "${DIM}│${RESET} ${BOLD}Product${RESET}  ${SYM_ARROW} ${YELLOW}skipped (--skip-product)${RESET}"
         fi
+    elif [ "$MODE" = "review" ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Target${RESET}   ${SYM_ARROW} ${DIM}$REVIEW_MODE_TARGET${RESET}"
+        if [ -n "$REVIEW_MODE_DIFF_BASE" ]; then
+            echo -e "${DIM}│${RESET} ${BOLD}DiffBase${RESET} ${SYM_ARROW} ${DIM}$REVIEW_MODE_DIFF_BASE${RESET}"
+        fi
+        echo -e "${DIM}│${RESET} ${BOLD}Findings${RESET} ${SYM_ARROW} ${DIM}$REVIEW_MODE_FINDINGS_FILE${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Report${RESET}   ${SYM_ARROW} ${DIM}$REVIEW_MODE_REPORT_FILE${RESET}"
+        if [ -n "$REVIEW_MODE_FIX_SPEC_FILE" ]; then
+            echo -e "${DIM}│${RESET} ${BOLD}FixSpec${RESET}  ${SYM_ARROW} ${DIM}$REVIEW_MODE_FIX_SPEC_FILE${RESET}"
+        fi
+        echo -e "${DIM}│${RESET} ${BOLD}Focus${RESET}    ${SYM_ARROW} ${DIM}$REVIEW_MODE_FOCUS${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Source${RESET}   ${SYM_ARROW} ${DIM}$SOURCE_DIR${RESET}"
     else
         # Build/plan mode config
         echo -e "${DIM}│${RESET} ${BOLD}Spec${RESET}     ${SYM_ARROW} ${DIM}$SPEC_FILE${RESET}"

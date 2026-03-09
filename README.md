@@ -62,10 +62,11 @@ ralph-starter/
 ├── ralph.conf                    # Configuration defaults
 ├── CLAUDE.md                     # Project context for Claude
 ├── prompts/
-│   ├── PROMPT_spec.md            # Spec generation instructions (NEW!)
+│   ├── PROMPT_spec.md            # Spec generation instructions
 │   ├── PROMPT_plan.md            # Planning mode instructions
 │   ├── PROMPT_build.md           # Build mode instructions
-│   └── PROMPT_product.md         # Product artifact generation
+│   ├── PROMPT_product.md         # Product artifact generation
+│   └── PROMPT_review.md          # Codebase analysis and review
 ├── specs/
 │   ├── INDEX.md                  # Feature catalog
 │   ├── {feature}.json            # JSON specs with tasks (recommended)
@@ -74,9 +75,11 @@ ralph-starter/
 │   └── {feature}_PLAN.md         # Derived task checklist (optional)
 ├── .claude/
 │   └── skills/
-│       └── writing-ralph-specs/  # Skill for creating JSON specs
+│       ├── writing-ralph-specs/  # Skill for creating JSON specs
+│       └── reviewing-codebase/   # Skill for codebase analysis
 ├── product-input/                # Product context files (product mode)
 ├── product-output/               # Generated artifacts (product mode)
+├── review-output/                # Review findings and reports (review mode)
 ├── progress.txt                  # Iteration history (auto-created)
 ├── archive/                      # Auto-archived branch state
 ├── completions/
@@ -95,10 +98,11 @@ ralph-starter/
 | Mode        | Purpose                                      | Command              |
 | ----------- | -------------------------------------------- | -------------------- |
 | **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch` |
-| **Spec**    | Generate JSON spec from input (NEW!)         | `./ralph.sh spec`    |
+| **Spec**    | Generate JSON spec from input                | `./ralph.sh spec`    |
 | **Plan**    | Derive readable checklist from spec tasks    | `./ralph.sh plan`    |
 | **Build**   | Execute tasks from spec one at a time        | `./ralph.sh build`   |
 | **Product** | Generate product documentation artifacts     | `./ralph.sh product` |
+| **Review**  | Codebase analysis producing findings + report | `./ralph.sh review` |
 
 **Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control (plan mode is optional).
 
@@ -198,8 +202,15 @@ This tells the loop to exit successfully.
 ./ralph.sh launch --full-product --context ./product-input
 ./ralph.sh launch --skip-product -p "Build a Kanban app"
 
+# Codebase review (findings JSON + Markdown report)
+./ralph.sh review                            # Review src/* for all categories
+./ralph.sh review --review-target ./lib/     # Review specific directory
+./ralph.sh review --diff-base main           # Review only changed files since main
+./ralph.sh review --focus security           # Focus on security only
+./ralph.sh review --fix-spec ./specs/fixes.json  # Generate fix spec from findings
+
 # Custom prompts
-./ralph.sh -f prompts/review.md  # Use custom prompt file
+./ralph.sh -f prompts/custom.md  # Use custom prompt file
 ./ralph.sh -p "Fix lint errors"  # Inline prompt (build mode)
 
 # Model selection
@@ -454,6 +465,17 @@ Prompts support these placeholders:
 | `{{ARTIFACT_SPEC_FILE}}`  | `./docs/PRODUCT_ARTIFACT_SPEC.md` | Artifact specifications |
 | `{{PROGRESS_FILE}}`       | `progress.txt`                    | Iteration history       |
 
+**Review Mode:**
+
+| Variable                   | Default                          | Description                    |
+| -------------------------- | -------------------------------- | ------------------------------ |
+| `{{REVIEW_TARGET}}`        | `src/*`                          | Directory/glob to review       |
+| `{{DIFF_BASE}}`            | (none)                           | Git ref for changed-files scope |
+| `{{REVIEW_FINDINGS_FILE}}` | `review-output/findings.json`    | Findings JSON output           |
+| `{{REVIEW_REPORT_FILE}}`   | `review-output/REVIEW_REPORT.md` | Report Markdown output         |
+| `{{REVIEW_FIX_SPEC_FILE}}` | (none)                           | Fix spec output (optional)     |
+| `{{REVIEW_FOCUS}}`         | all categories                   | Categories to analyze          |
+
 ## Customizing for Your Project
 
 ### 1. Update CLAUDE.md
@@ -612,7 +634,7 @@ If a plan becomes wrong or stale—regenerate it. Don't patch bad plans.
 Ensure prompt files exist:
 
 ```bash
-ls prompts/PROMPT_spec.md prompts/PROMPT_plan.md prompts/PROMPT_build.md prompts/PROMPT_product.md
+ls prompts/PROMPT_spec.md prompts/PROMPT_plan.md prompts/PROMPT_build.md prompts/PROMPT_product.md prompts/PROMPT_review.md
 ```
 
 ### Loop runs but no progress
