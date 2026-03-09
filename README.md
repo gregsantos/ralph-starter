@@ -79,6 +79,9 @@ ralph-starter/
 ├── product-output/               # Generated artifacts (product mode)
 ├── progress.txt                  # Iteration history (auto-created)
 ├── archive/                      # Auto-archived branch state
+├── completions/
+│   ├── ralph.bash                # Bash tab completion
+│   └── ralph.zsh                 # Zsh tab completion
 └── docs/
     ├── RALPH_LOOP_REF.md         # Full CLI reference
     ├── RALPH_WORKSHOP.md         # Comprehensive workshop guide
@@ -218,6 +221,37 @@ This tells the loop to exit successfully.
 ```
 
 See [docs/RALPH_LOOP_REF.md](docs/RALPH_LOOP_REF.md) for the full CLI reference including environment variables, global config, and all options.
+
+### Shell Completion
+
+Tab completion is available for bash and zsh. After setup, restart your shell or run `compinit` (zsh).
+
+**Bash:**
+
+```bash
+# Option 1: Source in shell config
+echo 'source /path/to/ralph-starter/completions/ralph.bash' >> ~/.bashrc
+
+# Option 2: User completions (no sudo)
+mkdir -p ~/.local/share/bash-completion/completions
+cp completions/ralph.bash ~/.local/share/bash-completion/completions/ralph.sh
+```
+
+**Zsh:**
+
+```bash
+# Option 1: Oh My Zsh (if using Oh My Zsh—no config changes needed)
+mkdir -p ~/.oh-my-zsh/custom/completions
+cp completions/ralph.zsh ~/.oh-my-zsh/custom/completions/_ralph
+
+# Option 2: Add to fpath in ~/.zshrc (before compinit)
+fpath=(/path/to/ralph-starter/completions $fpath)
+autoload -Uz compinit && compinit
+
+# Option 3: System-wide (requires sudo)
+sudo cp completions/ralph.zsh /usr/local/share/zsh/site-functions/_ralph
+# On Apple Silicon: use /opt/homebrew/share/zsh/site-functions
+```
 
 ## Complete Workflow
 

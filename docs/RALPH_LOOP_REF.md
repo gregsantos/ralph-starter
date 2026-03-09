@@ -51,16 +51,22 @@ cp completions/ralph.bash ~/.local/share/bash-completion/completions/ralph.sh
 **Zsh:**
 
 ```bash
-# Option 1: Add completions directory to fpath (BEFORE compinit in ~/.zshrc)
+# Option 1: Oh My Zsh (if using Oh My Zsh—no config changes needed)
+mkdir -p ~/.oh-my-zsh/custom/completions
+cp completions/ralph.zsh ~/.oh-my-zsh/custom/completions/_ralph
+
+# Option 2: Add completions directory to fpath (BEFORE compinit in ~/.zshrc)
 fpath=(/path/to/ralph-starter/completions $fpath)
 autoload -Uz compinit && compinit
 
-# Option 2: Copy to a directory already in fpath
+# Option 3: Copy to a directory already in fpath
+mkdir -p ~/.zsh/completions
 cp completions/ralph.zsh ~/.zsh/completions/_ralph
-compinit
+# Add fpath=(~/.zsh/completions $fpath) to ~/.zshrc before compinit if needed
 
-# Option 3: Copy to system completions (requires sudo)
+# Option 4: System-wide (requires sudo)
 sudo cp completions/ralph.zsh /usr/local/share/zsh/site-functions/_ralph
+# On Apple Silicon: use /opt/homebrew/share/zsh/site-functions
 ```
 
 After installation, restart your shell or run `source ~/.bashrc` (bash) or `source ~/.zshrc` (zsh).
