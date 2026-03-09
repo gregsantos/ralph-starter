@@ -37,7 +37,7 @@ cd my-project
 # Preview config without running
 ./ralph.sh --dry-run
 
-# Generate a spec from a feature description (NEW!)
+# Generate a spec from a feature description
 ./ralph.sh spec -p "Add user authentication with JWT tokens"
 # Creates: specs/user-auth.json with tasks and acceptance criteria
 
@@ -95,32 +95,33 @@ ralph-starter/
 
 ### Modes
 
-| Mode        | Purpose                                      | Command              |
-| ----------- | -------------------------------------------- | -------------------- |
-| **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch` |
-| **Spec**    | Generate JSON spec from input                | `./ralph.sh spec`    |
-| **Plan**    | Derive readable checklist from spec tasks    | `./ralph.sh plan`    |
-| **Build**   | Execute tasks from spec one at a time        | `./ralph.sh build`   |
-| **Product** | Generate product documentation artifacts     | `./ralph.sh product` |
-| **Review**  | Codebase analysis producing findings + report | `./ralph.sh review` |
+| Mode        | Purpose                                             | Command              |
+| ----------- | --------------------------------------------------- | -------------------- |
+| **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch`  |
+| **Spec**    | Generate JSON spec from input                       | `./ralph.sh spec`    |
+| **Plan**    | Derive readable checklist from spec tasks           | `./ralph.sh plan`    |
+| **Build**   | Execute tasks from spec one at a time               | `./ralph.sh build`   |
+| **Product** | Generate product documentation artifacts            | `./ralph.sh product` |
+| **Review**  | Codebase analysis producing findings + report       | `./ralph.sh review`  |
 
-**Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control (plan mode is optional).
+**Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control. Use `review` to analyze existing codebases and optionally generate fix specs.
 
 ### Specs vs Plans
 
-| Directory | Contains                  | Purpose                                                  | Lifecycle      |
-| --------- | ------------------------- | -------------------------------------------------------- | -------------- |
+| Directory | Contains                  | Purpose                                                    | Lifecycle      |
+| --------- | ------------------------- | ---------------------------------------------------------- | -------------- |
 | `specs/`  | Feature specifications    | Requirements, tasks, acceptance criteria (source of truth) | Semi-permanent |
-| `plans/`  | Implementation checklists | Human-readable view derived from spec tasks (optional)   | Disposable     |
+| `plans/`  | Implementation checklists | Human-readable view derived from spec tasks (optional)     | Disposable     |
 
 ### Spec Formats: Tasks vs User Stories
 
-| Format           | Use Case                  | Recommended? |
-| ---------------- | ------------------------- | ------------ |
-| **tasks** array  | New specs with spec mode  | ✅ Yes        |
-| **userStories**  | Legacy/existing specs     | Backward compatible |
+| Format          | Use Case                 | Recommended?        |
+| --------------- | ------------------------ | ------------------- |
+| **tasks** array | New specs with spec mode | ✅ Yes              |
+| **userStories** | Legacy/existing specs    | Backward compatible |
 
 **Tasks format** (recommended):
+
 ```json
 {
   "tasks": [
@@ -128,7 +129,10 @@ ralph-starter/
       "id": "T-001",
       "title": "Add login form",
       "description": "Create login form component with validation",
-      "acceptanceCriteria": ["Form validates email format", "Submit disabled when invalid"],
+      "acceptanceCriteria": [
+        "Form validates email format",
+        "Submit disabled when invalid"
+      ],
       "dependsOn": [],
       "status": "pending",
       "passes": false,
@@ -144,6 +148,7 @@ ralph-starter/
 - `dependsOn` ensures tasks run in correct order
 
 **userStories format** (legacy):
+
 ```json
 {
   "userStories": [
@@ -177,8 +182,7 @@ This tells the loop to exit successfully.
 ## Common Commands
 
 ```bash
-# Spec generation (NEW!)
-./ralph.sh spec -p "Add dark mode"          # From inline description
+# Spec generation./ralph.sh spec -p "Add dark mode"          # From inline description
 ./ralph.sh spec -f ./requirements.md        # From requirements file
 ./ralph.sh spec --from-product              # From product artifacts
 ./ralph.sh spec -p "Feature" -o ./specs/feature.json  # Custom output
@@ -299,6 +303,7 @@ Run the full pipeline with one command:
 ```
 
 Launch defaults:
+
 - Product phase is **optional** by default.
 - Product runs when `--full-product` is set, or `product-input/` contains meaningful non-empty context files.
 - Build iterations are computed dynamically: `task_count + launch_buffer` (default buffer `5`).
@@ -346,6 +351,7 @@ Use spec mode to generate a JSON spec with tasks:
 ```
 
 This creates a spec with:
+
 - **tasks** array: Atomic implementation tasks with acceptance criteria
 - **context**: Current state, target state, constraints
 - **dependencies**: Which tasks depend on which
@@ -397,6 +403,31 @@ Plan mode can generate a Markdown checklist from spec tasks:
 ```
 
 Note: Build mode works directly from the spec—plans are optional for documentation purposes.
+
+### Review Workflow
+
+Review mode performs structured codebase analysis, producing JSON findings and a Markdown report. It's read-only — no source code changes, no commits, no pushes.
+
+```bash
+# 1. Review the codebase (all categories by default)
+./ralph.sh review
+#    → review-output/findings.json    (structured findings)
+#    → review-output/REVIEW_REPORT.md (human-readable report)
+
+# 2. Review only files changed since main
+./ralph.sh review --diff-base main
+
+# 3. Focus on specific categories
+./ralph.sh review --focus security,test-coverage
+
+# 4. Generate a fix spec from findings, then build fixes
+./ralph.sh review --fix-spec ./specs/review-fixes.json
+./ralph.sh build -s ./specs/review-fixes.json
+```
+
+**Categories**: `security`, `bug`, `code-quality`, `test-coverage`, `architecture`
+
+**Iteration strategy**: Module-first passes (one module, all categories), then cross-cutting passes (one category, all modules), then report generation.
 
 ## Loop Architecture
 
@@ -467,14 +498,14 @@ Prompts support these placeholders:
 
 **Review Mode:**
 
-| Variable                   | Default                          | Description                    |
-| -------------------------- | -------------------------------- | ------------------------------ |
-| `{{REVIEW_TARGET}}`        | `src/*`                          | Directory/glob to review       |
+| Variable                   | Default                          | Description                     |
+| -------------------------- | -------------------------------- | ------------------------------- |
+| `{{REVIEW_TARGET}}`        | `src/*`                          | Directory/glob to review        |
 | `{{DIFF_BASE}}`            | (none)                           | Git ref for changed-files scope |
-| `{{REVIEW_FINDINGS_FILE}}` | `review-output/findings.json`    | Findings JSON output           |
-| `{{REVIEW_REPORT_FILE}}`   | `review-output/REVIEW_REPORT.md` | Report Markdown output         |
-| `{{REVIEW_FIX_SPEC_FILE}}` | (none)                           | Fix spec output (optional)     |
-| `{{REVIEW_FOCUS}}`         | all categories                   | Categories to analyze          |
+| `{{REVIEW_FINDINGS_FILE}}` | `review-output/findings.json`    | Findings JSON output            |
+| `{{REVIEW_REPORT_FILE}}`   | `review-output/REVIEW_REPORT.md` | Report Markdown output          |
+| `{{REVIEW_FIX_SPEC_FILE}}` | (none)                           | Fix spec output (optional)      |
+| `{{REVIEW_FOCUS}}`         | all categories                   | Categories to analyze           |
 
 ## Customizing for Your Project
 
