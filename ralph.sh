@@ -3838,7 +3838,14 @@ parse_claude_output() {
                     case "$tool_name" in
                         Read)
                             files_read=$((files_read + 1))
-                            echo -e "  ${BLUE}${SYM_SEARCH}${RESET} Read ${DIM}${tool_detail}${RESET}"
+                            # Detect skill file reads
+                            if [[ "$tool_detail" == *".claude/skills/"*"/SKILL.md"* ]]; then
+                                local skill_name
+                                skill_name=$(echo "$tool_detail" | grep -oE '\.claude/skills/[^/]+' | sed 's|.claude/skills/||')
+                                echo -e "  ${CYAN}${SYM_GEAR}${RESET} Skill loaded: ${BOLD}${skill_name}${RESET}"
+                            else
+                                echo -e "  ${BLUE}${SYM_SEARCH}${RESET} Read ${DIM}${tool_detail}${RESET}"
+                            fi
                             ;;
                         Glob)
                             echo -e "  ${BLUE}${SYM_SEARCH}${RESET} Glob ${DIM}${tool_detail}${RESET}"
