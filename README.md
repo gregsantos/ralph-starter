@@ -80,15 +80,15 @@ git commit -m "Add ralph-starter as submodule"
 ### Run
 
 ```bash
-# Quick build with inline prompt (no spec needed)
-./ralph-starter/ralph.sh build -p "Change styles to tokyo night theme"
+# Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
+./ralph-starter/ralph.sh -p "Fix lint errors" 3
 
-# One-shot pipeline: generates spec then builds
-./ralph-starter/ralph.sh launch -p "Build user auth"
-
-# Or step by step: generate spec, review it, then build
+# Spec → Build — structured multi-step features (recommended)
 ./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
 ./ralph-starter/ralph.sh build -s ./ralph-starter/specs/dark-mode-toggle.json
+
+# Launch mode — one-shot pipeline: generates spec then builds
+./ralph-starter/ralph.sh launch -p "Build user auth"
 
 # Review codebase
 ./ralph-starter/ralph.sh review
@@ -184,15 +184,16 @@ ralph-starter/
 
 | Mode        | Purpose                                             | Command              |
 | ----------- | --------------------------------------------------- | -------------------- |
+| **Inline**  | Quick one-shot tasks (sonnet, no spec needed)       | `./ralph.sh -p "…"`  |
 | **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch`  |
 | **Spec**    | Generate JSON spec from input                       | `./ralph.sh spec`    |
-| **Plan**    | Derive readable checklist from spec tasks           | `./ralph.sh plan`    |
 | **Build**   | Execute tasks from spec one at a time               | `./ralph.sh build`   |
+| **Plan**    | Derive readable checklist from spec tasks           | `./ralph.sh plan`    |
 | **Product** | Generate product documentation artifacts            | `./ralph.sh product` |
 | **Review**  | Codebase analysis producing findings + report       | `./ralph.sh review`  |
 | **Setup**   | Configure host project integration (submodule)      | `./ralph.sh setup`   |
 
-**Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control. Use `review` to analyze existing codebases and optionally generate fix specs.
+**Choosing the right mode**: Use **inline** (`-p`) for simple, self-contained changes. Use **spec → build** or **launch** for multi-step features. Use **review** to analyze existing codebases.
 
 ### Specs vs Plans
 
@@ -276,8 +277,11 @@ This tells the loop to exit successfully.
 ./ralph.sh spec --from-product              # From product artifacts
 ./ralph.sh spec -p "Feature" -o ./specs/feature.json  # Custom output
 
-# Building
-./ralph.sh build -p "Fix login bug"         # Inline prompt (no spec needed)
+# Inline mode (quick tasks, no spec needed, uses sonnet)
+./ralph.sh -p "Fix login bug"               # Simple fix
+./ralph.sh -p "Add favicon" 1               # Trivial, 1 iteration
+
+# Building (from spec, uses opus)
 ./ralph.sh                                  # Build mode (default, uses spec)
 ./ralph.sh build 20                         # Build with max 20 iterations
 ./ralph.sh build -s ./specs/feature.json    # Build from specific spec
@@ -305,7 +309,6 @@ This tells the loop to exit successfully.
 
 # Custom prompts
 ./ralph.sh -f prompts/custom.md  # Use custom prompt file
-./ralph.sh -p "Fix lint errors"  # Inline prompt (build mode)
 
 # Model selection
 ./ralph.sh build --model sonnet  # Use Sonnet (faster, cheaper)
@@ -760,10 +763,11 @@ ls prompts/PROMPT_spec.md prompts/PROMPT_plan.md prompts/PROMPT_build.md prompts
 
 ### Loop runs but no progress
 
-1. Check that spec has tasks with `passes: false`, or plan file has `[ ]` items
-2. Ensure tasks are specific enough to be actionable
-3. Check progress.txt for what the AI attempted
-4. Verify task dependencies aren't blocking (all `dependsOn` tasks must have `passes: true`)
+1. **Inline mode with complex tasks?** Use `spec → build` instead — inline (`-p`) is for simple, self-contained changes
+2. Check that spec has tasks with `passes: false`, or plan file has `[ ]` items
+3. Ensure tasks are specific enough to be actionable
+4. Check progress.txt for what the AI attempted
+5. Verify task dependencies aren't blocking (all `dependsOn` tasks must have `passes: true`)
 
 ### Tests keep failing
 
