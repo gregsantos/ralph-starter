@@ -1046,7 +1046,15 @@ if [ "${RALPH_HOST_ROOT+set}" = "set" ]; then
     # Explicit override: use the value (empty string = force standalone)
     if [ -n "$RALPH_HOST_ROOT" ]; then
         HOST_ROOT="$(cd "$RALPH_HOST_ROOT" 2>/dev/null && pwd -P)"
-        RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+        if [ -z "$HOST_ROOT" ]; then
+            echo "Error: RALPH_HOST_ROOT path does not exist: $RALPH_HOST_ROOT" >&2
+            exit 1
+        elif [ "$HOST_ROOT" = "$SCRIPT_DIR_REAL" ]; then
+            # Pointing at ralph dir itself — treat as standalone
+            HOST_ROOT=""
+        else
+            RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+        fi
     fi
 else
     # Auto-detect: check if SCRIPT_DIR is inside a parent git repo
@@ -1063,7 +1071,11 @@ fi
 
 # Switch to host project root if detected
 if [ -n "$HOST_ROOT" ]; then
-    cd "$HOST_ROOT"
+    # Notify user of host detection (override with RALPH_HOST_ROOT="" for standalone)
+    if [ "${RALPH_HOST_ROOT+set}" != "set" ]; then
+        echo "ralph: detected host project at $HOST_ROOT (override: RALPH_HOST_ROOT=\"\")" >&2
+    fi
+    cd "$HOST_ROOT" || { echo "Error: cannot cd to host root: $HOST_ROOT" >&2; exit 1; }
 fi
 
 # Defaults
@@ -1104,6 +1116,7 @@ FROM_PRODUCT=false         # Read from product-output/ artifacts
 SPEC_OUTPUT_FILE=""        # Output file for generated spec
 SPEC_FORCE_OVERWRITE=false # Overwrite existing spec file
 SETUP_WITH_CONFIG=false    # Generate host ralph.conf during setup
+SETUP_FORCE=false          # Overwrite existing host ralph.conf
 SPEC_INPUT_TYPE=""         # prompt, file, or product (for spec mode)
 SPEC_INPUT_CONTENT=""      # The content/path for spec mode input
 CLI_INLINE_PROMPT=""       # Track -p value separately for spec mode
@@ -1322,6 +1335,7 @@ while [[ $# -gt 0 ]]; do
             ;;
         --force)
             SPEC_FORCE_OVERWRITE=true
+            SETUP_FORCE=true
             shift
             ;;
         --review-target)
@@ -1383,56 +1397,66 @@ fi
 
 # Handle setup subcommand early (before other processing)
 if [ "$PRESET_NAME" = "setup" ]; then
-    run_setup() {
-        local host_root="$HOST_ROOT"
-        local ralph_subdir="$RALPH_SUBDIR"
+    if [ -z "$HOST_ROOT" ]; then
+        echo -e "${YELLOW}${SYM_DOT} No host project detected (ralph-starter appears to be standalone)${RESET}"
+        echo -e "  ${DIM}To force a host root: RALPH_HOST_ROOT=/path/to/project ./ralph.sh setup${RESET}"
+        exit 1
+    fi
 
-        if [ -z "$host_root" ]; then
-            echo -e "${YELLOW}${SYM_DOT} No host project detected (ralph-starter appears to be standalone)${RESET}"
-            echo -e "  ${DIM}To force a host root: RALPH_HOST_ROOT=/path/to/project ./ralph.sh setup${RESET}"
-            exit 1
-        fi
+    # Sanity check: refuse to operate on root or home directory
+    if [ "$HOST_ROOT" = "/" ] || [ "$HOST_ROOT" = "$HOME" ]; then
+        echo -e "${RED}${SYM_CROSS} Error: HOST_ROOT resolves to a dangerous path: $HOST_ROOT${RESET}" >&2
+        exit 1
+    fi
 
-        echo -e "${BOLD}Ralph Setup${RESET} — configuring host project integration"
-        echo -e "  ${DIM}Host root:${RESET}    $host_root"
-        echo -e "  ${DIM}Ralph at:${RESET}     $ralph_subdir/"
-        echo ""
+    echo -e "${BOLD}Ralph Setup${RESET} — configuring host project integration"
+    echo -e "  ${DIM}Host root:${RESET}    $HOST_ROOT"
+    echo -e "  ${DIM}Ralph at:${RESET}     $RALPH_SUBDIR/"
+    echo ""
 
-        # 1. Symlink skills into host project's .claude/skills/
-        local host_skills_dir="${host_root}/.claude/skills"
-        mkdir -p "$host_skills_dir"
+    # 1. Symlink skills into host project's .claude/skills/
+    host_skills_dir="${HOST_ROOT}/.claude/skills"
+    mkdir -p "$host_skills_dir"
 
-        local skills_linked=0
-        for skill_dir in "${SCRIPT_DIR}/.claude/skills"/*/; do
-            [ -d "$skill_dir" ] || continue
-            local skill_name
-            skill_name=$(basename "$skill_dir")
+    # Compute relative symlink target: from .claude/skills/<name> back to HOST_ROOT,
+    # then into ralph subdir. Need ../../ to escape .claude/skills/, plus extra ../
+    # for each additional depth level in RALPH_SUBDIR.
+    # e.g. RALPH_SUBDIR=ralph-starter       → ../../ralph-starter/.claude/skills/<name>
+    # e.g. RALPH_SUBDIR=tools/ralph-starter → ../../../tools/ralph-starter/.claude/skills/<name>
+    subdir_depth=$(echo "$RALPH_SUBDIR" | tr '/' '\n' | wc -l | tr -d ' ')
+    rel_prefix=""
+    for (( i = 0; i < subdir_depth + 1; i++ )); do
+        rel_prefix="../${rel_prefix}"
+    done
 
-            local target="../${ralph_subdir}/.claude/skills/${skill_name}"
-            local link_path="${host_skills_dir}/${skill_name}"
+    skills_linked=0
+    for skill_dir in "${SCRIPT_DIR}/.claude/skills"/*/; do
+        [ -d "$skill_dir" ] || continue
+        skill_name=$(basename "$skill_dir")
 
-            # Remove existing symlink or directory if present
-            if [ -L "$link_path" ] || [ -d "$link_path" ]; then
-                rm -rf "$link_path"
-            fi
+        target="${rel_prefix}${RALPH_SUBDIR}/.claude/skills/${skill_name}"
+        link_path="${host_skills_dir}/${skill_name}"
 
-            ln -s "$target" "$link_path"
-            echo -e "  ${GREEN}${SYM_CHECK}${RESET} Linked skill: ${BOLD}${skill_name}${RESET}"
-            skills_linked=$((skills_linked + 1))
-        done
+        # Remove existing symlink (use -f, not -rf, to avoid destroying real directories)
+        rm -f "$link_path"
 
-        if [ $skills_linked -eq 0 ]; then
-            echo -e "  ${DIM}No skills found to link${RESET}"
-        fi
+        ln -s "$target" "$link_path"
+        echo -e "  ${GREEN}${SYM_CHECK}${RESET} Linked skill: ${BOLD}${skill_name}${RESET}"
+        skills_linked=$((skills_linked + 1))
+    done
 
-        # 2. Generate host ralph.conf if --with-config
-        if [ "$SETUP_WITH_CONFIG" = true ]; then
-            local host_conf="${host_root}/ralph.conf"
-            if [ -f "$host_conf" ] && [ "$SPEC_FORCE_OVERWRITE" != true ]; then
-                echo -e "\n  ${YELLOW}${SYM_DOT} Host ralph.conf already exists: ${host_conf}${RESET}"
-                echo -e "  ${DIM}Use --force to overwrite${RESET}"
-            else
-                cat > "$host_conf" << CONFEOF
+    if [ $skills_linked -eq 0 ]; then
+        echo -e "  ${DIM}No skills found to link${RESET}"
+    fi
+
+    # 2. Generate host ralph.conf if --with-config
+    if [ "$SETUP_WITH_CONFIG" = true ]; then
+        host_conf="${HOST_ROOT}/ralph.conf"
+        if [ -f "$host_conf" ] && [ "$SETUP_FORCE" != true ]; then
+            echo -e "\n  ${YELLOW}${SYM_DOT} Host ralph.conf already exists: ${host_conf}${RESET}"
+            echo -e "  ${DIM}Use --force to overwrite${RESET}"
+        else
+            cat > "$host_conf" << CONFEOF
 # Host project configuration for ralph-starter
 # Overrides ralph-starter/ralph.conf defaults
 # Precedence: CLI > env > this file > ralph-starter/ralph.conf > ~/.ralph/config > defaults
@@ -1445,25 +1469,23 @@ if [ "$PRESET_NAME" = "setup" ]; then
 # MAX_ITERATIONS=10
 # PUSH_ENABLED=true
 CONFEOF
-                echo -e "\n  ${GREEN}${SYM_CHECK}${RESET} Generated host config: ${BOLD}ralph.conf${RESET}"
-            fi
+            echo -e "\n  ${GREEN}${SYM_CHECK}${RESET} Generated host config: ${BOLD}ralph.conf${RESET}"
         fi
+    fi
 
-        # 3. Print usage instructions
-        echo ""
-        echo -e "${BOLD}Usage:${RESET}"
-        echo -e "  ${DIM}# Run from host project root${RESET}"
-        echo -e "  ./${ralph_subdir}/ralph.sh build"
-        echo -e "  ./${ralph_subdir}/ralph.sh spec -p 'Add feature X'"
-        echo -e "  ./${ralph_subdir}/ralph.sh launch -p 'Build feature Y'"
-        echo -e "  ./${ralph_subdir}/ralph.sh review"
-        echo ""
-        echo -e "  ${DIM}# Dry-run to verify path resolution${RESET}"
-        echo -e "  ./${ralph_subdir}/ralph.sh --dry-run"
-        echo ""
-        echo -e "  ${DIM}# Skills are available in Claude Code via /writing-ralph-specs, /reviewing-codebase${RESET}"
-    }
-    run_setup
+    # 3. Print usage instructions
+    echo ""
+    echo -e "${BOLD}Usage:${RESET}"
+    echo -e "  ${DIM}# Run from host project root${RESET}"
+    echo -e "  ./${RALPH_SUBDIR}/ralph.sh build"
+    echo -e "  ./${RALPH_SUBDIR}/ralph.sh spec -p 'Add feature X'"
+    echo -e "  ./${RALPH_SUBDIR}/ralph.sh launch -p 'Build feature Y'"
+    echo -e "  ./${RALPH_SUBDIR}/ralph.sh review"
+    echo ""
+    echo -e "  ${DIM}# Dry-run to verify path resolution${RESET}"
+    echo -e "  ./${RALPH_SUBDIR}/ralph.sh --dry-run"
+    echo ""
+    echo -e "  ${DIM}# Skills are available in Claude Code via /writing-ralph-specs, /reviewing-codebase${RESET}"
     exit 0
 fi
 
@@ -2670,17 +2692,17 @@ safe_load_config() {
             # Set the variable (only if not already set by CLI/env, unless force=true)
             case "$key" in
                 SPEC_FILE)
-                    if [ "$CLI_SPEC_SET" != "true" ]; then
+                    if [ "$CLI_SPEC_SET" != "true" ] && [ -z "${RALPH_SPEC_FILE:-}" ]; then
                         { [ -z "$SPEC_FILE" ] || [ "$force" = "true" ]; } && SPEC_FILE="$value"
                     fi
                     ;;
                 PLAN_FILE)
-                    if [ "$CLI_PLAN_SET" != "true" ]; then
+                    if [ "$CLI_PLAN_SET" != "true" ] && [ -z "${RALPH_PLAN_FILE:-}" ]; then
                         { [ -z "$PLAN_FILE" ] || [ "$force" = "true" ]; } && PLAN_FILE="$value"
                     fi
                     ;;
                 PROGRESS_FILE)
-                    if [ "$CLI_PROGRESS_SET" != "true" ]; then
+                    if [ "$CLI_PROGRESS_SET" != "true" ] && [ -z "${RALPH_PROGRESS_FILE:-}" ]; then
                         { [ -z "$PROGRESS_FILE" ] || [ "$force" = "true" ]; } && PROGRESS_FILE="$value"
                     fi
                     ;;
@@ -2688,17 +2710,17 @@ safe_load_config() {
                     { [ -z "$SOURCE_DIR" ] || [ "$force" = "true" ]; } && SOURCE_DIR="$value"
                     ;;
                 MODEL)
-                    if [ "$CLI_MODEL_SET" != "true" ]; then
+                    if [ "$CLI_MODEL_SET" != "true" ] && [ -z "${RALPH_MODEL:-}" ]; then
                         { [ -z "$MODEL_OVERRIDE" ] || [ "$force" = "true" ]; } && MODEL_OVERRIDE="$value"
                     fi
                     ;;
                 MAX_ITERATIONS)
-                    if [ "$CLI_MAX_SET" != "true" ] && [ "$UNLIMITED" != "true" ]; then
-                        [ "$force" = "true" ] && MAX_ITERATIONS="$value" || [ -z "${MAX_ITERATIONS_FROM_CONFIG:-}" ] && MAX_ITERATIONS="$value"
+                    if [ "$CLI_MAX_SET" != "true" ] && [ "$UNLIMITED" != "true" ] && [ -z "${RALPH_MAX_ITERATIONS:-}" ]; then
+                        { [ -z "${MAX_ITERATIONS_CONFIGURED:-}" ] || [ "$force" = "true" ]; } && MAX_ITERATIONS="$value" && MAX_ITERATIONS_CONFIGURED=true
                     fi
                     ;;
                 PUSH_ENABLED)
-                    if [ "$CLI_PUSH_SET" != "true" ]; then
+                    if [ "$CLI_PUSH_SET" != "true" ] && [ -z "${RALPH_PUSH_ENABLED:-}" ]; then
                         case "$value" in
                             true|TRUE|1|yes|YES) PUSH_ENABLED=true ;;
                             false|FALSE|0|no|NO) PUSH_ENABLED=false ;;
@@ -2736,7 +2758,7 @@ safe_load_config() {
                     fi
                     ;;
                 LOG_DIR)
-                    if [ "$CLI_LOG_DIR_SET" != "true" ]; then
+                    if [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "${RALPH_LOG_DIR:-}" ]; then
                         { [ -z "$LOG_DIR" ] || [ "$force" = "true" ]; } && LOG_DIR="$value"
                     fi
                     ;;
@@ -2847,23 +2869,29 @@ PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
 PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
 ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
 
+# Rebase a relative path into the ralph subdir. No-op when not in submodule mode.
+rebase_path() {
+    local path="$1"
+    # No-op in standalone mode
+    if [ -z "$RALPH_SUBDIR" ]; then
+        echo "$path"
+        return
+    fi
+    # Already rebased or absolute — skip
+    if [[ "$path" == "./${RALPH_SUBDIR}/"* ]] || [[ "$path" == /* ]]; then
+        echo "$path"
+    elif [[ "$path" == ./* ]]; then
+        echo "./${RALPH_SUBDIR}/${path#./}"
+    else
+        echo "./${RALPH_SUBDIR}/${path}"
+    fi
+}
+
 # When running as submodule (HOST_ROOT set), rebase artifact paths into ralph subdir.
 # Only rebase paths not explicitly set by CLI flags — config/default paths need rebasing
 # because they're relative to ralph-starter, but CWD is now the host project root.
 # SOURCE_DIR stays at host project root (points to host code, not ralph code).
 if [ -n "$HOST_ROOT" ]; then
-    rebase_path() {
-        local path="$1"
-        # Already rebased or absolute — skip
-        if [[ "$path" == "./${RALPH_SUBDIR}/"* ]] || [[ "$path" == /* ]]; then
-            echo "$path"
-        elif [[ "$path" == ./* ]]; then
-            echo "./${RALPH_SUBDIR}/${path#./}"
-        else
-            echo "./${RALPH_SUBDIR}/${path}"
-        fi
-    }
-
     [ "$CLI_SPEC_SET" != "true" ] && SPEC_FILE="$(rebase_path "$SPEC_FILE")"
     [ "$CLI_PROGRESS_SET" != "true" ] && PROGRESS_FILE="$(rebase_path "$PROGRESS_FILE")"
     PRODUCT_CONTEXT_DIR="$(rebase_path "$PRODUCT_CONTEXT_DIR")"
