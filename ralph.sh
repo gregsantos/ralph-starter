@@ -3697,7 +3697,7 @@ print_iteration_start() {
     local progress=""
 
     if [ $max -gt 0 ]; then
-        progress=" (${iter}/${max})"
+        progress=" ($((iter + 1))/${max})"
     fi
 
     echo -e "\n${YELLOW}${BOLD}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
