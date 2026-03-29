@@ -54,6 +54,85 @@ cd my-project
 ./ralph.sh plan -s ./specs/user-auth.json
 ```
 
+## Add to an Existing Project
+
+Ralph-starter can be added as a git submodule to any project. It auto-detects the host project and adjusts paths so Claude operates on your code while ralph artifacts stay inside `ralph-starter/`.
+
+### Install
+
+```bash
+cd your-project
+
+# Add as submodule (use -b to pin a branch)
+git submodule add -b main https://github.com/gregsantos/ralph-starter.git ralph-starter
+
+# Run setup to symlink skills and optionally generate a host config
+./ralph-starter/ralph.sh setup --with-config
+
+# Verify paths
+./ralph-starter/ralph.sh --dry-run
+
+# Commit
+git add .gitmodules ralph-starter .claude ralph.conf
+git commit -m "Add ralph-starter as submodule"
+```
+
+### Run
+
+```bash
+./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
+./ralph-starter/ralph.sh build -s ./ralph-starter/specs/dark-mode-toggle.json
+./ralph-starter/ralph.sh launch -p "Build user auth"
+./ralph-starter/ralph.sh review
+```
+
+### Update ralph-starter
+
+```bash
+cd ralph-starter
+git fetch origin
+git checkout origin/main    # or origin/<branch>
+cd ..
+git add ralph-starter
+git commit -m "Update ralph-starter"
+```
+
+Or update to the latest commit on the tracked branch:
+
+```bash
+git submodule update --remote ralph-starter
+git add ralph-starter
+git commit -m "Update ralph-starter to latest"
+```
+
+### Collaborators
+
+Clone with submodules:
+
+```bash
+git clone --recurse-submodules <your-project-url>
+```
+
+Or after a regular clone:
+
+```bash
+git submodule update --init --recursive
+```
+
+### Host ralph.conf
+
+The `ralph.conf` in your project root overrides `ralph-starter/ralph.conf`. Edit it to customize source directory, model, iterations, etc. Environment variables always take precedence over all config files.
+
+### Override Detection
+
+```bash
+# Force standalone mode (ignore host project)
+RALPH_HOST_ROOT="" ./ralph-starter/ralph.sh build
+
+# Force a specific host root
+RALPH_HOST_ROOT=/path/to/project ./ralph-starter/ralph.sh build
+```
+
 ## Project Structure
 
 ```
@@ -103,6 +182,7 @@ ralph-starter/
 | **Build**   | Execute tasks from spec one at a time               | `./ralph.sh build`   |
 | **Product** | Generate product documentation artifacts            | `./ralph.sh product` |
 | **Review**  | Codebase analysis producing findings + report       | `./ralph.sh review`  |
+| **Setup**   | Configure host project integration (submodule)      | `./ralph.sh setup`   |
 
 **Recommended workflow**: `launch` for one-shot execution, or `spec` → `build` for manual control. Use `review` to analyze existing codebases and optionally generate fix specs.
 
