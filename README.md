@@ -33,25 +33,17 @@ cd my-project
 
 # Verify setup
 ./ralph.sh --help
-
-# Preview config without running
 ./ralph.sh --dry-run
 
-# Generate a spec from a feature description
+# Quick fix (inline mode)
+./ralph.sh -p "Fix lint errors" 3
+
+# Feature (launch mode — generates spec, then builds)
+./ralph.sh launch -p "Add user authentication with JWT tokens"
+
+# Or manual control: generate spec, review it, then build
 ./ralph.sh spec -p "Add user authentication with JWT tokens"
-# Creates: specs/user-auth.json with tasks and acceptance criteria
-
-# Or generate a spec from an existing PRD/requirements file
-./ralph.sh spec -f ./requirements.md
-
-# Or run the full one-shot pipeline (product optional)
-./ralph.sh launch -p "Build a collaborative notes app with auth and realtime sync"
-
-# Run build mode (executes tasks from spec one at a time)
 ./ralph.sh build -s ./specs/user-auth.json
-
-# Optional: generate human-readable plan from spec
-./ralph.sh plan -s ./specs/user-auth.json
 ```
 
 ## Add to an Existing Project
@@ -83,12 +75,12 @@ git commit -m "Add ralph-starter as submodule"
 # Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
 ./ralph-starter/ralph.sh -p "Fix lint errors" 3
 
-# Spec → Build — structured multi-step features (recommended)
+# Feature (launch mode — generates spec, then builds)
+./ralph-starter/ralph.sh launch -p "Build user auth"
+
+# Or manual control: generate spec, review it, then build
 ./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
 ./ralph-starter/ralph.sh build -s ./ralph-starter/specs/dark-mode-toggle.json
-
-# Launch mode — one-shot pipeline: generates spec then builds
-./ralph-starter/ralph.sh launch -p "Build user auth"
 
 # Review codebase
 ./ralph-starter/ralph.sh review
@@ -182,18 +174,18 @@ ralph-starter/
 
 ### Modes
 
-| Mode        | Purpose                                             | Command              |
-| ----------- | --------------------------------------------------- | -------------------- |
-| **Inline**  | Quick one-shot tasks (sonnet, no spec needed)       | `./ralph.sh -p "…"`  |
-| **Launch**  | One-shot pipeline: product(optional) → spec → build | `./ralph.sh launch`  |
-| **Spec**    | Generate JSON spec from input                       | `./ralph.sh spec`    |
-| **Build**   | Execute tasks from spec one at a time               | `./ralph.sh build`   |
-| **Plan**    | Derive readable checklist from spec tasks           | `./ralph.sh plan`    |
-| **Product** | Generate product documentation artifacts            | `./ralph.sh product` |
-| **Review**  | Codebase analysis producing findings + report       | `./ralph.sh review`  |
-| **Setup**   | Configure host project integration (submodule)      | `./ralph.sh setup`   |
+| Mode        | Purpose                                               | Command              |
+| ----------- | ----------------------------------------------------- | -------------------- |
+| **Inline**  | Quick fixes and simple changes (sonnet, no spec)       | `./ralph.sh -p "…"`  |
+| **Launch**  | Features: generates spec → builds (default for features) | `./ralph.sh launch`  |
+| **Spec**    | Generate spec only (for manual review before building) | `./ralph.sh spec`    |
+| **Build**   | Execute tasks from an existing spec                    | `./ralph.sh build`   |
+| **Review**  | Codebase analysis producing findings + report          | `./ralph.sh review`  |
+| **Plan**    | Human-readable plan from spec tasks (optional)         | `./ralph.sh plan`    |
+| **Product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
+| **Setup**   | Configure host project integration (submodule)         | `./ralph.sh setup`   |
 
-**Choosing the right mode**: Use **inline** (`-p`) for simple, self-contained changes. Use **spec → build** or **launch** for multi-step features. Use **review** to analyze existing codebases.
+**Quick fixes → inline. Features → launch.** Use `spec` + `build` separately when you want to review the spec before building. Launch skips product by default — it only runs product when `--full-product` is set or `product-input/` has content.
 
 ### Specs vs Plans
 
@@ -384,25 +376,23 @@ The simplified workflow for implementing features with Ralph:
 
 ### One-Shot Workflow (`launch`)
 
-Run the full pipeline with one command:
+The recommended way to build features:
 
 ```bash
-# Uses prompt input, auto-creates feature branch, runs spec->build
-# Product phase runs only when --full-product or product-input has meaningful content
+# Generates spec with tasks, then builds — no product phase by default
 ./ralph.sh launch -p "Build a habit tracker with streaks"
 
-# Force product phase first (15 iters), then spec (5), then build (tasks + buffer)
+# Force product discovery first (for greenfield projects with product-input/ content)
 ./ralph.sh launch --full-product -p "Build a CRM for small agencies"
 ```
 
 Launch defaults:
 
-- Product phase is **optional** by default.
-- Product runs when `--full-product` is set, or `product-input/` contains meaningful non-empty context files.
+- **Skips product by default.** Product runs only with `--full-product` or when `product-input/` has meaningful content.
 - Build iterations are computed dynamically: `task_count + launch_buffer` (default buffer `5`).
 - Plan mode is not part of launch (spec tasks are the source of truth).
 - `--dry-run` is read-only and does not archive branches or modify `progress.txt`.
-- Use `--skip-product` to force spec→build only, or `--launch-buffer N` to tune build iteration headroom.
+- Use `--launch-buffer N` to tune build iteration headroom.
 
 ### Step 0: Product Discovery (Optional)
 
