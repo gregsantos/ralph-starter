@@ -80,9 +80,17 @@ git commit -m "Add ralph-starter as submodule"
 ### Run
 
 ```bash
+# Quick build with inline prompt (no spec needed)
+./ralph-starter/ralph.sh build -p "Change styles to tokyo night theme"
+
+# One-shot pipeline: generates spec then builds
+./ralph-starter/ralph.sh launch -p "Build user auth"
+
+# Or step by step: generate spec, review it, then build
 ./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
 ./ralph-starter/ralph.sh build -s ./ralph-starter/specs/dark-mode-toggle.json
-./ralph-starter/ralph.sh launch -p "Build user auth"
+
+# Review codebase
 ./ralph-starter/ralph.sh review
 ```
 
@@ -262,14 +270,16 @@ This tells the loop to exit successfully.
 ## Common Commands
 
 ```bash
-# Spec generation./ralph.sh spec -p "Add dark mode"          # From inline description
+# Spec generation
+./ralph.sh spec -p "Add dark mode"          # From inline description
 ./ralph.sh spec -f ./requirements.md        # From requirements file
 ./ralph.sh spec --from-product              # From product artifacts
 ./ralph.sh spec -p "Feature" -o ./specs/feature.json  # Custom output
 
-# Building (uses spec as source of truth)
-./ralph.sh                       # Build mode (default)
-./ralph.sh build 20              # Build with max 20 iterations
+# Building
+./ralph.sh build -p "Fix login bug"         # Inline prompt (no spec needed)
+./ralph.sh                                  # Build mode (default, uses spec)
+./ralph.sh build 20                         # Build with max 20 iterations
 ./ralph.sh build -s ./specs/feature.json    # Build from specific spec
 
 # Planning (optional - generates readable checklist from spec)
