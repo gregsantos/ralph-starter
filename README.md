@@ -69,21 +69,40 @@ git add .gitmodules ralph-starter .claude ralph.conf
 git commit -m "Add ralph-starter as submodule"
 ```
 
+### Shell Completions (optional)
+
+Tab-completion for presets, flags, and options. Add to your shell config:
+
+**Zsh** (`~/.zshrc`, before `compinit`):
+```bash
+fpath=(/path/to/your-project/ralph-starter/completions $fpath)
+autoload -Uz compinit && compinit
+alias ralph='./ralph-starter/ralph.sh'
+```
+
+**Bash** (`~/.bashrc`):
+```bash
+source /path/to/your-project/ralph-starter/completions/ralph.bash
+alias ralph='./ralph-starter/ralph.sh'
+```
+
+The alias lets you type `ralph dev -p "..."` instead of `./ralph-starter/ralph.sh dev -p "..."`. Completions work with both.
+
 ### Run
 
 ```bash
 # Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
-./ralph-starter/ralph.sh -p "Fix lint errors" 3
+ralph -p "Fix lint errors" 3
 
 # Feature (dev mode — generates spec, then builds)
-./ralph-starter/ralph.sh dev -p "Build user auth"
+ralph dev -p "Build user auth"
 
 # Or manual control: generate spec, review it, then build
-./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
-./ralph-starter/ralph.sh build -s ./ralph-starter/specs/dark-mode-toggle.json
+ralph spec -p "Add dark mode toggle"
+ralph build -s ./ralph-starter/specs/dark-mode-toggle.json
 
 # Review codebase
-./ralph-starter/ralph.sh review
+ralph review
 ```
 
 ### Update ralph-starter

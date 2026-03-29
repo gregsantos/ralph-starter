@@ -1,16 +1,13 @@
 #!/bin/bash
 # Bash completion script for ralph.sh
 #
-# Installation:
-#   Option 1: Source directly in your shell config
-#     echo 'source /path/to/ralph-starter/completions/ralph.bash' >> ~/.bashrc
+# Installation (add to ~/.bashrc):
 #
-#   Option 2: Copy to system completions directory
-#     sudo cp completions/ralph.bash /etc/bash_completion.d/ralph
+#   # Source completions from your project's submodule
+#   source /path/to/your-project/ralph-starter/completions/ralph.bash
 #
-#   Option 3: Copy to user completions directory
-#     mkdir -p ~/.local/share/bash-completion/completions
-#     cp completions/ralph.bash ~/.local/share/bash-completion/completions/ralph.sh
+#   # Recommended: alias for convenience (completions work automatically)
+#   alias ralph='./ralph-starter/ralph.sh'
 
 _ralph_completions() {
     local cur prev opts presets models log_formats
@@ -151,7 +148,8 @@ _ralph_completions() {
     return 0
 }
 
-# Register completion for ralph.sh and common symlinks/aliases
+# Register completion for ralph.sh and common invocation patterns
 complete -F _ralph_completions ralph.sh
 complete -F _ralph_completions ./ralph.sh
 complete -F _ralph_completions ralph
+complete -F _ralph_completions ./ralph-starter/ralph.sh

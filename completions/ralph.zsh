@@ -2,18 +2,14 @@
 
 # Zsh completion script for ralph.sh
 #
-# Installation:
-#   Option 1: Add completions directory to fpath
-#     # Add to ~/.zshrc BEFORE compinit
-#     fpath=(/path/to/ralph-starter/completions $fpath)
-#     autoload -Uz compinit && compinit
+# Installation (add to ~/.zshrc BEFORE compinit):
 #
-#   Option 2: Copy to a directory already in fpath
-#     cp completions/ralph.zsh ~/.zsh/completions/_ralph
-#     # Then run: compinit
+#   # Add completions to fpath from your project's submodule
+#   fpath=(/path/to/your-project/ralph-starter/completions $fpath)
+#   autoload -Uz compinit && compinit
 #
-#   Option 3: Copy to system completions (requires sudo)
-#     sudo cp completions/ralph.zsh /usr/local/share/zsh/site-functions/_ralph
+#   # Recommended: alias for convenience (completions work automatically)
+#   alias ralph='./ralph-starter/ralph.sh'
 
 _ralph() {
     local -a presets models log_formats
@@ -85,5 +81,5 @@ _ralph() {
         '*:preset or iterations:(($presets))'
 }
 
-# Provide completion for both ralph.sh and ralph command names
-compdef _ralph ralph.sh ralph ./ralph.sh
+# Provide completion for ralph.sh and common invocation patterns
+compdef _ralph ralph.sh ralph ./ralph.sh ./ralph-starter/ralph.sh
