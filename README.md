@@ -71,22 +71,28 @@ git commit -m "Add ralph-starter as submodule"
 
 ### Shell Completions (optional)
 
-Tab-completion for presets, flags, and options. Add to your shell config:
+Tab-completion for presets, flags, and options. Works across all projects that use ralph-starter as a submodule.
 
-**Zsh** (`~/.zshrc`, before `compinit`):
+**Zsh** — one-time setup:
 ```bash
-fpath=(/path/to/your-project/ralph-starter/completions $fpath)
-autoload -Uz compinit && compinit
+# Symlink completion file to a global location
+mkdir -p ~/.zsh/completions
+ln -sf "$(pwd)/ralph-starter/completions/ralph.zsh" ~/.zsh/completions/_ralph
+```
+
+Then add to `~/.zshrc` (before `compinit`):
+```bash
+fpath=(~/.zsh/completions $fpath)
 alias ralph='./ralph-starter/ralph.sh'
 ```
 
-**Bash** (`~/.bashrc`):
+**Bash** — add to `~/.bashrc`:
 ```bash
-source /path/to/your-project/ralph-starter/completions/ralph.bash
+source /path/to/ralph-starter/completions/ralph.bash
 alias ralph='./ralph-starter/ralph.sh'
 ```
 
-The alias lets you type `ralph dev -p "..."` instead of `./ralph-starter/ralph.sh dev -p "..."`. Completions work with both.
+The alias resolves relative to your CWD, so `ralph dev -p "..."` works in any project with a `ralph-starter/` submodule.
 
 ### Run
 
