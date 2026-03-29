@@ -289,51 +289,46 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ## Quick Start
 
 ```bash
-# Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
+# Inline — quick fixes (sonnet, no spec needed)
 ./ralph.sh -p "Fix lint errors" 3       # Simple fix, 3 iterations
 ./ralph.sh -p "Add favicon" 1           # Trivial change, 1 iteration
 
-# Spec → Build — structured multi-step features (recommended for non-trivial work)
-./ralph.sh spec -p "Add dark mode"      # Generate spec with tasks
-./ralph.sh build -s ./specs/dark-mode.json  # Build from spec
-
-# Launch mode — one-shot pipeline: product(optional) → spec → build
+# Launch — features (generates spec, then builds)
 ./ralph.sh launch -p "Add dark mode"
+./ralph.sh launch -p "Build user auth with OAuth"
+
+# Launch with product discovery (only when you need it)
 ./ralph.sh launch --full-product -p "Build a new SaaS app"
-./ralph.sh launch --skip-product -p "Ship a small docs-only enhancement"
 
-# Build mode (from existing spec)
-./ralph.sh                              # Build mode, opus, 10 iterations (default)
-./ralph.sh build -s ./specs/feature.json  # Build from specific spec
+# Manual control — generate spec, review it, then build
+./ralph.sh spec -p "Add dark mode"
+./ralph.sh build -s ./specs/dark-mode.json
 
-# Review mode (codebase analysis)
+# Review — codebase analysis
 ./ralph.sh review                       # Review src/* for all categories
-./ralph.sh review --diff-base main      # Review only changed files since main
-./ralph.sh review --fix-spec ./specs/fixes.json  # Generate fix spec from findings
+./ralph.sh review --diff-base main      # Only changed files since main
 
-# Other modes and options
-./ralph.sh plan -s ./specs/feature.json # Generate human-readable plan (optional)
+# Other
+./ralph.sh plan -s ./specs/feature.json # Human-readable plan (optional)
 ./ralph.sh product                      # Product artifact generation (12 docs)
-./ralph.sh --no-push                    # Disable auto-push
 ./ralph.sh --dry-run                    # Preview config without running
 ./ralph.sh --resume                     # Resume interrupted session
-./ralph.sh -i                           # Interactive mode (confirm between iterations)
 ```
 
 ## Modes
 
 | Mode        | Purpose                                               | Command              |
 | ----------- | ----------------------------------------------------- | -------------------- |
-| **inline**  | Quick one-shot tasks (sonnet, no spec needed)          | `./ralph.sh -p "…"`  |
-| **launch**  | One-shot pipeline: product(optional) → spec → build    | `./ralph.sh launch`  |
-| **spec**    | Generate specs from input/files/product                | `./ralph.sh spec`    |
-| **build**   | Execute tasks from spec one at a time                  | `./ralph.sh build`   |
-| **plan**    | Create human-readable plan (optional for tasks)        | `./ralph.sh plan`    |
-| **product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
+| **inline**  | Quick fixes and simple changes (sonnet, no spec)       | `./ralph.sh -p "…"`  |
+| **launch**  | Features: generates spec → builds (default for features) | `./ralph.sh launch`  |
+| **spec**    | Generate spec only (for manual review before building) | `./ralph.sh spec`    |
+| **build**   | Execute tasks from an existing spec                    | `./ralph.sh build`   |
 | **review**  | Codebase analysis producing findings + report          | `./ralph.sh review`  |
+| **plan**    | Human-readable plan from spec tasks (optional)         | `./ralph.sh plan`    |
+| **product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
 | **setup**   | Configure host project integration                     | `./ralph.sh setup`   |
 
-**Choosing the right mode**: Use **inline** for simple, self-contained changes (fix a bug, update a config). Use **spec → build** or **launch** for multi-step features that benefit from structured tasks and acceptance criteria.
+**Quick fixes → inline. Features → launch.** Use `spec` + `build` separately when you want to review the spec before building. Launch skips product by default — it only runs product when `--full-product` is set or `product-input/` has content.
 
 ## Host Project Integration
 
