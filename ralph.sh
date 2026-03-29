@@ -4140,12 +4140,19 @@ while true; do
     run_with_retry "$prompt_content"
     claude_exit_code=$?
 
-    # Check if Claude command itself failed after all retries
+    # Check if Claude command itself failed after all retries.
+    # If the completion marker was already detected during streaming, a non-zero exit code
+    # is expected (Claude CLI exits 1 when any tool call errors, even if the task succeeded).
+    # Don't mark the iteration as failed in that case.
     if [ "$claude_exit_code" -ne 0 ]; then
-        echo "failed" > "$ITERATION_STATUS_FILE"
-        echo "Claude CLI exited with code $claude_exit_code (after retries)" >> "$ITERATION_REASON_FILE"
-        echo -e "  ${RED}${SYM_CROSS} Claude CLI failed with code ${claude_exit_code}${RESET}"
-        log_error "Claude CLI exited with code $claude_exit_code (after retries)" "$claude_exit_code"
+        if [ -f "$COMPLETION_FILE" ] && [ "$(cat "$COMPLETION_FILE" 2>/dev/null)" = "COMPLETE" ]; then
+            echo -e "  ${YELLOW}${SYM_DOT} Claude CLI exited with code ${claude_exit_code} (task completed, ignoring)${RESET}"
+        else
+            echo "failed" > "$ITERATION_STATUS_FILE"
+            echo "Claude CLI exited with code $claude_exit_code (after retries)" >> "$ITERATION_REASON_FILE"
+            echo -e "  ${RED}${SYM_CROSS} Claude CLI failed with code ${claude_exit_code}${RESET}"
+            log_error "Claude CLI exited with code $claude_exit_code (after retries)" "$claude_exit_code"
+        fi
     fi
 
     iter_end=$(date +%s)
