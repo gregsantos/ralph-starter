@@ -2,29 +2,17 @@
 
 Source of truth for all system capabilities and planned features.
 
-## Completed
-
-| Feature         | Spec                                                 | Status   | Plan                                                              | Description                                            |
-| --------------- | ---------------------------------------------------- | -------- | ----------------------------------------------------------------- | ------------------------------------------------------ |
-| Ralph Loop v2.0 | [ralph-improvements.json](./ralph-improvements.json) | Complete | [ralph-improvements_PLAN.md](../plans/ralph-improvements_PLAN.md) | Resilience, observability, config, and DX improvements |
-
 ## Examples
 
 | Feature              | Spec                                         | Description                                              |
 | -------------------- | -------------------------------------------- | -------------------------------------------------------- |
 | Example Tasks Format | [example-tasks.json](./example-tasks.json)   | Reference example showing all task fields and dependencies |
 
-## Active Development
+## Specs
 
-| Feature               | Spec                                                             | Status      | Plan                                                                    | Description                                                |
-| --------------------- | ---------------------------------------------------------------- | ----------- | ----------------------------------------------------------------------- | ---------------------------------------------------------- |
-| Unified Spec Workflow | [unified-spec-workflow.json](./unified-spec-workflow.json)       | In Progress | [unified-spec-workflow_PLAN.md](../plans/unified-spec-workflow_PLAN.md) | Add spec mode, eliminate plan requirement, tasks in specs  |
-
-## Planned
-
-| Feature | Spec | Priority | Description |
-| ------- | ---- | -------- | ----------- |
-|         |      |          |             |
+| Feature | Spec | Status | Description |
+| ------- | ---- | ------ | ----------- |
+|         |      |        |             |
 
 ## Workflow
 
