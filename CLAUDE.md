@@ -289,21 +289,22 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ## Quick Start
 
 ```bash
-# Launch mode (one-shot: product optional -> spec -> build)
+# Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
+./ralph.sh -p "Fix lint errors" 3       # Simple fix, 3 iterations
+./ralph.sh -p "Add favicon" 1           # Trivial change, 1 iteration
+
+# Spec → Build — structured multi-step features (recommended for non-trivial work)
+./ralph.sh spec -p "Add dark mode"      # Generate spec with tasks
+./ralph.sh build -s ./specs/dark-mode.json  # Build from spec
+
+# Launch mode — one-shot pipeline: product(optional) → spec → build
 ./ralph.sh launch -p "Add dark mode"
 ./ralph.sh launch --full-product -p "Build a new SaaS app"
 ./ralph.sh launch --skip-product -p "Ship a small docs-only enhancement"
-./ralph.sh launch --skip-product --launch-buffer 8 -p "Build a Kanban board"
 
-# Spec mode (generate specs)
-./ralph.sh spec -p "Add dark mode"      # From inline description
-./ralph.sh spec -f ./requirements.md    # From requirements file
-./ralph.sh spec --from-product          # From product artifacts
-
-# Build mode (implement from spec)
+# Build mode (from existing spec)
 ./ralph.sh                              # Build mode, opus, 10 iterations (default)
 ./ralph.sh build -s ./specs/feature.json  # Build from specific spec
-./ralph.sh build --model sonnet         # Build with sonnet
 
 # Review mode (codebase analysis)
 ./ralph.sh review                       # Review src/* for all categories
@@ -313,24 +314,26 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 # Other modes and options
 ./ralph.sh plan -s ./specs/feature.json # Generate human-readable plan (optional)
 ./ralph.sh product                      # Product artifact generation (12 docs)
-./ralph.sh -p "Fix lint errors" 3       # Inline prompt, 3 iterations
 ./ralph.sh --no-push                    # Disable auto-push
 ./ralph.sh --dry-run                    # Preview config without running
 ./ralph.sh --resume                     # Resume interrupted session
 ./ralph.sh -i                           # Interactive mode (confirm between iterations)
 ```
 
-## Six Modes
+## Modes
 
-| Mode        | Purpose                                         | Command              |
-| ----------- | ----------------------------------------------- | -------------------- |
-| **launch**  | One-shot pipeline: product(optional) -> spec -> build | `./ralph.sh launch` |
-| **spec**    | Generate specs from input/files/product         | `./ralph.sh spec`    |
-| **plan**    | Create human-readable plan (optional for tasks) | `./ralph.sh plan`    |
-| **build**   | Execute tasks one at a time                     | `./ralph.sh build`   |
-| **product** | Generate product documentation (12 artifacts)   | `./ralph.sh product` |
-| **review**  | Codebase analysis producing findings + report   | `./ralph.sh review`  |
-| **setup**   | Configure host project integration               | `./ralph.sh setup`   |
+| Mode        | Purpose                                               | Command              |
+| ----------- | ----------------------------------------------------- | -------------------- |
+| **inline**  | Quick one-shot tasks (sonnet, no spec needed)          | `./ralph.sh -p "…"`  |
+| **launch**  | One-shot pipeline: product(optional) → spec → build    | `./ralph.sh launch`  |
+| **spec**    | Generate specs from input/files/product                | `./ralph.sh spec`    |
+| **build**   | Execute tasks from spec one at a time                  | `./ralph.sh build`   |
+| **plan**    | Create human-readable plan (optional for tasks)        | `./ralph.sh plan`    |
+| **product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
+| **review**  | Codebase analysis producing findings + report          | `./ralph.sh review`  |
+| **setup**   | Configure host project integration                     | `./ralph.sh setup`   |
+
+**Choosing the right mode**: Use **inline** for simple, self-contained changes (fix a bug, update a config). Use **spec → build** or **launch** for multi-step features that benefit from structured tasks and acceptance criteria.
 
 ## Host Project Integration
 

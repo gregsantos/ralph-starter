@@ -1754,9 +1754,26 @@ case $PROMPT_SOURCE in
         MODEL="${MODEL_OVERRIDE:-opus}"
         ;;
     inline)
-        # Create temp file for inline prompt
+        # Create temp file with autonomous execution preamble + user prompt
+        # Without this preamble, Claude may try to brainstorm/ask questions
+        # instead of implementing, since each iteration is a fresh session
+        # with no memory of previous iterations.
         TEMP_PROMPT_FILE=$(mktemp /tmp/ralph_prompt_XXXXXX.md)
-        echo "$PROMPT_CONTENT" > "$TEMP_PROMPT_FILE"
+        cat > "$TEMP_PROMPT_FILE" << 'INLINE_PREAMBLE'
+You are running inside an autonomous execution loop (ralph). There is NO interactive user — do not ask questions, propose alternatives, or wait for confirmation. Implement the requested change directly.
+
+## Rules
+- Read the relevant files, then make the changes
+- Commit your work with a clear commit message when done
+- If the task is complete, output `<ralph>COMPLETE</ralph>` as the last thing you do
+- If more work remains for subsequent iterations, end normally without the completion marker
+- Do not invoke brainstorming, planning, or design skills — implement directly
+- Check {{PROGRESS_FILE}} for context from previous iterations (if it exists)
+
+## Task
+
+INLINE_PREAMBLE
+        echo "$PROMPT_CONTENT" >> "$TEMP_PROMPT_FILE"
         PROMPT_FILE="$TEMP_PROMPT_FILE"
         MODE="inline"
         # Default model for inline (faster)
@@ -4298,6 +4315,13 @@ echo -e "${CYAN}${BOLD}║${RESET}   ${BOLD}Model${RESET}        ${SYM_ARROW} ${
 echo -e "${CYAN}${BOLD}║${RESET}                                                                ${CYAN}${BOLD}║${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}   ${DIM}Log: $LOG_FILE${RESET}"
 echo -e "${CYAN}${BOLD}║${RESET}                                                                ${CYAN}${BOLD}║${RESET}"
+if [ "$EXIT_REASON" = "max_iterations" ]; then
+    echo -e "${CYAN}${BOLD}║${RESET}   ${DIM}Resume: ./ralph.sh --resume${RESET}                                 ${CYAN}${BOLD}║${RESET}"
+    if [ "$MODE" = "inline" ]; then
+        echo -e "${CYAN}${BOLD}║${RESET}   ${DIM}Or try: spec -p \"...\" then build -s <spec>${RESET}               ${CYAN}${BOLD}║${RESET}"
+    fi
+    echo -e "${CYAN}${BOLD}║${RESET}                                                                ${CYAN}${BOLD}║${RESET}"
+fi
 echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}\n"
 
 exit $EXIT_STATUS
