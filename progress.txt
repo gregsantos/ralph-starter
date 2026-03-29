@@ -44,3 +44,19 @@ The `product-input/` directory still contains only `README.md` and `.gitkeep`. N
 2. **requirements.md** — What are the product requirements and constraints?
 
 ### Next artifact (when unblocked): 1_executive_summary.md
+
+---
+
+## Iteration 3 — 2026-03-29
+
+### Status: BLOCKED (unchanged)
+
+### Blocker: Missing product context files (same as Iterations 1-2)
+
+The `product-input/` directory still contains only `README.md` and `.gitkeep`. No product context files have been added across 3 iterations.
+
+**Required to unblock:** Populate `ralph-starter/product-input/` with at minimum:
+1. **vision.md** — What is this product? Who is it for? What problem does it solve?
+2. **requirements.md** — What are the product requirements and constraints?
+
+### Next artifact (when unblocked): 1_executive_summary.md
