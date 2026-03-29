@@ -234,3 +234,16 @@ When `--fix-spec` is provided, convert findings to a tasks-array spec:
 - **Check git blame**: Recent changes are more likely to have issues than battle-tested code
 - **Don't over-report**: 10 high-quality findings beat 50 low-quality ones
 - **Positive findings matter**: `info` findings that highlight good patterns help the team understand what to replicate
+
+## Host Project Mode
+
+When ralph-starter is a subdirectory of a host project (e.g., as a git submodule), adjust paths accordingly:
+
+1. **Detect**: Check if a `ralph-starter/` (or similar) subdirectory exists containing `ralph.sh` and `review-output/`
+2. **Review target**: Analyze the host project's source code (at the repo root), not ralph-starter's code
+3. **Findings**: Write to `ralph-starter/review-output/findings.json`
+4. **Report**: Write to `ralph-starter/review-output/REVIEW_REPORT.md`
+5. **Fix spec**: Write to `ralph-starter/specs/` if generating fix specs
+6. **CLAUDE.md**: Read the host project's CLAUDE.md for coding conventions
+
+If no ralph-starter subdirectory is found, use standard paths (`review-output/`, `specs/`, etc.).

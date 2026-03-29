@@ -895,6 +895,7 @@ show_help() {
     echo "  spec              Use PROMPT_spec.md for spec generation (default model: opus)"
     echo "  product           Use PROMPT_product.md for product artifact generation"
     echo "  review            Codebase analysis producing findings JSON + Markdown report"
+    echo "  setup             Configure host project integration (symlink skills, generate config)"
     echo ""
     echo -e "${BOLD}Options:${RESET}"
     echo "  -f, --file PATH   Use custom prompt file"
@@ -969,6 +970,14 @@ show_help() {
     echo "  ./ralph.sh review --diff-base main   # Review only changed files since main"
     echo "  ./ralph.sh review --focus security   # Focus on security only"
     echo "  ./ralph.sh review --fix-spec ./specs/fixes.json  # Generate fix spec"
+    echo ""
+    echo -e "${BOLD}Host Project (Submodule) Examples:${RESET}"
+    echo "  ./ralph-starter/ralph.sh setup              # Symlink skills into host project"
+    echo "  ./ralph-starter/ralph.sh setup --with-config  # Also generate host ralph.conf"
+    echo "  ./ralph-starter/ralph.sh build              # Build in host project context"
+    echo "  ./ralph-starter/ralph.sh --dry-run          # Verify host project path resolution"
+    echo "  RALPH_HOST_ROOT='' ./ralph.sh build         # Force standalone mode"
+    echo ""
     echo "  ./ralph.sh -f ./prompts/review.md    # Custom prompt file"
     echo "  ./ralph.sh -p \"Fix lint errors\" 3    # Inline prompt, 3 iterations"
     echo "  ./ralph.sh build --unlimited         # Unlimited iterations (careful!)"
@@ -998,6 +1007,7 @@ show_help() {
     echo "  RALPH_DIFF_BASE        Git ref for diff-based review scope"
     echo "  RALPH_FINDINGS_FILE    Review findings JSON output path"
     echo "  RALPH_REPORT_FILE      Review report Markdown output path"
+    echo "  RALPH_HOST_ROOT        Force host project root (empty string = standalone mode)"
     echo ""
     echo -e "${BOLD}Defaults:${RESET}"
     echo "  Iterations: 10 (prevents runaway sessions)"
@@ -1016,6 +1026,45 @@ show_help() {
 
 # Get script directory for resolving relative paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# ── Host Project Detection ────────────────────────────────────────────────────
+# When ralph-starter is a subdirectory (e.g., git submodule) of a host project,
+# detect the host project root and adjust CWD so Claude CLI and git operate on
+# the host project while ralph artifacts stay inside ralph-starter/.
+#
+# Override: RALPH_HOST_ROOT=<path> to force a host root
+#           RALPH_HOST_ROOT="" to force standalone mode
+# ──────────────────────────────────────────────────────────────────────────────
+
+HOST_ROOT=""
+RALPH_SUBDIR=""
+
+# Resolve SCRIPT_DIR to physical path (avoids /tmp vs /private/tmp on macOS)
+SCRIPT_DIR_REAL="$(cd "$SCRIPT_DIR" && pwd -P)"
+
+if [ "${RALPH_HOST_ROOT+set}" = "set" ]; then
+    # Explicit override: use the value (empty string = force standalone)
+    if [ -n "$RALPH_HOST_ROOT" ]; then
+        HOST_ROOT="$(cd "$RALPH_HOST_ROOT" 2>/dev/null && pwd -P)"
+        RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+    fi
+else
+    # Auto-detect: check if SCRIPT_DIR is inside a parent git repo
+    parent_git_root="$(cd "$SCRIPT_DIR/.." 2>/dev/null && git rev-parse --show-toplevel 2>/dev/null || true)"
+    if [ -n "$parent_git_root" ]; then
+        # Normalize to physical path for consistent comparison
+        parent_git_root="$(cd "$parent_git_root" 2>/dev/null && pwd -P)"
+    fi
+    if [ -n "$parent_git_root" ] && [ "$parent_git_root" != "$SCRIPT_DIR_REAL" ]; then
+        HOST_ROOT="$parent_git_root"
+        RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+    fi
+fi
+
+# Switch to host project root if detected
+if [ -n "$HOST_ROOT" ]; then
+    cd "$HOST_ROOT"
+fi
 
 # Defaults
 PROMPT_SOURCE="preset"    # preset, file, or inline
@@ -1054,6 +1103,7 @@ LAUNCH_SESSION_FILE=".ralph-launch-session.json"
 FROM_PRODUCT=false         # Read from product-output/ artifacts
 SPEC_OUTPUT_FILE=""        # Output file for generated spec
 SPEC_FORCE_OVERWRITE=false # Overwrite existing spec file
+SETUP_WITH_CONFIG=false    # Generate host ralph.conf during setup
 SPEC_INPUT_TYPE=""         # prompt, file, or product (for spec mode)
 SPEC_INPUT_CONTENT=""      # The content/path for spec mode input
 CLI_INLINE_PROMPT=""       # Track -p value separately for spec mode
@@ -1304,6 +1354,14 @@ while [[ $# -gt 0 ]]; do
             CLI_FOCUS_SET=true
             shift 2
             ;;
+        setup)
+            PRESET_NAME="setup"
+            shift
+            ;;
+        --with-config)
+            SETUP_WITH_CONFIG=true
+            shift
+            ;;
         launch|plan|build|product|spec|review)
             PROMPT_SOURCE="preset"
             PRESET_NAME="$1"
@@ -1320,6 +1378,92 @@ done
 # Handle --list-sessions early (before other processing)
 if [ "$LIST_SESSIONS" = true ]; then
     list_sessions
+    exit 0
+fi
+
+# Handle setup subcommand early (before other processing)
+if [ "$PRESET_NAME" = "setup" ]; then
+    run_setup() {
+        local host_root="$HOST_ROOT"
+        local ralph_subdir="$RALPH_SUBDIR"
+
+        if [ -z "$host_root" ]; then
+            echo -e "${YELLOW}${SYM_DOT} No host project detected (ralph-starter appears to be standalone)${RESET}"
+            echo -e "  ${DIM}To force a host root: RALPH_HOST_ROOT=/path/to/project ./ralph.sh setup${RESET}"
+            exit 1
+        fi
+
+        echo -e "${BOLD}Ralph Setup${RESET} — configuring host project integration"
+        echo -e "  ${DIM}Host root:${RESET}    $host_root"
+        echo -e "  ${DIM}Ralph at:${RESET}     $ralph_subdir/"
+        echo ""
+
+        # 1. Symlink skills into host project's .claude/skills/
+        local host_skills_dir="${host_root}/.claude/skills"
+        mkdir -p "$host_skills_dir"
+
+        local skills_linked=0
+        for skill_dir in "${SCRIPT_DIR}/.claude/skills"/*/; do
+            [ -d "$skill_dir" ] || continue
+            local skill_name
+            skill_name=$(basename "$skill_dir")
+
+            local target="../${ralph_subdir}/.claude/skills/${skill_name}"
+            local link_path="${host_skills_dir}/${skill_name}"
+
+            # Remove existing symlink or directory if present
+            if [ -L "$link_path" ] || [ -d "$link_path" ]; then
+                rm -rf "$link_path"
+            fi
+
+            ln -s "$target" "$link_path"
+            echo -e "  ${GREEN}${SYM_CHECK}${RESET} Linked skill: ${BOLD}${skill_name}${RESET}"
+            skills_linked=$((skills_linked + 1))
+        done
+
+        if [ $skills_linked -eq 0 ]; then
+            echo -e "  ${DIM}No skills found to link${RESET}"
+        fi
+
+        # 2. Generate host ralph.conf if --with-config
+        if [ "$SETUP_WITH_CONFIG" = true ]; then
+            local host_conf="${host_root}/ralph.conf"
+            if [ -f "$host_conf" ] && [ "$SPEC_FORCE_OVERWRITE" != true ]; then
+                echo -e "\n  ${YELLOW}${SYM_DOT} Host ralph.conf already exists: ${host_conf}${RESET}"
+                echo -e "  ${DIM}Use --force to overwrite${RESET}"
+            else
+                cat > "$host_conf" << CONFEOF
+# Host project configuration for ralph-starter
+# Overrides ralph-starter/ralph.conf defaults
+# Precedence: CLI > env > this file > ralph-starter/ralph.conf > ~/.ralph/config > defaults
+
+# Source code directory (host project)
+# SOURCE_DIR=src/*
+
+# Model and iteration defaults
+# MODEL=opus
+# MAX_ITERATIONS=10
+# PUSH_ENABLED=true
+CONFEOF
+                echo -e "\n  ${GREEN}${SYM_CHECK}${RESET} Generated host config: ${BOLD}ralph.conf${RESET}"
+            fi
+        fi
+
+        # 3. Print usage instructions
+        echo ""
+        echo -e "${BOLD}Usage:${RESET}"
+        echo -e "  ${DIM}# Run from host project root${RESET}"
+        echo -e "  ./${ralph_subdir}/ralph.sh build"
+        echo -e "  ./${ralph_subdir}/ralph.sh spec -p 'Add feature X'"
+        echo -e "  ./${ralph_subdir}/ralph.sh launch -p 'Build feature Y'"
+        echo -e "  ./${ralph_subdir}/ralph.sh review"
+        echo ""
+        echo -e "  ${DIM}# Dry-run to verify path resolution${RESET}"
+        echo -e "  ./${ralph_subdir}/ralph.sh --dry-run"
+        echo ""
+        echo -e "  ${DIM}# Skills are available in Claude Code via /writing-ralph-specs, /reviewing-codebase${RESET}"
+    }
+    run_setup
     exit 0
 fi
 
@@ -2474,10 +2618,12 @@ validate_config_value() {
 }
 
 # Safely parse a config file line by line
-# Arguments: config_file_path
+# Arguments: config_file_path [force]
 # Sets global variables based on config file contents
+# If force=true, overrides previously set config values (used for host config)
 safe_load_config() {
     local config_file="$1"
+    local force="${2:-false}"
     local line_num=0
     local warnings_shown=false
 
@@ -2521,25 +2667,35 @@ safe_load_config() {
                 continue
             fi
 
-            # Set the variable (only if not already set by CLI/env)
+            # Set the variable (only if not already set by CLI/env, unless force=true)
             case "$key" in
                 SPEC_FILE)
-                    [ "$CLI_SPEC_SET" != "true" ] && [ -z "$SPEC_FILE" ] && SPEC_FILE="$value"
+                    if [ "$CLI_SPEC_SET" != "true" ]; then
+                        { [ -z "$SPEC_FILE" ] || [ "$force" = "true" ]; } && SPEC_FILE="$value"
+                    fi
                     ;;
                 PLAN_FILE)
-                    [ "$CLI_PLAN_SET" != "true" ] && [ -z "$PLAN_FILE" ] && PLAN_FILE="$value"
+                    if [ "$CLI_PLAN_SET" != "true" ]; then
+                        { [ -z "$PLAN_FILE" ] || [ "$force" = "true" ]; } && PLAN_FILE="$value"
+                    fi
                     ;;
                 PROGRESS_FILE)
-                    [ "$CLI_PROGRESS_SET" != "true" ] && [ -z "$PROGRESS_FILE" ] && PROGRESS_FILE="$value"
+                    if [ "$CLI_PROGRESS_SET" != "true" ]; then
+                        { [ -z "$PROGRESS_FILE" ] || [ "$force" = "true" ]; } && PROGRESS_FILE="$value"
+                    fi
                     ;;
                 SOURCE_DIR)
-                    [ -z "$SOURCE_DIR" ] && SOURCE_DIR="$value"
+                    { [ -z "$SOURCE_DIR" ] || [ "$force" = "true" ]; } && SOURCE_DIR="$value"
                     ;;
                 MODEL)
-                    [ "$CLI_MODEL_SET" != "true" ] && [ -z "$MODEL_OVERRIDE" ] && MODEL_OVERRIDE="$value"
+                    if [ "$CLI_MODEL_SET" != "true" ]; then
+                        { [ -z "$MODEL_OVERRIDE" ] || [ "$force" = "true" ]; } && MODEL_OVERRIDE="$value"
+                    fi
                     ;;
                 MAX_ITERATIONS)
-                    [ "$CLI_MAX_SET" != "true" ] && [ "$UNLIMITED" != "true" ] && MAX_ITERATIONS="$value"
+                    if [ "$CLI_MAX_SET" != "true" ] && [ "$UNLIMITED" != "true" ]; then
+                        [ "$force" = "true" ] && MAX_ITERATIONS="$value" || [ -z "${MAX_ITERATIONS_FROM_CONFIG:-}" ] && MAX_ITERATIONS="$value"
+                    fi
                     ;;
                 PUSH_ENABLED)
                     if [ "$CLI_PUSH_SET" != "true" ]; then
@@ -2550,16 +2706,18 @@ safe_load_config() {
                     fi
                     ;;
                 PRODUCT_CONTEXT_DIR)
-                    [ -z "$PRODUCT_CONTEXT_DIR" ] && PRODUCT_CONTEXT_DIR="$value"
+                    { [ -z "$PRODUCT_CONTEXT_DIR" ] || [ "$force" = "true" ]; } && PRODUCT_CONTEXT_DIR="$value"
                     ;;
                 PRODUCT_OUTPUT_DIR)
-                    [ -z "$PRODUCT_OUTPUT_DIR" ] && PRODUCT_OUTPUT_DIR="$value"
+                    { [ -z "$PRODUCT_OUTPUT_DIR" ] || [ "$force" = "true" ]; } && PRODUCT_OUTPUT_DIR="$value"
                     ;;
                 ARTIFACT_SPEC_FILE)
-                    [ -z "$ARTIFACT_SPEC_FILE" ] && ARTIFACT_SPEC_FILE="$value"
+                    { [ -z "$ARTIFACT_SPEC_FILE" ] || [ "$force" = "true" ]; } && ARTIFACT_SPEC_FILE="$value"
                     ;;
                 LAUNCH_BUFFER)
-                    [ "$CLI_LAUNCH_BUFFER_SET" != "true" ] && [ -z "${RALPH_LAUNCH_BUFFER:-}" ] && LAUNCH_BUFFER="$value"
+                    if [ "$CLI_LAUNCH_BUFFER_SET" != "true" ] && [ -z "${RALPH_LAUNCH_BUFFER:-}" ]; then
+                        LAUNCH_BUFFER="$value"
+                    fi
                     ;;
                 FULL_PRODUCT)
                     if [ -z "${RALPH_FULL_PRODUCT:-}" ] && [ "$FULL_PRODUCT" != "true" ] && [ "$SKIP_PRODUCT" != "true" ]; then
@@ -2578,7 +2736,9 @@ safe_load_config() {
                     fi
                     ;;
                 LOG_DIR)
-                    [ "$CLI_LOG_DIR_SET" != "true" ] && [ -z "$LOG_DIR" ] && LOG_DIR="$value"
+                    if [ "$CLI_LOG_DIR_SET" != "true" ]; then
+                        { [ -z "$LOG_DIR" ] || [ "$force" = "true" ]; } && LOG_DIR="$value"
+                    fi
                     ;;
                 LOG_FORMAT)
                     # Normalize to lowercase (validation accepts TEXT/JSON but rest of script expects lowercase)
@@ -2609,6 +2769,7 @@ safe_load_config() {
 load_ralph_config() {
     local global_config
     local project_config="${SCRIPT_DIR}/ralph.conf"
+    local host_config=""
 
     # Determine global config path (CLI --global-config > default location)
     if [ -n "$GLOBAL_CONFIG_FILE" ]; then
@@ -2622,6 +2783,12 @@ load_ralph_config() {
         mkdir -p "${HOME}/.ralph"
     fi
 
+    # Detect host-level ralph.conf (in CWD, which is HOST_ROOT when submodule)
+    local cwd_config="$(pwd)/ralph.conf"
+    if [ -f "$cwd_config" ] && [ "$cwd_config" != "$project_config" ]; then
+        host_config="$cwd_config"
+    fi
+
     # Load global config first (lowest precedence after defaults)
     if [ -f "$global_config" ]; then
         safe_load_config "$global_config"
@@ -2632,6 +2799,13 @@ load_ralph_config() {
     if [ -f "$project_config" ]; then
         safe_load_config "$project_config"
         LOADED_CONFIG_FILES+=("$project_config")
+    fi
+
+    # Load host-level config third (overrides project config)
+    # Precedence: CLI > env > host ralph.conf > project ralph.conf > global > defaults
+    if [ -n "$host_config" ]; then
+        safe_load_config "$host_config" true
+        LOADED_CONFIG_FILES+=("$host_config")
     fi
 }
 
@@ -2669,11 +2843,35 @@ setup_log_file
 SPEC_FILE="${SPEC_FILE:-./specs/IMPLEMENTATION_PLAN.md}"
 PROGRESS_FILE="${PROGRESS_FILE:-progress.txt}"
 SOURCE_DIR="${SOURCE_DIR:-src/*}"
-
-# Product mode defaults
 PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
 PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
 ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
+
+# When running as submodule (HOST_ROOT set), rebase artifact paths into ralph subdir.
+# Only rebase paths not explicitly set by CLI flags — config/default paths need rebasing
+# because they're relative to ralph-starter, but CWD is now the host project root.
+# SOURCE_DIR stays at host project root (points to host code, not ralph code).
+if [ -n "$HOST_ROOT" ]; then
+    rebase_path() {
+        local path="$1"
+        # Already rebased or absolute — skip
+        if [[ "$path" == "./${RALPH_SUBDIR}/"* ]] || [[ "$path" == /* ]]; then
+            echo "$path"
+        elif [[ "$path" == ./* ]]; then
+            echo "./${RALPH_SUBDIR}/${path#./}"
+        else
+            echo "./${RALPH_SUBDIR}/${path}"
+        fi
+    }
+
+    [ "$CLI_SPEC_SET" != "true" ] && SPEC_FILE="$(rebase_path "$SPEC_FILE")"
+    [ "$CLI_PROGRESS_SET" != "true" ] && PROGRESS_FILE="$(rebase_path "$PROGRESS_FILE")"
+    PRODUCT_CONTEXT_DIR="$(rebase_path "$PRODUCT_CONTEXT_DIR")"
+    PRODUCT_OUTPUT_DIR="$(rebase_path "$PRODUCT_OUTPUT_DIR")"
+    ARTIFACT_SPEC_FILE="$(rebase_path "$ARTIFACT_SPEC_FILE")"
+    SESSION_FILE="./${RALPH_SUBDIR}/.ralph-session.json"
+    LAUNCH_SESSION_FILE="./${RALPH_SUBDIR}/.ralph-launch-session.json"
+fi
 
 # Spec mode variables (for template substitution)
 # These are populated from the input flags parsed earlier
@@ -2773,6 +2971,11 @@ else
     PLAN_FILE="${PLAN_FILE:-./plans/IMPLEMENTATION_PLAN.md}"
 fi
 
+# Rebase plan file when running as submodule (unless CLI-set)
+if [ -n "$HOST_ROOT" ] && [ "$CLI_PLAN_SET" != "true" ]; then
+    PLAN_FILE="$(rebase_path "$PLAN_FILE")"
+fi
+
 # Show config precedence in verbose mode
 # This function displays where each config value came from
 show_config_precedence() {
@@ -2780,8 +2983,18 @@ show_config_precedence() {
 
     echo -e "\n${DIM}  [verbose] ┌─────────────────────────────────────────┐${RESET}"
     echo -e "${DIM}  [verbose] │ Configuration Precedence                │${RESET}"
-    echo -e "${DIM}  [verbose] │ (cli > env > config > default)          │${RESET}"
+    echo -e "${DIM}  [verbose] │ (cli > env > host conf > conf > default)│${RESET}"
     echo -e "${DIM}  [verbose] └─────────────────────────────────────────┘${RESET}"
+
+    # Host project detection status
+    if [ -n "$HOST_ROOT" ]; then
+        local host_source="auto-detected"
+        [ "${RALPH_HOST_ROOT+set}" = "set" ] && host_source="RALPH_HOST_ROOT env"
+        echo -e "${DIM}  [verbose]${RESET} HOST_ROOT    = ${HOST_ROOT} ${DIM}(${host_source})${RESET}"
+        echo -e "${DIM}  [verbose]${RESET} RALPH_SUBDIR = ${RALPH_SUBDIR}"
+    else
+        echo -e "${DIM}  [verbose]${RESET} HOST_ROOT    = ${DIM}(standalone mode)${RESET}"
+    fi
 
     # Determine source for each key variable
     local model_source="default"
@@ -3360,6 +3573,10 @@ print_header() {
 
 print_config() {
     echo -e "${DIM}┌─────────────────────────────────────────┐${RESET}"
+    if [ -n "$HOST_ROOT" ]; then
+        echo -e "${DIM}│${RESET} ${BOLD}Host${RESET}     ${SYM_ARROW} ${CYAN}$HOST_ROOT${RESET}"
+        echo -e "${DIM}│${RESET} ${BOLD}Ralph${RESET}    ${SYM_ARROW} ${DIM}${RALPH_SUBDIR}/${RESET}"
+    fi
     echo -e "${DIM}│${RESET} ${BOLD}Mode${RESET}     ${SYM_ARROW} ${GREEN}$MODE${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Model${RESET}    ${SYM_ARROW} ${CYAN}$MODEL${RESET}"
     echo -e "${DIM}│${RESET} ${BOLD}Prompt${RESET}   ${SYM_ARROW} ${BLUE}$PROMPT_FILE${RESET}"

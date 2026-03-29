@@ -204,6 +204,18 @@ The `userStories` format is still supported for backward compatibility. New spec
 - **passes field**: Initialize as `false`; build mode sets to `true` when all criteria met
 - **status field**: Build mode sets to `in_progress` when starting, `complete` when done
 
+## Host Project Mode
+
+When ralph-starter is a subdirectory of a host project (e.g., as a git submodule), adjust paths accordingly:
+
+1. **Detect**: Check if a `ralph-starter/` (or similar) subdirectory exists containing `ralph.sh` and `specs/`
+2. **Specs**: Write to `ralph-starter/specs/` instead of `specs/`
+3. **Source code**: Analyze the host project's source (at the repo root), not ralph-starter's code
+4. **CLAUDE.md**: Read the host project's CLAUDE.md for coding conventions
+5. **INDEX.md**: Update `ralph-starter/specs/INDEX.md`
+
+If no ralph-starter subdirectory is found, use standard paths (`specs/`, `plans/`, etc.).
+
 ## Reference
 
 - `specs/example-tasks.json` - Simple example showing all task fields and dependencies

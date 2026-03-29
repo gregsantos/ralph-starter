@@ -330,6 +330,27 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 | **build**   | Execute tasks one at a time                     | `./ralph.sh build`   |
 | **product** | Generate product documentation (12 artifacts)   | `./ralph.sh product` |
 | **review**  | Codebase analysis producing findings + report   | `./ralph.sh review`  |
+| **setup**   | Configure host project integration               | `./ralph.sh setup`   |
+
+## Host Project Integration
+
+Ralph-starter can be used as a git submodule in any project. It auto-detects the host project and adjusts paths so Claude operates on host code while artifacts stay in `ralph-starter/`.
+
+```bash
+# Setup in a host project
+git submodule add <url> ralph-starter
+./ralph-starter/ralph.sh setup              # Symlink skills
+./ralph-starter/ralph.sh setup --with-config  # Also generate host ralph.conf
+
+# Run from host project root
+./ralph-starter/ralph.sh build -s ./ralph-starter/specs/feature.json
+./ralph-starter/ralph.sh spec -p "Add feature"
+
+# Override detection
+RALPH_HOST_ROOT="" ./ralph.sh build  # Force standalone mode
+```
+
+See [docs/RALPH_LOOP_REF.md](docs/RALPH_LOOP_REF.md) for full host project documentation.
 
 ## Prompt Files
 

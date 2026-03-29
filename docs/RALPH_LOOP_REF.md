@@ -80,6 +80,67 @@ After installation, restart your shell or run `source ~/.bashrc` (bash) or `sour
 - File paths for flags that accept them (`-f`, `-s`, `-l`, `--log-file`, etc.)
 - Directory paths for flags that accept them (`--log-dir`, `--source`, `--context`, `--output`)
 
+## Host Project Integration
+
+Ralph-starter can be added to any project as a git submodule. When running inside a host project, ralph automatically detects the parent repo and adjusts paths so Claude operates on the host project's code while ralph artifacts stay self-contained.
+
+### Setup
+
+```bash
+# Add ralph-starter as a submodule
+cd my-project
+git submodule add https://github.com/user/ralph-starter.git ralph-starter
+
+# Run setup to symlink skills into host project
+./ralph-starter/ralph.sh setup
+
+# Optional: generate a host-level ralph.conf for overrides
+./ralph-starter/ralph.sh setup --with-config
+```
+
+### How It Works
+
+- **Auto-detection**: Ralph walks up from its directory to find the parent git repo root
+- **Path rebasing**: Artifact paths (specs, plans, progress) point into `ralph-starter/`
+- **Source analysis**: `SOURCE_DIR` defaults to `src/*` at the host project root
+- **Git operations**: Commits and pushes target the host project repo
+- **Skills**: Symlinked into `host-project/.claude/skills/` for Claude Code access
+
+### Running from Host Project
+
+```bash
+# All commands run from host project root
+./ralph-starter/ralph.sh build -s ./ralph-starter/specs/feature.json
+./ralph-starter/ralph.sh spec -p "Add user auth"
+./ralph-starter/ralph.sh launch -p "Build dashboard"
+./ralph-starter/ralph.sh review
+./ralph-starter/ralph.sh --dry-run  # Verify path resolution
+```
+
+### Host ralph.conf
+
+A `ralph.conf` in the host project root overrides `ralph-starter/ralph.conf`:
+
+```
+# Precedence: CLI > env > host ralph.conf > ralph-starter/ralph.conf > ~/.ralph/config > defaults
+SOURCE_DIR=lib/*
+MODEL=sonnet
+```
+
+### Override Detection
+
+```bash
+# Force a specific host root
+RALPH_HOST_ROOT=/path/to/project ./ralph-starter/ralph.sh build
+
+# Force standalone mode (ignore parent repo)
+RALPH_HOST_ROOT="" ./ralph.sh build
+```
+
+### Sharing with Collaborators
+
+Skill symlinks are committed to the host repo. Collaborators clone with `--recurse-submodules` and everything works — no per-developer setup needed.
+
 ## Usage
 
 ### Basic Commands
