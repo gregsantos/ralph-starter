@@ -73,7 +73,7 @@ After installation, restart your shell or run `source ~/.bashrc` (bash) or `sour
 
 **What's Completed:**
 
-- Presets: `launch`, `plan`, `build`, `product`, `spec`
+- Presets: `dev`, `launch`, `plan`, `build`, `product`, `spec`
 - All flags: `--model`, `--file`, `--spec`, `--log-format`, etc.
 - Model names: `opus`, `sonnet`, `haiku`
 - Log formats: `text`, `json`
@@ -112,7 +112,7 @@ git submodule add https://github.com/user/ralph-starter.git ralph-starter
 # All commands run from host project root
 ./ralph-starter/ralph.sh build -s ./ralph-starter/specs/feature.json
 ./ralph-starter/ralph.sh spec -p "Add user auth"
-./ralph-starter/ralph.sh launch -p "Build dashboard"
+./ralph-starter/ralph.sh dev -p "Build dashboard"
 ./ralph-starter/ralph.sh review
 ./ralph-starter/ralph.sh --dry-run  # Verify path resolution
 ```
@@ -149,8 +149,8 @@ Skill symlinks are committed to the host repo. Collaborators clone with `--recur
 # Default: build mode, opus, 10 iterations
 ./ralph.sh
 
-# One-shot pipeline: product(optional) -> spec -> build
-./ralph.sh launch -p "Build a habit tracker"
+# Feature pipeline: spec -> build (no product)
+./ralph.sh dev -p "Build a habit tracker"
 
 # Plan mode (10 iterations default)
 ./ralph.sh plan
@@ -252,8 +252,8 @@ Default global config: `~/.ralph/config` (loaded before project `ralph.conf`)
 # Preview config without running Claude
 ./ralph.sh -s ./specs/my-feature.md --dry-run
 
-# Preview launch pipeline plan safely (no branch/archive/progress mutations)
-./ralph.sh launch --dry-run --skip-product -p "Build a habit tracker"
+# Preview dev pipeline plan safely (no branch/archive/progress mutations)
+./ralph.sh dev --dry-run -p "Build a habit tracker"
 ```
 
 ### Test Mode
@@ -420,27 +420,41 @@ If none of these exist, it falls back to reading all `.md` files in `product-out
 ./ralph.sh product --context ./input/ --output ./output/ --model sonnet 5
 ```
 
-### Launch Mode
+### Dev Mode
+
+Dev mode runs the spec-then-build pipeline for everyday features. It never runs product discovery.
 
 ```bash
-# One-shot pipeline with prompt input
-./ralph.sh launch -p "Build a collaborative notes app"
+# Feature pipeline: spec -> build
+./ralph.sh dev -p "Build a collaborative notes app"
 
-# Force product phase first
-./ralph.sh launch --full-product -p "Build a CRM app"
+# Tune dynamic build budget (build iterations = task_count + buffer)
+./ralph.sh dev -p "Add user authentication" --dev-buffer 8
+```
 
-# Explicitly skip product phase
-./ralph.sh launch --skip-product -p "Build a Kanban board"
+Dev mode defaults:
+- Product phase is never run.
+- Spec phase runs with max 5 iterations.
+- Build phase iterations are computed dynamically from generated spec tasks plus buffer (`--dev-buffer`, default 5).
+- Plan mode is intentionally not part of the dev pipeline.
+
+### Launch Mode
+
+Launch mode runs the full product-then-spec-then-build pipeline for greenfield projects. It always runs product discovery.
+
+```bash
+# Greenfield pipeline: product -> spec -> build
+./ralph.sh launch -p "Build a CRM app"
 
 # Tune dynamic build budget (build iterations = task_count + buffer)
 ./ralph.sh launch -p "Build an invoicing app" --launch-buffer 8
 ```
 
 Launch mode defaults:
-- Product phase is skipped unless `--full-product` is set or `product-input/` has meaningful context files.
+- Product phase always runs.
 - Spec phase runs with max 5 iterations.
 - Build phase iterations are computed dynamically from generated spec tasks plus buffer (`--launch-buffer`, default 5).
-- Plan mode is intentionally not part of launch.
+- Plan mode is intentionally not part of the launch pipeline.
 
 ### Review Mode
 
@@ -536,7 +550,8 @@ Review mode uses a hybrid approach:
 
 | Mode          | Default Model | Rationale                                    |
 | ------------- | ------------- | -------------------------------------------- |
-| `launch`      | opus          | End-to-end product/spec/build orchestration  |
+| `dev`         | opus          | Feature spec/build pipeline                  |
+| `launch`      | opus          | Greenfield product/spec/build orchestration  |
 | `plan`        | opus          | Complex reasoning for architecture decisions |
 | `build`       | opus          | Quality implementation with full context     |
 | `spec`        | opus          | Requires deep understanding for spec design  |
@@ -928,7 +943,8 @@ Note: The session file `.ralph-session.json` is preserved on interrupt. It's onl
 
 # Presets (default: 10 iterations)
 ./ralph.sh                    # Build mode, opus, 10 iterations
-./ralph.sh launch -p "Feature" # One-shot launch pipeline
+./ralph.sh dev -p "Feature"    # Feature pipeline: spec -> build
+./ralph.sh launch -p "App"     # Greenfield pipeline: product -> spec -> build
 ./ralph.sh plan               # Plan mode, opus, 10 iterations
 ./ralph.sh build 5            # Build mode, 5 iterations
 ./ralph.sh plan 3             # Plan mode, 3 iterations
@@ -1021,7 +1037,7 @@ ralph<TAB>                                   # Complete presets and options
 ./ralph.sh build -s ./specs/new-spec.json    # Execute tasks
 
 # One-shot feature development workflow
-./ralph.sh launch -p "Add user authentication"
+./ralph.sh dev -p "Add user authentication"
 
 # Quick feature from idea to implementation
 ./ralph.sh spec -p "Add dark mode toggle"
@@ -1090,6 +1106,8 @@ Ralph supports environment variables for CI/CD integration and user defaults. Pr
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
 | `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
 | `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
+| `RALPH_DEV_BUFFER`     | Extra build iterations for dev mode     | `RALPH_DEV_BUFFER=8`          |
+| `RALPH_LAUNCH_BUFFER`  | Extra build iterations for launch mode  | `RALPH_LAUNCH_BUFFER=8`       |
 | `RALPH_REVIEW_TARGET`  | Review target directory/glob            | `RALPH_REVIEW_TARGET=./lib/`  |
 | `RALPH_DIFF_BASE`      | Git ref for diff-based review scope     | `RALPH_DIFF_BASE=main`        |
 | `RALPH_FINDINGS_FILE`  | Review findings JSON output path        | `RALPH_FINDINGS_FILE=...`     |
@@ -1185,6 +1203,7 @@ SOURCE_DIR=src/*
 MODEL=opus
 MAX_ITERATIONS=10
 PUSH_ENABLED=true
+PIPELINE_BUFFER=5
 
 # Logging
 LOG_DIR=~/.ralph/logs
@@ -1205,6 +1224,7 @@ LOG_DIR=~/.ralph/logs
 | `LOG_DIR`            | Log file directory                           | `~/.ralph/logs`                   |
 | `LOG_FORMAT`         | Log format (text/json)                       | `text`                            |
 | `NOTIFY_WEBHOOK`     | Notification webhook URL                     | (none)                            |
+| `PIPELINE_BUFFER`    | Extra build iterations for dev/launch        | `5`                               |
 
 ### Security
 
@@ -1301,19 +1321,25 @@ The full workflow for implementing features with Ralph:
 - Build mode works directly from spec tasks (no separate plan file needed)
 - Plan mode is optional for generating human-readable views
 
-### One-Shot Workflow via Launch Mode
+### One-Shot Workflow via Dev / Launch Mode
 
 ```bash
-# Auto branch + optional product + spec + build
-./ralph.sh launch -p "Build a scheduling app"
+# Dev: feature pipeline (spec -> build, no product)
+./ralph.sh dev -p "Build a scheduling app"
 
-# Force product phase before spec/build
-./ralph.sh launch --full-product -p "Build a recruiting platform"
+# Launch: greenfield pipeline (product -> spec -> build)
+./ralph.sh launch -p "Build a recruiting platform"
 ```
+
+Dev behavior:
+1. Auto-create or switch to a feature branch (`feature/<slug>`).
+2. Run spec phase with max 5 iterations and explicit output spec.
+3. Compute build iterations dynamically from spec task count plus dev buffer.
+4. Run build phase against the generated spec.
 
 Launch behavior:
 1. Auto-create or switch to a feature branch (`feature/<slug>`).
-2. Run product phase only when forced or meaningful `product-input/` exists.
+2. Run product phase (always).
 3. Run spec phase with max 5 iterations and explicit output spec.
 4. Compute build iterations dynamically from spec task count plus launch buffer.
 5. Run build phase against the generated spec.
@@ -1432,10 +1458,13 @@ The generated plan includes a warning: "This is a derived view. Edit the spec, n
 ./ralph.sh spec --from-product               # Step 1: Generate spec from PRD
 ./ralph.sh build -s ./specs/my-feature.json  # Step 2: Execute tasks
 
-# Full workflow in one command
-./ralph.sh launch -p "Add dark mode"
+# Feature in one command (spec -> build)
+./ralph.sh dev -p "Add dark mode"
 
-# Quick feature development (skip product mode)
+# Greenfield in one command (product -> spec -> build)
+./ralph.sh launch -p "Build a new SaaS app"
+
+# Quick feature development (manual spec then build)
 ./ralph.sh spec -p "Add user authentication"
 ./ralph.sh build -s ./specs/new-spec.json
 

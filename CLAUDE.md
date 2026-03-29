@@ -184,10 +184,10 @@ The recommended workflow for implementing features with Ralph:
 4. (Optional) Plan Mode    → plans/{feature}_PLAN.md  (human-readable view)
 ```
 
-For one-shot execution, use launch mode:
+For one-shot execution, use dev mode:
 
 ```bash
-./ralph.sh launch -p "Add user authentication with OAuth"
+./ralph.sh dev -p "Add user authentication with OAuth"
 ```
 
 ## Creating Specs
@@ -293,12 +293,12 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 ./ralph.sh -p "Fix lint errors" 3       # Simple fix, 3 iterations
 ./ralph.sh -p "Add favicon" 1           # Trivial change, 1 iteration
 
-# Launch — features (generates spec, then builds)
-./ralph.sh launch -p "Add dark mode"
-./ralph.sh launch -p "Build user auth with OAuth"
+# Dev — features (generates spec, then builds)
+./ralph.sh dev -p "Add dark mode"
+./ralph.sh dev -p "Build user auth with OAuth"
 
-# Launch with product discovery (only when you need it)
-./ralph.sh launch --full-product -p "Build a new SaaS app"
+# Launch — greenfield projects (product discovery + spec + build)
+./ralph.sh launch -p "Build a new SaaS app"
 
 # Manual control — generate spec, review it, then build
 ./ralph.sh spec -p "Add dark mode"
@@ -317,18 +317,19 @@ Autonomous Claude Code runner for iterative development. See [docs/RALPH_LOOP_RE
 
 ## Modes
 
-| Mode        | Purpose                                               | Command              |
-| ----------- | ----------------------------------------------------- | -------------------- |
-| **inline**  | Quick fixes and simple changes (sonnet, no spec)       | `./ralph.sh -p "…"`  |
-| **launch**  | Features: generates spec → builds (default for features) | `./ralph.sh launch`  |
-| **spec**    | Generate spec only (for manual review before building) | `./ralph.sh spec`    |
-| **build**   | Execute tasks from an existing spec                    | `./ralph.sh build`   |
-| **review**  | Codebase analysis producing findings + report          | `./ralph.sh review`  |
-| **plan**    | Human-readable plan from spec tasks (optional)         | `./ralph.sh plan`    |
-| **product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
-| **setup**   | Configure host project integration                     | `./ralph.sh setup`   |
+| Mode        | Purpose                                                | Command              |
+| ----------- | ------------------------------------------------------ | -------------------- |
+| **inline**  | Quick fixes and simple changes (sonnet, no spec)        | `./ralph.sh -p "…"`  |
+| **dev**     | Features: generates spec → builds (everyday features)   | `./ralph.sh dev`     |
+| **launch**  | Greenfield: product → spec → build (always runs product)| `./ralph.sh launch`  |
+| **spec**    | Generate spec only (for manual review before building)  | `./ralph.sh spec`    |
+| **build**   | Execute tasks from an existing spec                     | `./ralph.sh build`   |
+| **review**  | Codebase analysis producing findings + report           | `./ralph.sh review`  |
+| **plan**    | Human-readable plan from spec tasks (optional)          | `./ralph.sh plan`    |
+| **product** | Generate product documentation (12 artifacts)           | `./ralph.sh product` |
+| **setup**   | Configure host project integration                      | `./ralph.sh setup`   |
 
-**Quick fixes → inline. Features → launch.** Use `spec` + `build` separately when you want to review the spec before building. Launch skips product by default — it only runs product when `--full-product` is set or `product-input/` has content.
+**Quick fixes → inline. Features → dev. Greenfield → launch.** Use `spec` + `build` separately when you want to review the spec before building.
 
 ## Host Project Integration
 

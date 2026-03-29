@@ -9,7 +9,7 @@ A comprehensive guide to autonomous AI-assisted development with Ralph Loop.
 1. [What is Ralph Loop?](#what-is-ralph-loop)
 2. [Core Concepts](#core-concepts)
 3. [Quick Start](#quick-start)
-4. [The Five Modes](#the-five-modes)
+4. [The Six Modes](#the-six-modes)
 5. [The Recommended Workflow](#the-recommended-workflow)
 6. [Configuration](#configuration)
 7. [Spec Mode](#spec-mode)
@@ -77,15 +77,16 @@ Each iteration starts with **zero memory** of previous runs. The AI reads its st
 
 **The key insight**: Specs with a `tasks` array are the single source of truth. Build mode works directly from the spec—no separate plan file needed. Plan mode is optional for generating human-readable views.
 
-### 3. Five Modes
+### 3. Six Modes
 
-| Mode      | Purpose                                           | When to Use                                      |
-| --------- | ------------------------------------------------- | ------------------------------------------------ |
-| **Launch** | One-shot pipeline (product optional -> spec -> build) | Fastest path from idea to first implementation   |
-| **Spec**  | Generate JSON specs from input                    | Starting from requirements, PRD, or idea         |
-| **Plan**  | Create human-readable plan (optional)             | When you need a readable checklist view          |
-| **Build** | Execute tasks one at a time                       | Implementing the spec                            |
-| **Product** | Generate product documentation                  | Product discovery and planning                   |
+| Mode       | Purpose                                          | When to Use                                      |
+| ---------- | ------------------------------------------------ | ------------------------------------------------ |
+| **Dev**    | Spec -> build pipeline (no product)              | Everyday features, the default pipeline          |
+| **Launch** | Product -> spec -> build pipeline (greenfield)   | New projects, always runs product discovery      |
+| **Spec**   | Generate JSON specs from input                   | Starting from requirements, PRD, or idea         |
+| **Plan**   | Create human-readable plan (optional)            | When you need a readable checklist view          |
+| **Build**  | Execute tasks one at a time                      | Implementing the spec                            |
+| **Product**| Generate product documentation                   | Product discovery and planning                   |
 
 ### 4. One Task Per Iteration
 
@@ -133,7 +134,7 @@ Ralph runs pre-flight checks automatically to verify dependencies. Use `--skip-c
 
 ```bash
 # 1. One-shot flow (recommended for quick starts)
-./ralph.sh launch -p "Add dark mode toggle to settings"
+./ralph.sh dev -p "Add dark mode toggle to settings"
 
 # 2. Optional: use explicit spec->build for more control
 ./ralph.sh spec -p "Add dark mode toggle to settings"
@@ -152,7 +153,7 @@ You should see the help output with all available options.
 
 ---
 
-## The Five Modes
+## The Six Modes
 
 ### Mode Overview
 
@@ -177,7 +178,8 @@ You should see the help output with all available options.
 
 | Mode          | Default Model | Rationale                                    |
 | ------------- | ------------- | -------------------------------------------- |
-| `launch`      | opus          | End-to-end product/spec/build orchestration |
+| `dev`         | opus          | Spec -> build pipeline for features          |
+| `launch`      | opus          | Product -> spec -> build for greenfield      |
 | `spec`        | opus          | Requires deep understanding for spec design  |
 | `plan`        | opus          | Complex reasoning for architecture decisions |
 | `build`       | opus          | Quality implementation with full context     |
@@ -189,24 +191,37 @@ You should see the help output with all available options.
 
 ## The Recommended Workflow
 
-### Launch (One Command)
+### Dev (Feature Pipeline)
 
-For most greenfield or early feature work, use launch mode:
+For everyday features, use dev mode. It runs spec -> build with no product phase:
 
 ```bash
-# Product phase auto-runs only when context is meaningful
-./ralph.sh launch -p "Add user authentication with OAuth"
+# Feature development (spec -> build)
+./ralph.sh dev -p "Add user authentication with OAuth"
 
-# Force product phase first
-./ralph.sh launch --full-product -p "Build a recruiting platform"
+# Increase build headroom
+./ralph.sh dev --dev-buffer 8 -p "Add complex dashboard"
+```
 
-# Force spec->build only
-./ralph.sh launch --skip-product -p "Ship a small docs feature"
+Dev behavior:
+1. Auto-creates/switches to `feature/<slug>` branch
+2. Runs spec phase (default max 5 iterations)
+3. Runs build phase with dynamic iterations (`task_count + dev buffer`)
+4. Skips plan mode (spec tasks are source of truth)
+5. Never runs product phase
+
+### Launch (Greenfield Pipeline)
+
+For new projects or greenfield work, use launch mode. It always runs product -> spec -> build:
+
+```bash
+# Full greenfield pipeline (product -> spec -> build)
+./ralph.sh launch -p "Build a recruiting platform"
 ```
 
 Launch behavior:
 1. Auto-creates/switches to `feature/<slug>` branch
-2. Runs product phase only when forced or meaningful `product-input/` exists
+2. Always runs product phase (generates 12 artifacts)
 3. Runs spec phase (default max 5 iterations)
 4. Runs build phase with dynamic iterations (`task_count + launch buffer`)
 5. Skips plan mode (spec tasks are source of truth)
@@ -250,10 +265,11 @@ mkdir -p product-input
 
 | Scenario | Workflow |
 |----------|----------|
-| One-shot implementation | `./ralph.sh launch -p "..."` |
+| Feature implementation | `./ralph.sh dev -p "..."` |
 | Quick bug fix | `./ralph.sh -p "Fix the null pointer in UserCard"` |
-| Small feature | `./ralph.sh spec -p "..." && ./ralph.sh build -s ...` |
-| Major feature | `./ralph.sh product && ./ralph.sh spec --from-product && ./ralph.sh build -s ...` |
+| Small feature (manual control) | `./ralph.sh spec -p "..." && ./ralph.sh build -s ...` |
+| Greenfield project | `./ralph.sh launch -p "Build a new SaaS app"` |
+| Major feature (manual control) | `./ralph.sh product && ./ralph.sh spec --from-product && ./ralph.sh build -s ...` |
 | Existing requirements doc | `./ralph.sh spec -f ./requirements.md && ./ralph.sh build -s ...` |
 
 ---
@@ -303,9 +319,8 @@ CLI flags > Environment variables > Config file > Defaults
 | `RALPH_PROGRESS_FILE`  | Path to progress file                   | `RALPH_PROGRESS_FILE=log.txt` |
 | `RALPH_LOG_DIR`        | Log directory path                      | `RALPH_LOG_DIR=/tmp/logs`     |
 | `RALPH_LOG_FORMAT`     | Log format (text/json)                  | `RALPH_LOG_FORMAT=json`       |
+| `RALPH_DEV_BUFFER`     | Build iteration buffer in dev mode      | `RALPH_DEV_BUFFER=5`          |
 | `RALPH_LAUNCH_BUFFER`  | Build iteration buffer in launch mode   | `RALPH_LAUNCH_BUFFER=8`       |
-| `RALPH_FULL_PRODUCT`   | Force product phase in launch mode      | `RALPH_FULL_PRODUCT=true`     |
-| `RALPH_SKIP_PRODUCT`   | Skip product phase in launch mode       | `RALPH_SKIP_PRODUCT=true`     |
 | `RALPH_NOTIFY_WEBHOOK` | Webhook URL for session notifications   | `RALPH_NOTIFY_WEBHOOK=...`    |
 
 ### Template Variables
@@ -845,7 +860,7 @@ Verbose mode shows:
 - Prompt preview (first 20 lines)
 - Session state updates
 - Retry logic decisions
-- In launch mode, dry-run is read-only and does not archive branches or rewrite `progress.txt`.
+- In dev/launch mode, dry-run is read-only and does not archive branches or rewrite `progress.txt`.
 
 ### Session Resume
 
@@ -1116,10 +1131,12 @@ Resume it:
 ./ralph.sh spec -p "X" -o ./specs/x.json # Custom output path
 ./ralph.sh spec --force                  # Overwrite existing
 
-# Launch mode (one-shot)
-./ralph.sh launch -p "Build a Kanban board"      # Auto pipeline
-./ralph.sh launch --full-product -p "Build CRM"  # Force product phase
-./ralph.sh launch --skip-product -p "Quick MVP"  # Skip product phase
+# Dev mode (feature pipeline: spec -> build)
+./ralph.sh dev -p "Add a Kanban board"           # Feature pipeline
+./ralph.sh dev --dev-buffer 8 -p "Add dashboard" # Increase build headroom
+
+# Launch mode (greenfield pipeline: product -> spec -> build)
+./ralph.sh launch -p "Build CRM"                 # Greenfield with product phase
 ./ralph.sh launch --launch-buffer 8 -p "App"     # Increase build headroom
 
 # Plan mode (optional human-readable view)
@@ -1144,7 +1161,7 @@ Resume it:
 ./ralph.sh --interactive                 # Confirm between iterations
 ./ralph.sh --verbose                     # Show detailed output
 ./ralph.sh --dry-run                     # Preview config
-./ralph.sh launch --dry-run -p "Idea"    # Preview launch plan (read-only)
+./ralph.sh dev --dry-run -p "Idea"       # Preview dev plan (read-only)
 
 # Session management
 ./ralph.sh --resume                      # Resume interrupted session

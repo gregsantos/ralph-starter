@@ -2,7 +2,7 @@
 
 ## Context
 
-Ralph-starter is a bash-based autonomous Claude Code runner with six modes (launch, spec, plan, build, product, review). Currently it assumes it IS the project — all paths resolve relative to CWD, which must be the project root. This design makes ralph portable so it can be cloned into any project as a git submodule and operate on the host project's code while keeping its own artifacts (specs, plans, progress) self-contained.
+Ralph-starter is a bash-based autonomous Claude Code runner with seven modes (dev, launch, spec, plan, build, product, review). Currently it assumes it IS the project — all paths resolve relative to CWD, which must be the project root. This design makes ralph portable so it can be cloned into any project as a git submodule and operate on the host project's code while keeping its own artifacts (specs, plans, progress) self-contained.
 
 **Problem**: When ralph-starter lives as a subdirectory (e.g., `my-app/ralph-starter/`), the Claude CLI, git operations, and source code analysis all need to target the parent project — not ralph-starter itself.
 
@@ -40,6 +40,7 @@ When `HOST_ROOT` is set, all CWD-relative defaults get the `$RALPH_SUBDIR/` pref
 | `PRODUCT_OUTPUT_DIR` | `./product-output/` | `./$RALPH_SUBDIR/product-output/` |
 | `ARTIFACT_SPEC_FILE` | `./docs/PRODUCT_ARTIFACT_SPEC.md` | `./$RALPH_SUBDIR/docs/PRODUCT_ARTIFACT_SPEC.md` |
 | Session files | `.ralph-session.json` | `./$RALPH_SUBDIR/.ralph-session.json` |
+| Dev session | `.ralph-dev-session.json` | `./$RALPH_SUBDIR/.ralph-dev-session.json` |
 | Launch session | `.ralph-launch-session.json` | `./$RALPH_SUBDIR/.ralph-launch-session.json` |
 
 **Unchanged** (already correct in both modes):
@@ -50,7 +51,7 @@ When `HOST_ROOT` is set, all CWD-relative defaults get the `$RALPH_SUBDIR/` pref
 - Last-branch marker uses `$SCRIPT_DIR/.ralph-last-branch` — absolute, always correct
 - Log dir uses `~/.ralph/logs/` — home-relative, always correct
 
-**Spec/launch mode output**: Spec and launch modes generate spec files using `${SCRIPT_DIR}/specs/{slug}.json` (absolute path via `slugify_text` at line ~2994). This already resolves inside ralph-starter — no rebasing needed. However, the `SPEC_MODE_OUTPUT_FILE` variable and the `-o` CLI flag use CWD-relative paths, so those defaults need rebasing when in submodule mode.
+**Spec/dev/launch mode output**: Spec, dev, and launch modes generate spec files using `${SCRIPT_DIR}/specs/{slug}.json` (absolute path via `slugify_text` at line ~2994). This already resolves inside ralph-starter — no rebasing needed. However, the `SPEC_MODE_OUTPUT_FILE` variable and the `-o` CLI flag use CWD-relative paths, so those defaults need rebasing when in submodule mode.
 
 **Review mode output**: `mkdir -p` for review-output already uses `$SCRIPT_DIR` in some codepaths but CWD-relative in others. Normalize to always create inside `$RALPH_SUBDIR/review-output/` when in submodule mode.
 

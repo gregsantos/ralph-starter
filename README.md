@@ -38,8 +38,8 @@ cd my-project
 # Quick fix (inline mode)
 ./ralph.sh -p "Fix lint errors" 3
 
-# Feature (launch mode — generates spec, then builds)
-./ralph.sh launch -p "Add user authentication with JWT tokens"
+# Feature (dev mode — generates spec, then builds)
+./ralph.sh dev -p "Add user authentication with JWT tokens"
 
 # Or manual control: generate spec, review it, then build
 ./ralph.sh spec -p "Add user authentication with JWT tokens"
@@ -75,8 +75,8 @@ git commit -m "Add ralph-starter as submodule"
 # Inline mode — quick one-shot tasks (uses sonnet, no spec needed)
 ./ralph-starter/ralph.sh -p "Fix lint errors" 3
 
-# Feature (launch mode — generates spec, then builds)
-./ralph-starter/ralph.sh launch -p "Build user auth"
+# Feature (dev mode — generates spec, then builds)
+./ralph-starter/ralph.sh dev -p "Build user auth"
 
 # Or manual control: generate spec, review it, then build
 ./ralph-starter/ralph.sh spec -p "Add dark mode toggle"
@@ -174,18 +174,19 @@ ralph-starter/
 
 ### Modes
 
-| Mode        | Purpose                                               | Command              |
-| ----------- | ----------------------------------------------------- | -------------------- |
-| **Inline**  | Quick fixes and simple changes (sonnet, no spec)       | `./ralph.sh -p "…"`  |
-| **Launch**  | Features: generates spec → builds (default for features) | `./ralph.sh launch`  |
-| **Spec**    | Generate spec only (for manual review before building) | `./ralph.sh spec`    |
-| **Build**   | Execute tasks from an existing spec                    | `./ralph.sh build`   |
-| **Review**  | Codebase analysis producing findings + report          | `./ralph.sh review`  |
-| **Plan**    | Human-readable plan from spec tasks (optional)         | `./ralph.sh plan`    |
-| **Product** | Generate product documentation (12 artifacts)          | `./ralph.sh product` |
-| **Setup**   | Configure host project integration (submodule)         | `./ralph.sh setup`   |
+| Mode        | Purpose                                                | Command              |
+| ----------- | ------------------------------------------------------ | -------------------- |
+| **Inline**  | Quick fixes and simple changes (sonnet, no spec)        | `./ralph.sh -p "…"`  |
+| **Dev**     | Features: generates spec → builds (everyday features)   | `./ralph.sh dev`     |
+| **Launch**  | Greenfield: product → spec → build (always runs product)| `./ralph.sh launch`  |
+| **Spec**    | Generate spec only (for manual review before building)  | `./ralph.sh spec`    |
+| **Build**   | Execute tasks from an existing spec                     | `./ralph.sh build`   |
+| **Review**  | Codebase analysis producing findings + report           | `./ralph.sh review`  |
+| **Plan**    | Human-readable plan from spec tasks (optional)          | `./ralph.sh plan`    |
+| **Product** | Generate product documentation (12 artifacts)           | `./ralph.sh product` |
+| **Setup**   | Configure host project integration (submodule)          | `./ralph.sh setup`   |
 
-**Quick fixes → inline. Features → launch.** Use `spec` + `build` separately when you want to review the spec before building. Launch skips product by default — it only runs product when `--full-product` is set or `product-input/` has content.
+**Quick fixes → inline. Features → dev. Greenfield → launch.** Use `spec` + `build` separately when you want to review the spec before building.
 
 ### Specs vs Plans
 
@@ -286,11 +287,12 @@ This tells the loop to exit successfully.
 ./ralph.sh product               # Generate product docs (12 artifacts)
 ./ralph.sh product --context ./input/ --output ./output/  # Custom paths
 
-# Launch pipeline (one-shot)
+# Dev pipeline (spec → build)
+./ralph.sh dev -p "Add dark mode toggle"
+./ralph.sh dev -f ./requirements.md
+
+# Launch pipeline (product → spec → build, greenfield)
 ./ralph.sh launch -p "Build an AI meeting assistant"
-./ralph.sh launch -f ./requirements.md
-./ralph.sh launch --full-product --context ./product-input
-./ralph.sh launch --skip-product -p "Build a Kanban app"
 
 # Codebase review (findings JSON + Markdown report)
 ./ralph.sh review                            # Review src/* for all categories
@@ -374,25 +376,25 @@ The simplified workflow for implementing features with Ralph:
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
-### One-Shot Workflow (`launch`)
+### One-Shot Workflow (`dev` and `launch`)
 
 The recommended way to build features:
 
 ```bash
-# Generates spec with tasks, then builds — no product phase by default
-./ralph.sh launch -p "Build a habit tracker with streaks"
+# Dev mode: spec → build (everyday features)
+./ralph.sh dev -p "Build a habit tracker with streaks"
 
-# Force product discovery first (for greenfield projects with product-input/ content)
-./ralph.sh launch --full-product -p "Build a CRM for small agencies"
+# Launch mode: product → spec → build (greenfield projects)
+./ralph.sh launch -p "Build a CRM for small agencies"
 ```
 
-Launch defaults:
+Pipeline defaults:
 
-- **Skips product by default.** Product runs only with `--full-product` or when `product-input/` has meaningful content.
-- Build iterations are computed dynamically: `task_count + launch_buffer` (default buffer `5`).
-- Plan mode is not part of launch (spec tasks are the source of truth).
+- **Dev mode** never runs product. **Launch mode** always runs product.
+- Build iterations are computed dynamically: `task_count + buffer` (default buffer `5`).
+- Plan mode is not part of the pipeline (spec tasks are the source of truth).
 - `--dry-run` is read-only and does not archive branches or modify `progress.txt`.
-- Use `--launch-buffer N` to tune build iteration headroom.
+- Use `--dev-buffer N` or `--launch-buffer N` to tune build iteration headroom.
 
 ### Step 0: Product Discovery (Optional)
 
