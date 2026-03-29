@@ -1,0 +1,30 @@
+# Progress for branch: feature/change-styles-to-tokyo-night-theme
+# Started: 2026-03-29 13:07:13
+
+## Iteration 1 — 2026-03-29
+
+### Status: BLOCKED
+
+### Blocker: Missing product context files
+
+The `product-input/` directory contains only a README placeholder. No product context files were found:
+
+- [ ] vision.md — Product vision, mission, goals
+- [ ] research.md — User research findings, interviews
+- [ ] requirements.md — Business requirements, constraints
+- [ ] constraints.md — Technical/budget/timeline constraints
+- [ ] competitors.md — Competitive analysis, market intel
+
+### What exists
+- A fresh Next.js 16 starter app with Tailwind CSS 4 and next-themes
+- A theme toggle component (light/dark mode)
+- Branch name suggests applying a "Tokyo Night" color theme
+
+### Action required
+Before product mode can generate meaningful artifacts, populate `ralph-starter/product-input/` with at least:
+1. **vision.md** — What is this product? Who is it for? What problem does it solve?
+2. **requirements.md** — What are the product requirements and constraints?
+
+Without these inputs, generated artifacts would be speculative and low-quality.
+
+### Next artifact (when unblocked): 1_executive_summary.md
