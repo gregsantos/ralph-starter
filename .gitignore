@@ -1,10 +1,19 @@
-# Ralph Loop
+# Ralph Loop session files
 .ralph-last-branch
 .ralph-session.json
 .ralph-dev-session.json
 .ralph-launch-session.json
 archive/
 review-output/
+
+# Ralph Loop generated artifacts (per-run, not source)
+progress.txt
+specs/*
+!specs/example.json
+plans/*
+!plans/IMPLEMENTATION_PLAN.md
+product-output/*
+!product-output/.gitkeep
 
 # Claude settings (but not skills)
 .claude/*
