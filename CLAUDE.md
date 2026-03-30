@@ -23,6 +23,9 @@ Run these after implementing to get immediate feedback:
 - Tests: `pnpm test`
 - Typecheck: `pnpm typecheck`
 - Lint: `pnpm lint`
+- Bash tests: `make test` (requires bats-core: `brew install bats-core`)
+- Bash lint: `make lint` (requires shellcheck: `brew install shellcheck`)
+- Both: `make check`
 
 ## Project Structure
 
