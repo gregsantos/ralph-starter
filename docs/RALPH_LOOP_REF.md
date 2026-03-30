@@ -1260,7 +1260,7 @@ project-root/
 │   ├── 7_prd.md                    # Use to inform specs
 │   └── ... (12 total)
 ├── specs/                          # Feature specifications (Step 1)
-│   ├── INDEX.md                    # Feature catalog
+│   ├── example.json                # Example spec with tasks
 │   ├── {feature}.json              # JSON specs with tasks (recommended)
 │   └── {feature}.md                # Markdown specs (legacy)
 ├── plans/                          # Optional derived plans
@@ -1528,7 +1528,7 @@ The legacy `userStories` format is still supported for backward compatibility:
 
 **To migrate**: Convert `userStories` to `tasks`, move dependencies inline, add `status: "pending"` and `notes: ""` fields.
 
-See `specs/unified-spec-workflow.json` for a comprehensive example.
+See `specs/example.json` for a comprehensive example.
 
 ## Related Files
 
@@ -1547,7 +1547,7 @@ See `specs/unified-spec-workflow.json` for a comprehensive example.
 
 ### Specs & Plans
 
-- `specs/INDEX.md` - Feature catalog
+- `specs/example.json` - Example spec with tasks
 - `specs/*.json` - JSON specs with tasks (recommended)
 - `plans/*_PLAN.md` - Optional derived human-readable views
 - `.claude/skills/writing-ralph-specs/` - Skill for creating JSON specs

@@ -200,7 +200,6 @@ The `userStories` format is still supported for backward compatibility. New spec
 - **Testable criteria**: Include verification commands
 - **Include doc updates**: Add documentation criteria for user-facing features (--help, README, reference docs)
 - **Use dependsOn**: `"dependsOn": ["T-001"]` means task depends on T-001 completion
-- **Update INDEX.md**: Add entry to `specs/INDEX.md`
 - **passes field**: Initialize as `false`; build mode sets to `true` when all criteria met
 - **status field**: Build mode sets to `in_progress` when starting, `complete` when done
 
@@ -212,11 +211,8 @@ When ralph-starter is a subdirectory of a host project (e.g., as a git submodule
 2. **Specs**: Write to `ralph-starter/specs/` instead of `specs/`
 3. **Source code**: Analyze the host project's source (at the repo root), not ralph-starter's code
 4. **CLAUDE.md**: Read the host project's CLAUDE.md for coding conventions
-5. **INDEX.md**: Update `ralph-starter/specs/INDEX.md`
-
 If no ralph-starter subdirectory is found, use standard paths (`specs/`, `plans/`, etc.).
 
 ## Reference
 
-- `specs/example-tasks.json` - Simple example showing all task fields and dependencies
-- `specs/unified-spec-workflow.json` - Comprehensive multi-phase example with phases, milestones, and task dependencies
+- `specs/example.json` - Example showing all task fields and dependencies

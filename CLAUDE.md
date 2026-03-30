@@ -38,7 +38,7 @@ ralph-starter/
 │   ├── PROMPT_product.md         # Product artifact generation
 │   └── PROMPT_review.md          # Codebase analysis and review
 ├── specs/
-│   ├── INDEX.md                  # Feature catalog
+│   ├── example.json              # Example spec with tasks
 │   ├── {feature}.json            # JSON specs (recommended)
 │   └── {feature}.md              # Markdown specs (alternative)
 ├── plans/
@@ -54,7 +54,6 @@ ralph-starter/
 ├── archive/                      # Auto-archived branch state
 └── docs/
     ├── RALPH_LOOP_REF.md         # CLI reference
-    ├── RALPH_WORKSHOP.md         # Workshop guide
     └── PRODUCT_ARTIFACT_SPEC.md  # Artifact specifications
 ```
 
@@ -365,8 +364,9 @@ When all tasks are complete, output `<ralph>COMPLETE</ralph>` to signal the loop
 
 # Specs
 
-- `./specs/INDEX.md` - Feature catalog
-- `./specs/{feature}.md` - Feature specification (the "what & why")
+- `./specs/example.json` - Example spec with tasks
+- `./specs/{feature}.json` - JSON specs (recommended)
+- `./specs/{feature}.md` - Markdown specs (alternative)
 
 # Plans
 

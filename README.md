@@ -172,7 +172,7 @@ ralph-starter/
 │   ├── PROMPT_product.md         # Product artifact generation
 │   └── PROMPT_review.md          # Codebase analysis and review
 ├── specs/
-│   ├── INDEX.md                  # Feature catalog
+│   ├── example.json              # Example spec with tasks
 │   ├── {feature}.json            # JSON specs with tasks (recommended)
 │   └── {feature}.md              # Markdown specs (alternative)
 ├── plans/
@@ -191,7 +191,6 @@ ralph-starter/
 │   └── ralph.zsh                 # Zsh tab completion
 └── docs/
     ├── RALPH_LOOP_REF.md         # Full CLI reference
-    ├── RALPH_WORKSHOP.md         # Comprehensive workshop guide
     └── PRODUCT_ARTIFACT_SPEC.md  # Product artifact specifications
 ```
 
@@ -492,7 +491,7 @@ Create a JSON spec file manually in `specs/`:
 
 The `passes` field starts as `false` and is set to `true` by build mode when all acceptance criteria are met.
 
-See `specs/unified-spec-workflow.json` for a comprehensive example.
+See `specs/example.json` for a comprehensive example.
 
 ### Step 2: Run Build Mode
 
@@ -756,9 +755,7 @@ If a plan becomes wrong or stale—regenerate it. Don't patch bad plans.
 | ---------------------------------------------------------------- | -------------------------------------- |
 | [CLAUDE.md](./CLAUDE.md)                                         | Project context and coding conventions |
 | [docs/RALPH_LOOP_REF.md](./docs/RALPH_LOOP_REF.md)               | Full CLI reference                     |
-| [docs/RALPH_WORKSHOP.md](./docs/RALPH_WORKSHOP.md)               | Comprehensive workshop guide           |
 | [docs/PRODUCT_ARTIFACT_SPEC.md](./docs/PRODUCT_ARTIFACT_SPEC.md) | Product artifact specifications        |
-| [specs/INDEX.md](./specs/INDEX.md)                               | Feature catalog and conventions        |
 
 ## Exit Codes
 
