@@ -106,7 +106,9 @@ SYM_GIT="⎇"
 # Claude outputs this marker when all tasks are complete
 COMPLETION_MARKER="<ralph>COMPLETE</ralph>"
 TASK_COMPLETE=false
-COMPLETION_FILE=$(mktemp /tmp/ralph_complete_XXXXXX)
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then
+    COMPLETION_FILE=$(mktemp /tmp/ralph_complete_XXXXXX)
+fi
 
 # Retry Configuration
 RETRY_ENABLED=true
@@ -124,8 +126,10 @@ GLOBAL_CONFIG_FILE=""     # Path to global config file (default: ~/.ralph/config
 LOADED_CONFIG_FILES=()    # Array of config files that were loaded
 
 # Iteration Status Tracking
-ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
-ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then
+    ITERATION_STATUS_FILE=$(mktemp /tmp/ralph_status_XXXXXX)
+    ITERATION_REASON_FILE=$(mktemp /tmp/ralph_reason_XXXXXX)
+fi
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PRE-FLIGHT CHECKS
@@ -693,7 +697,9 @@ FATAL_PATTERNS=(
 )
 
 # Temp file for capturing claude output during retry
-RETRY_OUTPUT_FILE=$(mktemp /tmp/ralph_retry_XXXXXX)
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then
+    RETRY_OUTPUT_FILE=$(mktemp /tmp/ralph_retry_XXXXXX)
+fi
 
 # Check if an error message indicates a retryable failure
 # Arguments: error_message, exit_code
@@ -1049,6 +1055,8 @@ show_help() {
 # ARGUMENT PARSING
 # ═══════════════════════════════════════════════════════════════════════════════
 
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then # Guard B: host detection + arg parsing
+
 # Get script directory for resolving relative paths
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
@@ -1078,7 +1086,7 @@ if [ "${RALPH_HOST_ROOT+set}" = "set" ]; then
             # Pointing at ralph dir itself — treat as standalone
             HOST_ROOT=""
         else
-            RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+            RALPH_SUBDIR="${SCRIPT_DIR_REAL#"${HOST_ROOT}"/}"
         fi
     fi
 else
@@ -1090,7 +1098,7 @@ else
     fi
     if [ -n "$parent_git_root" ] && [ "$parent_git_root" != "$SCRIPT_DIR_REAL" ]; then
         HOST_ROOT="$parent_git_root"
-        RALPH_SUBDIR="${SCRIPT_DIR_REAL#${HOST_ROOT}/}"
+        RALPH_SUBDIR="${SCRIPT_DIR_REAL#"${HOST_ROOT}"/}"
     fi
 fi
 
@@ -1823,6 +1831,8 @@ ITERATION_START_HEAD=""
 CURRENT_BRANCH=$(git branch --show-current 2>/dev/null) || CURRENT_BRANCH=""
 [ -z "$CURRENT_BRANCH" ] && CURRENT_BRANCH="unknown"
 START_TIME=$(date +%s)
+
+fi # Guard B: host detection + arg parsing
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # LOG FILE SETUP
@@ -2863,6 +2873,8 @@ substitute_template() {
     echo "$content"
 }
 
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then # Guard C1: config loading + defaults
+
 # Load config file (CLI args override config values)
 load_ralph_config
 
@@ -2877,6 +2889,8 @@ SOURCE_DIR="${SOURCE_DIR:-src/*}"
 PRODUCT_CONTEXT_DIR="${PRODUCT_CONTEXT_DIR:-./product-input/}"
 PRODUCT_OUTPUT_DIR="${PRODUCT_OUTPUT_DIR:-./product-output/}"
 ARTIFACT_SPEC_FILE="${ARTIFACT_SPEC_FILE:-./docs/PRODUCT_ARTIFACT_SPEC.md}"
+
+fi # Guard C1: config loading + defaults
 
 # Rebase a relative path into the ralph subdir. No-op when not in submodule mode.
 rebase_path() {
@@ -2895,6 +2909,8 @@ rebase_path() {
         echo "./${RALPH_SUBDIR}/${path}"
     fi
 }
+
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then # Guard C2: path rebasing + mode setup
 
 # When running as submodule (HOST_ROOT set), rebase artifact paths into ralph subdir.
 # Only rebase paths not explicitly set by CLI flags — config/default paths need rebasing
@@ -3013,6 +3029,8 @@ fi
 if [ -n "$HOST_ROOT" ] && [ "$CLI_PLAN_SET" != "true" ]; then
     PLAN_FILE="$(rebase_path "$PLAN_FILE")"
 fi
+
+fi # Guard C2: path rebasing + mode setup
 
 # Show config precedence in verbose mode
 # This function displays where each config value came from
@@ -3680,7 +3698,7 @@ print_config() {
         local webhook_display="${NOTIFY_WEBHOOK}"
         # Strip basic auth from display if present
         if [[ "$webhook_display" == *"@"* ]]; then
-            webhook_display=$(echo "$webhook_display" | sed 's|://[^@]*@|://***@|')
+            webhook_display="${webhook_display%%@*}"; webhook_display="${webhook_display%://*}://***@${NOTIFY_WEBHOOK#*@}"
         fi
         # Truncate long URLs
         if [ ${#webhook_display} -gt 40 ]; then
@@ -3800,7 +3818,7 @@ parse_claude_output() {
 
     # Reset status files
     echo "success" > "$ITERATION_STATUS_FILE"
-    > "$ITERATION_REASON_FILE"
+    true > "$ITERATION_REASON_FILE"
 
     # Process JSON stream line by line
     while IFS= read -r line; do
@@ -3863,11 +3881,13 @@ parse_claude_output() {
                             ;;
                         Write)
                             files_modified=$((files_modified + 1))
+                            # shellcheck disable=SC2076
                             [[ ! " ${modified_files[*]} " =~ " ${tool_detail} " ]] && modified_files+=("$tool_detail")
                             echo -e "  ${MAGENTA}${SYM_EDIT}${RESET} Write ${DIM}${tool_detail}${RESET}"
                             ;;
                         Edit)
                             files_modified=$((files_modified + 1))
+                            # shellcheck disable=SC2076
                             [[ ! " ${modified_files[*]} " =~ " ${tool_detail} " ]] && modified_files+=("$tool_detail")
                             echo -e "  ${MAGENTA}${SYM_EDIT}${RESET} Edit ${DIM}${tool_detail}${RESET}"
                             ;;
@@ -4074,6 +4094,8 @@ trap cleanup INT TERM
 # MAIN LOOP
 # ═══════════════════════════════════════════════════════════════════════════════
 
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then # Guard D: main loop
+
 # Run pre-flight checks (unless skipped)
 if [ "$SKIP_CHECKS" = false ]; then
     preflight_checks
@@ -4235,7 +4257,7 @@ while true; do
     ITERATION=$((ITERATION + 1))
 
     # Clear completion file for next iteration
-    > "$COMPLETION_FILE"
+    true > "$COMPLETION_FILE"
 
     # Show status before starting next iteration
     if [ "$iter_status" = "failed" ] && [ -s "$ITERATION_REASON_FILE" ]; then
@@ -4316,3 +4338,4 @@ fi
 echo -e "${CYAN}${BOLD}╚════════════════════════════════════════════════════════════════╝${RESET}\n"
 
 exit $EXIT_STATUS
+fi # Guard D: main loop
