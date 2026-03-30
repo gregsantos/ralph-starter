@@ -344,3 +344,88 @@ setup() {
     rm -f "$tmpfile"
     [[ "$status" -ne 0 ]]
 }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# load_pipeline_resume_state
+# ─────────────────────────────────────────────────────────────────────────────
+
+@test "load_pipeline_resume_state: valid JSON file returns 0" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo '{"status":"in_progress","branch":"feature/test"}' > "$tmpfile"
+    PIPELINE_SESSION_FILE="$tmpfile"
+    run load_pipeline_resume_state
+    rm -f "$tmpfile"
+    [[ "$status" -eq 0 ]]
+}
+
+@test "load_pipeline_resume_state: invalid JSON returns 1" {
+    local tmpfile
+    tmpfile=$(mktemp)
+    echo 'not valid json {{{' > "$tmpfile"
+    PIPELINE_SESSION_FILE="$tmpfile"
+    run load_pipeline_resume_state
+    rm -f "$tmpfile"
+    [[ "$status" -eq 1 ]]
+}
+
+@test "load_pipeline_resume_state: missing file returns 1" {
+    PIPELINE_SESSION_FILE="/nonexistent/path/session.json"
+    run load_pipeline_resume_state
+    [[ "$status" -eq 1 ]]
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# resolve_pipeline_spec_output_file
+# ─────────────────────────────────────────────────────────────────────────────
+
+@test "resolve_pipeline_spec_output_file: returns SPEC_OUTPUT_FILE when set" {
+    SPEC_OUTPUT_FILE="/custom/path/spec.json"
+    result=$(resolve_pipeline_spec_output_file)
+    [[ "$result" == "/custom/path/spec.json" ]]
+}
+
+@test "resolve_pipeline_spec_output_file: generates path from inline prompt" {
+    SPEC_OUTPUT_FILE=""
+    CLI_INLINE_PROMPT="Add dark mode"
+    CLI_FILE_PATH=""
+    local old_script_dir="$SCRIPT_DIR"
+    SCRIPT_DIR=$(mktemp -d)
+    result=$(resolve_pipeline_spec_output_file)
+    [[ "$result" == "${SCRIPT_DIR}/specs/add-dark-mode.json" ]]
+    rm -rf "$SCRIPT_DIR"
+    SCRIPT_DIR="$old_script_dir"
+}
+
+@test "resolve_pipeline_spec_output_file: appends timestamp when file exists" {
+    SPEC_OUTPUT_FILE=""
+    CLI_INLINE_PROMPT="existing feature"
+    CLI_FILE_PATH=""
+    local old_script_dir="$SCRIPT_DIR"
+    SCRIPT_DIR=$(mktemp -d)
+    mkdir -p "${SCRIPT_DIR}/specs"
+    touch "${SCRIPT_DIR}/specs/existing-feature.json"
+    result=$(resolve_pipeline_spec_output_file)
+    # Should NOT be the plain name (that file exists)
+    [[ "$result" != "${SCRIPT_DIR}/specs/existing-feature.json" ]]
+    # Should still be in the specs dir with the slug prefix
+    [[ "$result" == "${SCRIPT_DIR}/specs/existing-feature-"*".json" ]]
+    rm -rf "$SCRIPT_DIR"
+    SCRIPT_DIR="$old_script_dir"
+}
+
+# ─────────────────────────────────────────────────────────────────────────────
+# resolve_pipeline_branch_name
+# ─────────────────────────────────────────────────────────────────────────────
+
+@test "resolve_pipeline_branch_name: generates feature/ prefix" {
+    CLI_INLINE_PROMPT="new feature"
+    CLI_FILE_PATH=""
+    # Use a temp git repo so show-ref won't find existing branches
+    local tmpdir
+    tmpdir=$(mktemp -d)
+    git -C "$tmpdir" init --quiet
+    result=$(git -C "$tmpdir" -c advice.detachedHead=false checkout --orphan main 2>/dev/null; cd "$tmpdir" && resolve_pipeline_branch_name)
+    rm -rf "$tmpdir"
+    [[ "$result" == "feature/new-feature" ]]
+}
