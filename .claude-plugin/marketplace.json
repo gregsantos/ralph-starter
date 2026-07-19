@@ -1,0 +1,7 @@
+{
+  "name": "ralph-starter",
+  "owner": { "name": "Greg Santos" },
+  "plugins": [
+    { "name": "ralph", "source": "./plugin", "description": "Native Ralph Loop plugin" }
+  ]
+}
