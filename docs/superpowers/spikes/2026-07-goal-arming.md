@@ -37,7 +37,9 @@ because this spike runs inside a non-interactive subagent. Interactive
 documented `--plugin-dir` session-scoped loader, which is functionally
 equivalent for this question (it loads the same plugin manifest and
 registers the same slash command — confirmed by the `init` event's
-`slash_commands` list containing `ralph:goal-spike`).
+`slash_commands` list containing `ralph:goal-spike`). The headless
+substitution for the brief's interactive session was directed by the
+controller in the dispatch instructions (non-interactive execution environment).
 
 All runs happened inside an isolated scratch repo at `/tmp/ralph-spike`
 (a fresh `git init`, plugin files copied in — never run against
@@ -120,7 +122,7 @@ file of any kind was created by either run.
 
 | Criterion | Result |
 |---|---|
-| `/goal` shows an active goal after the command | Never observed — no arming occurred in either run |
+| `/goal` shows an active goal after the command | Never observed — no arming occurred in either run. Note: criterion 1 was moot rather than tested-and-failed — nothing was ever armed, so there was no active goal to query. |
 | The evaluator drives a second turn without user input | Never observed — Run 1 ended via max-turns exhaustion (not evaluator-driven continuation); Run 2 ended via ordinary `end_turn` after a single turn |
 | The goal clears after `cat SPIKE_DONE.txt` output appears | N/A — `SPIKE_DONE.txt` was never created because nothing was armed to begin with |
 
@@ -177,7 +179,16 @@ declared output contract. That type value is correct, but the output
 contract was wrong. Per `hooks-guide.md`'s "Prompt-based hooks" section,
 `type: "prompt"` hooks are documented for exactly this judgment-call use
 case, including a worked `Stop` hook example ("ask the model whether all
-requested tasks are complete"). The model's job is to return a yes/no
+requested tasks are complete").
+
+> From code.claude.com/docs/en/hooks-guide.md, "Prompt-based hooks" section:
+> "For decisions that require judgment rather than deterministic rules, use `type: "prompt"` hooks."
+> "The model's only job is to return a yes/no decision as JSON:
+> - `"ok": true`: the action proceeds
+> - `"ok": false`: what happens depends on the event:
+>   - `Stop` and `SubagentStop`: the `reason` is fed back to Claude so it keeps working"
+
+The model's job is to return a yes/no
 verdict as JSON:
 
 - `"ok": true` — the action (stopping) proceeds normally.
