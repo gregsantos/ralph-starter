@@ -4,6 +4,6 @@ test:
 	bats tests/
 
 lint:
-	shellcheck -x -s bash ralph.sh
+	shellcheck -x -s bash ralph.sh plugin/scripts/ralph-evidence.sh
 
 check: lint test

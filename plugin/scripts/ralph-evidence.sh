@@ -33,7 +33,13 @@ else
     jq -r ".tasks[] | select(.passes != true) | (.id + \" [\" + .status + \"] \" + .title)" "$SPEC"
 fi
 
-# --full verification runs are added in Task 5.
+if [[ "$MODE" == "--full" ]]; then
+    while IFS= read -r cmd; do
+        code=0
+        bash -c "$cmd" >/dev/null 2>&1 || code=$?
+        echo "verify: $cmd -> exit $code"
+    done < <(jq -r '.context.verificationCommands[]' "$SPEC")
+fi
 
 echo "verifier: $(jq -r '.verifier.verdict // "PENDING"' "$SPEC")"
 echo "=== END RALPH EVIDENCE ==="

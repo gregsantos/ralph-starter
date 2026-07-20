@@ -79,3 +79,57 @@ setup() {
     run "$EVIDENCE" "$BATS_TEST_TMPDIR/nocontext.json"
     [[ "$status" -eq 3 ]]
 }
+
+@test "evidence --full: reports real exit codes and runs all commands" {
+    FULLSPEC="$BATS_TEST_TMPDIR/full.json"
+    jq -n '{
+        project: "fixture",
+        context: { verificationCommands: ["true", "false", "echo hi"] },
+        tasks: [{"id":"T-001","title":"First","status":"complete","passes":true}]
+    }' > "$FULLSPEC"
+    run "$EVIDENCE" "$FULLSPEC" --full
+    [[ "$status" -eq 0 ]]
+    [[ "$output" == *"verify: true -> exit 0"* ]]
+    [[ "$output" == *"verify: false -> exit 1"* ]]
+    [[ "$output" == *"verify: echo hi -> exit 0"* ]]
+}
+
+@test "evidence --full: verify lines appear before verifier line" {
+    FULLSPEC="$BATS_TEST_TMPDIR/full.json"
+    jq -n '{
+        context: { verificationCommands: ["true"] },
+        tasks: []
+    }' > "$FULLSPEC"
+    run "$EVIDENCE" "$FULLSPEC" --full
+    verify_line=$(echo "$output" | grep -n "verify: true" | cut -d: -f1)
+    verifier_line=$(echo "$output" | grep -n "verifier:" | cut -d: -f1)
+    [[ "$verify_line" -lt "$verifier_line" ]]
+}
+
+@test "evidence: status mode runs no verification commands" {
+    SLOWSPEC="$BATS_TEST_TMPDIR/slow.json"
+    MARKER="$BATS_TEST_TMPDIR/ran-verify"
+    jq -n --arg cmd "touch $MARKER" '{
+        context: { verificationCommands: [$cmd] },
+        tasks: []
+    }' > "$SLOWSPEC"
+    run "$EVIDENCE" "$SLOWSPEC"
+    [[ ! -f "$MARKER" ]]
+}
+
+@test "evidence: exact full-output golden (status mode)" {
+    GOLD="$BATS_TEST_TMPDIR/gold.json"
+    make_spec "$GOLD" '[
+        {"id":"T-001","title":"First","status":"complete","passes":true},
+        {"id":"T-002","title":"Second","status":"pending","passes":false}
+    ]' '{"verdict":"PASS"}'
+    run "$EVIDENCE" "$GOLD"
+    expected="=== RALPH EVIDENCE ===
+spec: $GOLD
+tasks: 2 total | 1 passed | 0 in_progress | 1 pending | 0 blocked
+T-001 [passed] First
+T-002 [pending] Second
+verifier: PASS
+=== END RALPH EVIDENCE ==="
+    [[ "$output" == "$expected" ]]
+}
