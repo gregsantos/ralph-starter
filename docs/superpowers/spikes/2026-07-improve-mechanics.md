@@ -373,6 +373,9 @@ Captures kept (all in `/tmp/`, not in the repo):
 
 - `/tmp/p3-spike-worktree.jsonl` — probe (a)
 - `/tmp/p3-spike-parallel.jsonl` — probe (b)
-- `/tmp/p3-spike-bg-outer.jsonl` — probe (c), run 1
+- `/tmp/p3-spike-bg-outer.jsonl` — probe (c), run 2. Run 1's outer command
+  redirected to this same unsuffixed path, so run 2 silently overwrote
+  run 1's raw capture when it reused the path — run 1's raw capture no
+  longer exists; run 1's outcome is preserved only as prose in this doc.
 - `/tmp/p3-spike-bg-outer-run3.jsonl` — probe (c), run 3 (kill-switch demonstration)
 - `/tmp/p3-spike-goal.jsonl` — probe (d)
