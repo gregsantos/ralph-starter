@@ -5,12 +5,9 @@
 .ralph-launch-session.json
 .ralph-goal
 archive/
-review-output/
 
 # Ralph Loop generated artifacts (per-run, not source)
 progress.txt
-specs/*
-!specs/example.json
 plans/*
 !plans/IMPLEMENTATION_PLAN.md
 product-output/*
@@ -21,6 +18,7 @@ product-output/*
 !.claude/skills/
 !.claude/skills/**
 !.claude/ralph.json
+!.claude/settings.json
 
 # Dependencies
 node_modules/
