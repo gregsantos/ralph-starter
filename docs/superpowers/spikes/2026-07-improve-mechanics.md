@@ -379,3 +379,202 @@ Captures kept (all in `/tmp/`, not in the repo):
   longer exists; run 1's outcome is preserved only as prose in this doc.
 - `/tmp/p3-spike-bg-outer-run3.jsonl` — probe (c), run 3 (kill-switch demonstration)
 - `/tmp/p3-spike-goal.jsonl` — probe (d)
+
+---
+
+## Task 4 smoke runs
+
+**Task:** Task 4 of Plan 3 — `plugin/commands/review.md` (the `/ralph:review`
+command) plus three supervised headless smoke runs against the shared
+sandbox fixture (`tests/make_sandbox.sh`, which seeds
+`review-output/findings.json` with F-001/F-002/F-003 and `.claude/ralph.json`
+with only `verificationCommands`, so the default five categories apply).
+Sandbox: `/tmp/ralph-sb-review`, removed after R3 per the brief.
+
+Per Task 1's verdict above ((b) = PARALLEL-OK), review.md's step 3 keeps its
+"all in a single message so they run in parallel" wording as written — no
+sequential-dispatch substitution was needed.
+
+### R1 — full review: merge + dedup against the fixture backlog
+
+Command run exactly as briefed (`claude -p "/ralph:review"`, default five
+categories, `--max-turns 25 --max-budget-usd 10`, Bash timeout 600000).
+Capture: `/tmp/p3-review-full.jsonl` (233 stream-json lines). Exit: success,
+`is_error: false`, `stop_reason: "end_turn"`, `num_turns: 25` — this landed
+exactly at the turn cap without being forced there (`stop_reason` is the
+model's own `end_turn`, not a cap cutoff), so the margin was thin; worth
+raising the smoke's `--max-turns` if this command grows another step.
+
+Checklist, evidence-first:
+
+- **`findings.json` parses; `jq -e '.summary.total == (.findings|length)'` →
+  true.** Ran post-hoc: `true`.
+- **Fixture findings F-001/F-002/F-003 still present, unmodified; no
+  duplicate of F-001's unknown-flag issue among new findings.** `jq` diff of
+  F-002/F-003 against the fixture source shows byte-identical
+  title/description/suggestion/effort. F-001 unchanged (`"title": "Unknown
+  flags are silently ignored"`, `severity: medium`, unchanged `line: 3`).
+  Grepped every new finding's description for
+  `unknown flag|unrecognized flag|silently ignor` → `NO_DUP_FOUND`. The
+  agent's own final-message dedup log confirms the mechanism worked, not
+  just the outcome: *"The bug subagent's 'omits --version and unknown-flag'
+  finding was dropped as a duplicate: its unknown-flag half = existing
+  F-002, its --version half = F-005."* — i.e. the subagent DID rediscover
+  the unknown-flag issue (as expected — it's a real bug in greeting.sh) and
+  the orchestrator correctly recognized it as already covered by F-001/F-002
+  rather than writing a third copy. Zero wording adjustment needed.
+- **New finding ids continue from F-004; every new finding has
+  `"addressed": null`.** `jq` shows F-004..F-007 (all new), each with
+  `"addressed": null`, F-001/F-002/F-003 with no `addressed` key at all
+  (schema treats absent as null, per the skill) — preserved exactly as they
+  were in the fixture, not backfilled.
+- **Five (default categories) Agent tool_use dispatches; parallel = multiple
+  Agent tool_use blocks within one assistant message.** `jq` count of
+  `type=="tool_use" and name=="Agent"` across the capture = 5. All five
+  share the identical `message.id` (`msg_011CdE2HA31jvq8YdEDsSXkt`):
+  Security / Bug / Code-quality / Test-coverage / Architecture review, one
+  `tool_use_id` each, zero sequential re-dispatch. Structural confirmation
+  of PARALLEL-OK from Task 1's probe (b), reproduced live inside the shipped
+  command.
+- **`REVIEW_REPORT.md` exists with severity sections and the summary
+  table.** Confirmed on disk: a Medium section (F-001, F-004, F-005, F-006),
+  Low section (F-002, F-007), Info section (F-003), summary table with
+  Critical/High/Medium/Low/Info/Total rows, and a closing
+  `**Open vs addressed:** 7 open · 0 addressed (of 7 total)` line.
+- **Zero commits (`git log --oneline` = 1 init commit), zero branches beyond
+  main, working tree shows only the two review-output files modified.**
+  `git log --oneline` → 1 line (`init: sandbox project with 2-task spec`);
+  `git branch -a` → `* main` only; `git status --short` → `M
+  review-output/findings.json` + `?? review-output/REVIEW_REPORT.md`,
+  nothing else.
+
+**Verdict: PASS**, all items, zero wording adjustments to review.md.
+
+### R2 — `--focus bug --target greeting.sh`
+
+Command run exactly as briefed (`--max-turns 15 --max-budget-usd 5`, Bash
+timeout 300000), same sandbox, findings.json already at 7 from R1.
+
+**Attempt 1** (`/tmp/p3-review-focus.jsonl`, 60 lines): the run wrote and
+validated `findings.json` correctly (`jq -e ...` → `true` inside the
+transcript, scope updated to `target: "greeting.sh"`, `focus: ["bug"]`) and
+then died mid-response — `result.is_error: true`,
+`result: "API Error: Connection closed mid-response..."`,
+`terminal_reason: "api_error"`, `num_turns: 8` — before step 6
+(`REVIEW_REPORT.md` regeneration) ran; the report file on disk still showed
+R1's stale scope line. This is a transport-layer failure (`server_error` on
+the trailing assistant event), not a review.md logic defect — the JSON the
+run had already written was internally consistent (dedup: 0 new findings,
+since the bug subagent found nothing not already in F-001/F-004/F-007) and
+the artifact file was left in a valid, unmodified-by-the-crash state.
+
+**Attempt 2** (`/tmp/p3-review-focus-retry.jsonl`, 32 lines): same
+transport error, this time before even dispatching the Agent call (transcript
+ends right after "Dispatching the single-category (bug) read-only
+subagent."). `findings.json`/`REVIEW_REPORT.md` mtimes confirmed unchanged
+by this attempt — no partial or corrupted writes; the failure mode is
+safely inert.
+
+**Attempt 3** (`/tmp/p3-review-focus-retry2.jsonl`, 83 lines): succeeded,
+`exit 0`. The single capture contains two `type: "result"` events sharing
+one `session_id` (`c8dcc4ea-...`) — a mid-stream connection drop followed by
+an automatic same-session resume (visible as a second `system init` +
+continued turns), landing on a real final result:
+`"Review complete. ... New findings this run: 0."`, `is_error: false`,
+`stop_reason: "end_turn"`. Two consecutive infra-level connection drops
+followed by a clean auto-recovered third attempt — recorded as an
+operational observation for future smoke runs (retry once or twice on
+`terminal_reason: "api_error"` before treating a run as failed), not a
+review.md defect.
+
+Checklist, evidence from the successful attempt 3 (state is cumulative —
+attempts 1-2 never wrote, so this is the only R2-attributable write):
+
+- **Exactly ONE Agent dispatch (bug only).** `jq` count = 1;
+  `input.description: "Bug review of greeting.sh"`.
+- **`scope.focus == ["bug"]`.** Confirmed in `findings.json`:
+  `"focus": ["bug"]`, `"target": "greeting.sh"`.
+- **Prior findings (from R1) preserved.** All seven findings' `id` /
+  `category` / `severity` / `title` fields byte-identical to R1's output;
+  `summary.total` still 7 (0 new — the bug subagent correctly recognized
+  every candidate bug in the 3-line `greeting.sh` as already covered by
+  F-001/F-004/F-007, per its own final message).
+- **Ids continue.** No new findings were generated this run, so there was
+  nothing to continue past F-007 — satisfied vacuously (the mechanism was
+  already proven with real continuation in R1's F-004..F-007 and R3's
+  F-008..F-012 below).
+- Bonus check (not in the R2 checklist but confirmed): `REVIEW_REPORT.md`
+  was correctly regenerated in the successful attempt, scope line reading
+  "target `greeting.sh` · diff base _(none)_ · focus: bug", and the working
+  tree still showed only the two review-output files touched.
+
+**Verdict: PASS** (on the third attempt). Zero wording adjustments to
+review.md — both failures were transport-layer, not logic/dedup issues.
+
+### R3 — `--diff-base HEAD~1`
+
+Setup exactly as briefed:
+`printf '\n# touched for diff-base probe\n' >> verify.sh && git add verify.sh
+&& git commit -qm "test: touch verify.sh"` → `git log --oneline` now 2
+commits. Command run exactly as briefed (`--max-turns 15
+--max-budget-usd 5`, Bash timeout 300000). Capture:
+`/tmp/p3-review-diffbase.jsonl` (186 lines). Exit: success,
+`is_error: false`, `stop_reason: "end_turn"`, `num_turns: 19`.
+
+Checklist, evidence-first:
+
+- **`scope.diffBase == "HEAD~1"`.** Confirmed in `findings.json`:
+  `"diffBase": "HEAD~1"`, `"target": "verify.sh"` (the only file `git diff
+  --name-only HEAD~1...HEAD` returned that falls under the repo's source
+  files).
+- **The dispatched subagents' target lists contain only `verify.sh`.**
+  Inspected each `Agent` tool_use's full `input.prompt`: every one of the
+  five (Security/Bug/Code-quality/Test-coverage/Architecture) states
+  *"Target file (the ONLY file in scope):
+  `/private/tmp/ralph-sb-review/verify.sh`. You may read `greeting.sh`,
+  `requirements.md`, `specs/sandbox.json` for context but only REPORT
+  findings whose file is `verify.sh`."* — no subagent was given `greeting.sh`
+  as a reportable target. All five share one `message.id`
+  (`msg_011CdE6UanougfgcYmVD6tTQ`) — parallel dispatch held here too.
+- **Backlog merge semantics intact.** `jq -e '.summary.total ==
+  (.findings|length)'` → `true`. F-001..F-007 present with unchanged
+  `category`/`addressed`. Five new findings F-008..F-012 (1 medium, 4 low,
+  0 critical/high/info) added, continuing the id sequence correctly. The
+  agent's own report lists the dedup decisions made against the diff-base
+  scope: the grep-guard root cause (already F-004) and the --version/
+  unknown-flag/--name bug variants (already F-005/F-002/F-006) were all
+  recognized as duplicates and folded into the existing findings' context
+  rather than re-reported.
+- `REVIEW_REPORT.md` regenerated with the diff-base scope line: "target
+  `verify.sh` · diff base `HEAD~1` · focus: security, bug, code-quality,
+  test-coverage, architecture", and a closing
+  `**Open vs addressed:** 12 open · 0 addressed (of 12 total)` line.
+
+**Verdict: PASS**, all items, zero wording adjustments to review.md.
+
+### Wording adjustments to review.md
+
+**None.** All three runs' checklists passed against review.md exactly as
+written in Task 4's brief — including the dedup nuance the brief flagged as
+the likeliest failure mode (F-001's unknown-flag issue being rediscovered
+and needing to merge rather than duplicate), which held on the first R1
+attempt. The two failures observed were infra-layer (`terminal_reason:
+"api_error"`, "Connection closed mid-response") during R2, unrelated to
+review.md's content, and resolved by retrying rather than editing the
+command.
+
+### Cleanup and captures
+
+```bash
+cd / && rm -rf /tmp/ralph-sb-review
+```
+
+Removed after R3. Captures kept (all in `/tmp/`, not in the repo):
+
+- `/tmp/p3-review-full.jsonl` — R1 (233 lines)
+- `/tmp/p3-review-focus.jsonl` — R2 attempt 1, infra failure after
+  `findings.json` write, before report regen (60 lines)
+- `/tmp/p3-review-focus-retry.jsonl` — R2 attempt 2, infra failure before
+  Agent dispatch, no writes (32 lines)
+- `/tmp/p3-review-focus-retry2.jsonl` — R2 attempt 3, successful (83 lines)
+- `/tmp/p3-review-diffbase.jsonl` — R3 (186 lines)
