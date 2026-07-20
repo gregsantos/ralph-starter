@@ -662,10 +662,12 @@ This is unambiguous: the exact `plugin/hooks/hooks.json` prompt text
 appeared in the transcript's Stop-hook feedback, proving the
 plugin-manifest-nested hook loads and fires under `--plugin-dir` in a
 headless run, with no fallback to project-level `.claude/settings.json`
-needed. (The run then hit `--max-turns 3` as expected — the planted
+needed. (The run then hit the `--max-turns 3` cap as expected — the planted
 condition could never be satisfied — `error_max_turns`, `terminal_reason:
-"max_turns"`; this is the correct outcome for a deliberately-unsatisfiable
-probe, not a hook failure.) The probe's `.ralph-goal` was deleted and the
+"max_turns"`, result JSON `num_turns: 4` (the SDK's turn counter can exceed
+the nominal cap by one via an internal round-trip, per the terminology note
+above); this is the correct outcome for a deliberately-unsatisfiable probe,
+not a hook failure.) The probe's `.ralph-goal` was deleted and the
 sandbox removed immediately after. **This settles the open design
 question in Task 10's favor: `build.md` does not need a
 sandbox-`.claude/settings.json` fallback; the plugin-shipped hook carries
@@ -732,9 +734,11 @@ summary text:
   verify.sh exits 0; no unexpected files."}`.
 - **Exactly one push, at PR time.** Structural `tool_use` parse (not
   substring grep) for every `Bash` command matching `push`: exactly one
-  call, `git push -u origin ralph/sandbox-greeting`. Remote refs: empty
-  before the run (`git show-ref` on the fresh bare repo returned nothing);
-  after, exactly one ref, `refs/heads/ralph/sandbox-greeting`.
+  call, `git push -u origin ralph/sandbox-greeting`. Remote refs: an
+  out-of-band check (`git -C <bare-repo-dir> show-ref`, run by the
+  controller directly against the bare remote's directory, not something
+  visible inside the session transcript) confirmed no refs before the run
+  and exactly one ref, `refs/heads/ralph/sandbox-greeting`, after.
   `gh pr create --title "ralph: Sandbox greeting" --body "..."` was
   attempted and its `tool_result` was `"none of the git remotes configured
   for this repository point to a known GitHub host... PR_EXIT=1"` — the
@@ -756,16 +760,88 @@ summary text:
   content). Deleted before the session's one natural Stop attempt — file
   absent afterward (`ls .ralph-goal` → no such file).
 
-**Hook firings: zero blocking firings this run**, which is the expected
-happy-path behavior, not a gap: `build.md`'s own Phase 3/4 instructions keep
-the assistant issuing tool calls turn after turn without ever trying to end
-the turn early, so no Stop event occurs until the very end — by which point
-`.ralph-goal` had already been deleted (terminal state reached), so the
-single Stop event that did fire found no file and allowed the stop with
-nothing to block. Contrast with Scenario 0, which deliberately forced an
-early Stop attempt while the file was still present and unmet, and did
-observe a block. Together the two scenarios cover both branches of the
-hook's behavior. Duration: 258.5s, 33 turns, `terminal_reason: "completed"`.
+**Hook firings: not observable from this transcript, and the honest
+explanation is weaker than first written here.** `t11-happy2.jsonl` and
+`t11-fail.jsonl` (both run with `--setting-sources project`) contain **zero**
+`hook_started`/`hook_response` events of any kind — not just `Stop`, but
+`SessionStart`/`UserPromptSubmit`/`PostToolUse` too — versus 4+ such events
+each in `t11-scenario0.jsonl` and the uncorrected `t11-happy.jsonl`. An
+earlier version of this section inferred from this silence that "the
+session's one natural Stop event found `.ralph-goal` already deleted and
+allowed the stop with nothing to block." That inference could not actually
+be verified from the transcript (prompt-type Stop-hook blocks only ever
+manifest as an injected "Stop hook feedback" user message, per Task 2's
+observability caveat — silence is also what a hook that never fires at all
+would look like), and post-review verification (below) shows the more
+concerning explanation is the correct one: **under `--setting-sources
+project`, the ralph plugin's own Stop hook does not block, at all** — so the
+absence of a block here reflects a broken safety net, not a satisfied one.
+The build still finished correctly, but only because `build.md`'s own
+Phase 3/4 instructions happened to keep the assistant working turn after
+turn without ever trying to stop early; the hook was not doing anything to
+enforce that. Duration: 258.5s, 33 turns, `terminal_reason: "completed"`.
+
+### MAJOR FINDING (post-review, 2026-07-20): the plugin Stop hook does not block under `--setting-sources project`
+
+Scenario 0 (above) proved the hook fires under bare `--plugin-dir` with
+default (unrestricted) settings sources — but Scenarios A/B's authoritative
+runs added `--setting-sources project` (to exclude the controller's personal
+`git push` confirmation gate — see Scenario A below), and that combination
+was never itself checked for hook activity until code review caught the
+zero-hook-event anomaly above. A direct, minimal probe settles it:
+
+```bash
+mkdir /tmp/ralph-probe2 && cd /tmp/ralph-probe2 && git init -q -b main && git commit -q --allow-empty -m init
+cat > .ralph-goal <<'EOF'
+The file SPIKE0_DONE.txt exists in the current directory and contains the exact text spike0-ok, produced by actually executing a command (visible as a tool_result in the transcript), not merely written as plain assistant text.
+EOF
+claude -p "say hi and stop" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 3 --permission-mode acceptEdits \
+  > /tmp/t11-probe2.jsonl 2>&1
+```
+
+Result: the plugin loaded correctly (`slash_commands` includes
+`ralph:build`, `ralph:go`, `ralph:status`), the assistant replied `"Hi! 👋"`,
+and the session ended **immediately** — `num_turns: 1`,
+`terminal_reason: "completed"`, **zero** hook events of any kind, **zero**
+injected "Stop hook feedback" messages — despite `.ralph-goal` existing with
+a condition that was plainly, unambiguously unmet (`SPIKE0_DONE.txt` was
+never created, never read, never mentioned). Contrast directly with
+Scenario 0's identical setup minus `--setting-sources project`, which
+correctly blocked the same kind of premature stop with an explicit
+"Condition not met" feedback message. The only variable changed is
+`--setting-sources project`, and it fully suppressed the safety net.
+
+**This is a major, production-relevant gap.** `--setting-sources project`
+was adopted for the authoritative Scenario A/B runs specifically to avoid a
+personal-settings contamination problem — and the "improve loop" /
+production usage this task exists to validate will plausibly run with the
+same isolation flag (or from a context where a host's own global settings
+shouldn't leak in). In that configuration, `plugin/hooks/hooks.json`'s
+goal-arming mechanism is silently inert: nothing stops a build from ending
+early, claiming completion, or looping indefinitely without the Stop-hook
+backstop `build.md`'s Phase 2 depends on. The Scenario A/B builds happened
+to finish correctly anyway because `build.md`'s own turn-by-turn
+instructions kept driving the loop without the assistant ever trying to
+stop early — the hook was never actually needed as a backstop in those two
+runs, so its silent absence didn't surface as a visible failure. A build
+that misbehaves (stalls, tries to end early, hallucinates completion) under
+`--setting-sources project` would have nothing catching it.
+
+**Task 13 / improve-loop impact:** the README must not claim
+`plugin/hooks/hooks.json` alone is sufficient. Any host or automation
+(including this repo's own improve loop) invoking `/ralph:build` under
+`--setting-sources project`, or any other configuration that excludes
+user-level settings, needs the Stop-hook definition duplicated into that
+project's own `.claude/settings.json` (the mechanism Task 2 validated
+directly) as a required companion, not merely a fallback. This wasn't
+caught earlier because Scenario 0 only tested the plugin-carrier question
+in isolation, and Scenarios A/B changed `--setting-sources` for an unrelated
+reason (the push-permission contamination) without separately re-verifying
+the hook still fired under the new combination — a gap in this task's own
+methodology, corrected here.
 
 ### Scenario B — failure path
 
@@ -809,9 +885,11 @@ Checklist:
   the task-status table, exactly matching Phase 5's spec. It failed for the
   same environment reason as Scenario A (`"none of the git remotes...point
   to a known GitHub host"`) and was reported honestly, not silently
-  swallowed. Push: exactly one `git push` call (structural), remote gained
-  exactly one ref (`refs/heads/ralph/sandbox-greeting`). `main` unchanged.
-  `.ralph-goal` deleted (confirmed absent afterward).
+  swallowed. Push: exactly one `git push` call (structural); an out-of-band
+  check of the bare remote's directory (not visible in-transcript, same
+  method as Scenario A) confirmed it gained exactly one ref
+  (`refs/heads/ralph/sandbox-greeting`). `main` unchanged. `.ralph-goal`
+  deleted (confirmed absent afterward).
 - **No completion claim anywhere.** `grep -c "<ralph>COMPLETE</ralph>"` on
   the full transcript → `0`. Final message opens "Build terminated at
   **Phase 5 (partial)**" and closes "This is a **partial result, not a
@@ -845,7 +923,7 @@ attempts at T-002 plus the retry), 32 turns, `terminal_reason: "completed"`.
 
 | Scenario | Turns | Duration | `terminal_reason` | Note |
 |---|---|---|---|---|
-| 0 (hook probe) | 3 (max hit) | 22.5s | `max_turns` | condition deliberately unsatisfiable |
+| 0 (hook probe) | 4 (`--max-turns 3` cap hit) | 22.5s | `max_turns` | condition deliberately unsatisfiable |
 | A, attempt 1 | 25 | 406.5s | `completed` | push blocked by inherited personal settings |
 | A, attempt 2 (authoritative) | 33 | 258.5s | `completed` | full Phase 4 reached, PR attempt honest |
 | B | 32 | 579.6s | `completed` | Phase 5, cap+exhaustion both observed |
