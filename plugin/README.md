@@ -71,11 +71,13 @@ rules and commit the existing files once.
   clauses; headless spawns add a dollar cap. There is no `--unlimited`.
 - **POSIX shell required** — the evidence script needs `bash`; pure
   Windows without git-bash/WSL is unsupported in v1.
+- **`.ralph-goal`** is an ephemeral, gitignored runtime file that
+  `/ralph:build` writes and deletes itself — hosts should gitignore it
+  and never commit it.
 
 ## Running headless / unattended
 
-Proven invocation shape for unattended builds (e.g. from `/loop` or a
-cloud routine):
+Proven invocation shape (e.g. from `/loop` or a cloud routine):
 
 ```bash
 claude -p "/ralph:build specs/feature.json" \
@@ -86,20 +88,9 @@ claude -p "/ralph:build specs/feature.json" \
   --max-turns 40
 ```
 
-- **`--allowedTools` is not optional alongside `acceptEdits`.**
-  `acceptEdits` only auto-approves `Edit`/`Write`; every `Bash` call (task
-  verification, `git`, `gh`) comes back "requires approval" and gets
-  auto-rejected until the session self-terminates
-  (`docs/superpowers/spikes/2026-07-goal-arming.md`, "Agent-type
-  registration (Task 7)").
-- **`--setting-sources project` avoids user-settings contamination** — a
-  real incident had a user-level `git push` approval gate silently deny a
-  build's push.
-- **Hard caveat:** under `--setting-sources project`, the plugin's own
-  Stop hook (`plugin/hooks/hooks.json`) **does not fire at all** — zero
-  hook events, no goal enforcement (same spike doc, Task 11's "MAJOR
-  FINDING"). For headless/unattended builds, the host repo **must**
-  duplicate the Stop hook into its own `.claude/settings.json`:
+- `--allowedTools` is required alongside `acceptEdits` (which only auto-approves `Edit`/`Write`) — otherwise `Bash` calls get rejected until the session dies (Task 7; full list including `Agent` validated end-to-end in Task 11, Scenario A, ~line 707).
+- `--setting-sources project` excludes the invoking user's personal settings — a real incident had a user-level `git push` approval gate silently deny a build's push.
+- **Caveat:** under `--setting-sources project` the plugin's own Stop hook does not fire at all (Task 11's "MAJOR FINDING") — duplicate it into the host's `.claude/settings.json`:
 
   ```json
   {
@@ -119,5 +110,4 @@ claude -p "/ralph:build specs/feature.json" \
   }
   ```
 
-Interactive sessions need none of this — the plugin's own hook fires
-normally there, since `--setting-sources` isn't restricted.
+Interactive sessions need none of this — the plugin's hook fires normally there.
