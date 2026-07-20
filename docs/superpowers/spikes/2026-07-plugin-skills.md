@@ -240,3 +240,126 @@ No retry was necessary, and none was performed.
   stream capture) removed.
 - `git status` after removal + before commit: only this spike doc is new;
   no probe files remain.
+
+---
+
+## Task 4 smoke runs
+
+**Date:** 2026-07-20
+**Task:** Task 4 of Plan 2 (see `.superpowers/sdd/task-4-brief.md`) —
+`plugin/commands/spec.md` plus three supervised headless smoke runs
+(S1 inline prompt, S2 requirements file, S3 findings backlog).
+
+All three runs passed every checklist item on the first attempt. No
+wording adjustments to `spec.md` were needed.
+
+### Invocations
+
+Sandbox created once via `bash tests/make_sandbox.sh /tmp/ralph-sb-spec`;
+each smoke test ran in the same sandbox, with the previous test's
+generated spec removed first to avoid slug collisions (all three specs
+have distinct slugs anyway, but the brief's collision-avoidance step was
+followed regardless).
+
+```bash
+# S1 — inline prompt
+claude -p "/ralph:spec Add a --version flag to greeting.sh that prints 'greeting 1.0.0' and exits 0; unknown flags must exit 2 with usage on stderr; default hello output unchanged" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 15 --permission-mode acceptEdits \
+  --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 5 > /tmp/p2-spec-p.jsonl 2>&1
+# exit 0
+
+rm specs/greeting-version-flag.json   # S1 cleanup before S2
+
+# S2 — requirements file
+claude -p "/ralph:spec -f requirements.md" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 15 --permission-mode acceptEdits \
+  --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 5 > /tmp/p2-spec-f.jsonl 2>&1
+# exit 0
+
+rm specs/greeting-flags.json   # S2 cleanup before S3
+
+# S3 — findings backlog
+claude -p "/ralph:spec --from-findings" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 15 --permission-mode acceptEdits \
+  --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 5 > /tmp/p2-spec-findings.jsonl 2>&1
+# exit 0
+```
+
+### S1 — inline prompt
+
+Generated `specs/greeting-version-flag.json` ("Greeting version flag",
+2 tasks: T-001 add `--version`, T-002 reject unknown flags with
+`dependsOn: ["T-001"]`).
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| A new `specs/*.json` (not `sandbox.json`) exists; `jq .` parses it | `specs/greeting-version-flag.json` created; `jq .` parsed cleanly | PASS |
+| `context.verificationCommands == ["./verify.sh"]` (proves 3a sourcing) | `jq -r '.context.verificationCommands'` → `["./verify.sh"]` | PASS |
+| Every task: `status=="pending"`, `passes==false`, `attempts==0`; ids sequential; `dependsOn` valid | `jq` dump: T-001 `{pending,false,0,[]}`, T-002 `{pending,false,0,["T-001"]}` | PASS |
+| Transcript: Read tool_use of the plugin skill path + Bash tool_use of `ralph-evidence.sh` with evidence block in tool_result | `{"name":"Read","input":{"file_path":"/Users/g8s/Dev/ralph-starter/plugin/skills/writing-ralph-specs/SKILL.md"}}` and a later `Bash` call running `/Users/g8s/Dev/ralph-starter/plugin/scripts/ralph-evidence.sh specs/greeting-version-flag.json`; tool_result contained `=== RALPH EVIDENCE ===` / `tasks: 2 total \| 0 passed \| 0 in_progress \| 2 pending \| 0 blocked` / `verifier: PENDING` / `=== END RALPH EVIDENCE ===`, `EVIDENCE_EXIT=0` | PASS |
+| No commit, no branch, spec untracked | `git log --oneline` → 1 line (`ad66b05 init: ...`); `git branch` → `* main` only; `git status --porcelain` → `?? specs/greeting-version-flag.json` | PASS |
+
+Bonus (not in the S1 checklist but checked anyway, per spec.md step 6):
+`git check-ignore specs/greeting-version-flag.json` exited 1 (not
+ignored) — same Bash call as the evidence run, output
+`IGNORE_EXIT=1`.
+
+### S2 — requirements file
+
+Generated `specs/greeting-flags.json` ("Greeting flags", 2 tasks
+mirroring T-001/T-002 of S1, worded slightly differently).
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Tasks derive from the file's three requirements (`--version` task, unknown-flag task, "hello unchanged") | T-001 "Add --version flag to greeting.sh" cites the exact string `greeting 1.0.0` and includes the criterion `Running: ./greeting.sh  still prints exactly 'hello'`; T-002 "Reject unknown flags with usage on stderr and exit 2" includes criteria for exit code 2, stderr-not-stdout, and re-confirms both `--version` and the no-arg default keep working | PASS — substance matches all three `requirements.md` bullets |
+| Same structural checks as S1 (new spec parses, verificationCommands, task fields, ids/dependsOn) | `jq .` parsed; `verificationCommands == ["./verify.sh"]`; both tasks `{pending,false,0}`, T-002 `dependsOn:["T-001"]` | PASS |
+| Transcript shows `requirements.md` was Read | `{"name":"Read","input":{"file_path":"/private/tmp/ralph-sb-spec/requirements.md"}}` (second tool_use, immediately after the skill Read) | PASS |
+| No commit, no branch, spec untracked | `git log --oneline` still 1 line; `git branch` → `* main`; `git status --porcelain` → `?? specs/greeting-flags.json` | PASS |
+
+Evidence tool_result for S2: `EXIT=0`, `IGNORE_EXIT=1`, same
+`=== RALPH EVIDENCE ===` block shape as S1 with the S2 task titles.
+
+### S3 — findings backlog
+
+Generated `specs/sandbox-greeting-flag-error-handling.json`
+("Sandbox greeting flag error handling", 2 tasks).
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Tasks cite F-001 and/or F-002 in descriptions | T-001 description opens "Fixes F-001."; T-002 description opens "Fixes F-002." | PASS |
+| No task derives from F-003 (info skipped) | Only 2 tasks total, both about unknown-flag handling; nothing about "greeting logic is simple and readable" (F-003's subject) | PASS |
+| Each task's criteria include the fix behavior and a "verification commands still pass"-style criterion | T-001's last criterion: `` `./verify.sh` passes and prints `verify OK` ``; T-002's last criterion: identical wording | PASS |
+| Severity ordering (F-001's fix before/above F-002's) | T-001 (fixes F-001, medium) precedes T-002 (fixes F-002, low) in the `tasks` array, and T-002 `dependsOn: ["T-001"]` | PASS |
+| Same structural checks as S1 | `jq .` parsed; `verificationCommands == ["./verify.sh"]`; both tasks `{pending,false,0}` with sequential ids and valid `dependsOn` | PASS |
+| Transcript shows `review-output/findings.json` was Read | First tool_use of the run: `{"name":"Read","input":{"file_path":"/private/tmp/ralph-sb-spec/review-output/findings.json"}}` | PASS |
+| No commit, no branch, spec untracked | `git log --oneline` still 1 line; `git branch` → `* main`; `git status --porcelain` → `?? specs/sandbox-greeting-flag-error-handling.json` | PASS |
+
+Evidence tool_result for S3: `=== EVIDENCE EXIT: 0 ===`,
+`=== CHECK-IGNORE EXIT: 1 ===`, evidence block showing
+`tasks: 2 total | 0 passed | 0 in_progress | 2 pending | 0 blocked`.
+
+### Prompt adjustments
+
+None. `spec.md` as written in Step 1 of the Task 4 brief produced a
+passing result on the first run of every smoke test — no re-runs were
+needed.
+
+### Cleanup
+
+- `cd / && rm -rf /tmp/ralph-sb-spec` (sandbox) run after S3, per the
+  brief.
+- `/tmp/p2-spec-p.jsonl`, `/tmp/p2-spec-f.jsonl`,
+  `/tmp/p2-spec-findings.jsonl` (raw stream captures) removed after
+  writing up this section.
+- `git status` in the ralph-starter repo before committing: only
+  `plugin/commands/spec.md` (new) and this spike doc's edit are staged;
+  no sandbox or capture files leaked into the working tree.
