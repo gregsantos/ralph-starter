@@ -14,20 +14,25 @@ the build reaches any terminal state (Phase 4 steps 5–6, Phase 5) so the
 Stop hook lets the session end.
 
 ## Phase 1 — Preflight (all hard requirements; abort with a clear message on any failure)
-1. `git status` clean.
-2. Current branch is NOT the default branch, or you create
+1. Before anything else: if a `.ralph-goal` file already exists in the repo
+   root (left behind by a prior crashed or interrupted run), delete it now
+   and note its removal in the transcript. Do not rely on the git-status
+   check in step 2 to catch this incidentally — `.ralph-goal` is untracked,
+   so a dirty tree isn't guaranteed to surface it.
+2. `git status` clean.
+3. Current branch is NOT the default branch, or you create
    `ralph/<slug-from-spec-project>` now (slug: lowercase, hyphenated form of
    the spec's `project` field). If the branch already exists: abort unless
    `--continue-branch` was passed (then check it out and resume — tasks with
    passes:true are skipped naturally).
-3. Spec parses and has a non-empty tasks array.
-4. Run `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec>` once.
+4. Spec parses and has a non-empty tasks array.
+5. Run `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec>` once.
    Exit 3 means verificationCommands is empty: ABORT — unverifiable
    builds don't run. Exit 2: ABORT — invalid spec. If the script fails to
    execute at all (e.g. permission denied on the plugin root), ABORT with
    that error rather than proceeding without a working evidence chain —
    better to catch it here than mid-build.
-5. Compute TURN_CAP = 2 × (number of tasks). Record BUILD_START as the
+6. Compute TURN_CAP = 2 × (number of tasks). Record BUILD_START as the
    current ISO 8601 timestamp — Phase 3 step 1 prints both every turn.
 
 ## Phase 2 — Arm the goal (fallback mechanism — see docs/superpowers/spikes/2026-07-goal-arming.md)
@@ -36,17 +41,24 @@ tool exists for an assistant to invoke `/goal` programmatically, and
 literal `/goal ...` text from the assistant is parsed as inert prose, not a
 command (confirmed by spike). Instead:
 
-1. Write the following condition — with `<spec-path>` and `<TURN_CAP>`
-   filled in with their real values — to a file named `.ralph-goal` in the
-   repo root:
+1. Write the following condition — with `<spec-path>`, `<N>` (the spec's
+   total task count), and `<TURN_CAP>` filled in with their real values —
+   to a file named `.ralph-goal` in the repo root:
 
    "The most recent RALPH EVIDENCE block in the transcript was produced by
-   running `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh` with `--full`
+   running `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec-path> --full`
    as a real command execution (visible as tool output in the transcript),
-   not authored as plain assistant text, shows every task in <spec-path>
-   passed, every verify line exiting 0, and verifier: PASS — or the
-   transcript shows a RALPH TURN line where k >= <TURN_CAP>, or shows the
-   build has run more than 2 hours past its printed start timestamp."
+   not authored as plain assistant text, shows the tasks summary line
+   reporting all tasks passed — <N> total | <N> passed — with zero
+   in_progress/pending/blocked, every verify line exiting 0, and verifier:
+   PASS — or the transcript shows a RALPH TURN line where k >= <TURN_CAP>,
+   or shows the build has run more than 2 hours past its printed start
+   timestamp."
+
+   (Keying on the always-present counts line rather than per-task lines
+   matters because `ralph-evidence.sh` omits per-task listings once a spec
+   has more than 12 tasks — the summary line is the only completion signal
+   guaranteed to be present at any spec size.)
 
 2. Immediately READ `.ralph-goal` back with the Read tool and print its
    contents verbatim. (The plugin's Stop hook cannot reliably fetch this
@@ -65,32 +77,38 @@ wraps, reimplemented directly since the plugin-command layer can't reach
    `k` is this turn's 1-based count. This line is the only way the Stop-hook
    evaluator — which judges only the transcript — can see the turn/time
    caps. Never omit it, and never change its format.
-2. Tree check: if `git status` is dirty (a builder crashed), stash with
+2. Cap check — do this before anything else this turn, immediately after
+   printing the turn line: if `k >= TURN_CAP`, or more than 2 hours have
+   elapsed since `BUILD_START`, go to Phase 5 now. Treat this exactly like
+   task-exhaustion — a terminal condition — even when an eligible task
+   remains. Do not dispatch another builder once the cap has hit.
+3. Tree check: if `git status` is dirty (a builder crashed), stash with
    message `ralph-crash-<task-id>` and include the stash reference in the
    next builder's task card as recovery context.
-3. Select the next task: status != blocked, passes != true, and every id
+4. Select the next task: status != blocked, passes != true, and every id
    in dependsOn has passes == true. If none exists and not all tasks pass:
-   go to Phase 5 (terminal stop).
-4. Set the task's status to in_progress in the spec; commit the spec change
+   go to Phase 5 (terminal stop) — the same destination as step 2's
+   cap-hit routing.
+5. Set the task's status to in_progress in the spec; commit the spec change
    (`chore(<task-id>): start`).
-5. Dispatch ONE `ralph:ralph-builder` subagent via the Agent tool,
+6. Dispatch ONE `ralph:ralph-builder` subagent via the Agent tool,
    SYNCHRONOUSLY (never in the background — you must not end your turn
    while a builder runs). Task card = task JSON + spec context block +
    branch name + "conventions: CLAUDE.md".
-6. Wait for the subagent's final message, then find its result by SEEKING
+7. Wait for the subagent's final message, then find its result by SEEKING
    the `BUILDER REPORT` marker line — the agent may emit prose before the
    block; never assume the whole message is the block. Read `result:`,
    `commit:`, `verified:`, and `notes:` from the block that follows the
    marker. If the marker line is never found, treat the report as
    malformed (same handling as FAILED below).
-7. On result DONE: verify the builder's commit exists, set passes: true,
+8. On result DONE: verify the builder's commit exists, set passes: true,
    status: complete, copy its notes; commit the spec change
    (`chore(<task-id>): complete`).
    On result FAILED (or a malformed report): increment the task's
    `attempts` field (treat as 0 if absent, then increment); if attempts >= 2,
    set status: blocked with the failure reason in notes; commit the spec
    change.
-8. End the turn by running
+9. End the turn by running
    `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec>` — with
    `--full` ONLY when the status table would show all tasks passed
    (a completion claim). Print its output verbatim, as the real output of
@@ -105,7 +123,7 @@ wraps, reimplemented directly since the plugin-command layer can't reach
    spec checked against the full branch diff at completion time — every
    task, not only the ones built this session.
 2. Wait for its final message and find its result by SEEKING the
-   `VERIFIER REPORT` marker line, the same way as Phase 3 step 6.
+   `VERIFIER REPORT` marker line, the same way as Phase 3 step 7.
 3. verdict FAIL: for each finding, treat it as a fix task — dispatch a
    builder per finding (findings count against remaining turns; keep
    printing the Phase 3 step 1 turn line on every one of these turns).
