@@ -31,7 +31,8 @@
       "status": "pending",
       "passes": false,
       "effort": "small",
-      "notes": ""
+      "notes": "",
+      "attempts": 0
     },
     {
       "id": "T-002",
@@ -101,6 +102,7 @@
       "notes": ""
     }
   ],
+  "verifier": null,
   "glossary": {
     "preferences": "User-specific settings stored as JSON (theme, notifications, locale)",
     "partial update": "PATCH semantics - only provided fields are updated, others preserved"

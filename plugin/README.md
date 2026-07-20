@@ -39,6 +39,20 @@ Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.c
 - `models` — model routing overrides for `go`/`builder`/`verifier`; `"inherit"` uses the invoking session's model.
 - `artifactPaths` — where specs and review output live; override for submodule or non-standard layouts.
 
+## Spec format
+
+Specs use the `tasks[]` schema (see [`specs/example.json`](../specs/example.json)):
+`id`, `title`, `description`, `acceptanceCriteria`, `dependsOn`, `status`,
+`passes`, `effort`, `notes`. `/ralph:build` also reads and writes two
+fields not covered elsewhere:
+
+- **`attempts`** (per task, integer) — orchestrator-managed retry
+  counter; a task moves to `status: blocked` once `attempts` reaches 2
+  without a `DONE` builder report.
+- **`verifier`** (top-level, `{verdict, date, summary}`) — written once
+  the `ralph-verifier` subagent returns `PASS` at completion; absent (or
+  `null` in `specs/example.json`, which was never built) until then.
+
 ## Artifact tracking
 
 `specs/*.json` and `review-output/findings.json` must be **git-tracked**,
