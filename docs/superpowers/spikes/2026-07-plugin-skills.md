@@ -363,3 +363,139 @@ needed.
 - `git status` in the ralph-starter repo before committing: only
   `plugin/commands/spec.md` (new) and this spike doc's edit are staged;
   no sandbox or capture files leaked into the working tree.
+
+## Task 5 smoke runs
+
+**Date:** 2026-07-20
+**Task:** Task 5 of Plan 2 (see `.superpowers/sdd/task-5-brief.md`) —
+`plugin/commands/build.md` Phase 1 preflight amendment (step 2 gains a
+single exception for the target spec file; new step 3a commits that spec
+on the work branch) plus two supervised headless smoke runs (negative
+control, then happy path).
+
+Negative control passed on the first attempt. Happy path required one
+rerun — not because of the amendment's wording, but because the CLI's own
+`--max-turns 25` budget (as specified in the brief) was exhausted one step
+before the finish line (builder dispatch + verifier dispatch + evidence
+runs + rebase left no turns for the push/PR step). This is a different
+mechanism from the spec's internal `RALPH TURN_CAP` (which gates Phase 3
+dispatch, not Phase 4 completion) — the brief's "rerun once" guidance was
+applied by analogy since the effect (an incomplete run hitting a cap) is
+the same. No wording change to `build.md` was needed or made.
+
+### Invocations
+
+Sandbox created via `bash tests/make_sandbox.sh /tmp/ralph-sb-bcommit`,
+plus a throwaway bare remote (`git init --bare`) added as `origin`, per
+the brief.
+
+```bash
+# Negative control — dirty verify.sh + untracked spec must abort preflight
+claude -p "/ralph:build specs/version-flag.json" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 6 --permission-mode acceptEdits \
+  --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 3 > /tmp/p2-build-dirty-abort.jsonl 2>&1
+# exit 0 (claude CLI exit; orchestrator aborted per Phase 1 step 2)
+
+# Happy path — run 1 (hit --max-turns 25 one step before push+PR)
+claude -p "/ralph:build specs/version-flag.json" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 25 --permission-mode acceptEdits \
+  --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 10 > /tmp/p2-build-uncommitted-spec.jsonl 2>&1
+# exit 1, terminal_reason "max_turns" — task built + verified PASS + clean
+# rebase all landed on disk, cut off checking gh auth just before push
+
+# Happy path — run 2 (same invocation, same sandbox, resumed on ralph/version-flag)
+claude -p "/ralph:build specs/version-flag.json" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 25 --permission-mode acceptEdits \
+  --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 10 > /tmp/p2-build-uncommitted-spec-run2.jsonl 2>&1
+# exit 0 — completion path: removed stale .ralph-goal, detected
+# task+verifier already recorded, rebased (no-op), pushed once, gh pr
+# create failed honestly against the local bare remote
+```
+
+### Negative control — other dirt still aborts
+
+Sandbox state before the run: `verify.sh` modified (`# unrelated dirt`
+appended) and `specs/version-flag.json` untracked (`git status
+--porcelain` showed both).
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Run ABORTS in preflight (dirty `verify.sh` alongside the untracked spec) | Final result text: "Aborting — preflight failed (Phase 1, step 2)... `verify.sh` is modified... This is unrelated to the spec and is not the allowed exception." | PASS |
+| No `ralph/*` branch created | `git branch` after run → `* main` only | PASS |
+| No builder dispatched | tool_use names in `/tmp/p2-build-dirty-abort.jsonl`: only `Bash` (x2) and `Read` (x1); no `Task`/`Agent` tool_use; the one `"name":"ralph"` match is the plugin-metadata line in the `system init` event, not a tool call | PASS |
+| No commit added | `git log --oneline` after run → still 1 line (`init: sandbox project with 2-task spec`) | PASS |
+
+`git checkout verify.sh` afterward restored the sandbox to clean-except-untracked-spec for the happy-path run, per the brief.
+
+### Happy path — uncommitted spec is committed on the branch
+
+**Run 1** (`--max-turns 25`, `/tmp/p2-build-uncommitted-spec.jsonl`, 166
+lines): reached `"type":"result","subtype":"error_max_turns"` at
+`num_turns:26`, `stop_reason:"tool_use"`, mid-way through checking `git
+remote -v` / `gh auth status` ahead of the push step. Disk state at that
+point (captured before the rerun):
+
+```
+$ git log main..ralph/version-flag --oneline --name-only
+719794a chore: record verifier PASS          specs/version-flag.json
+b1c2443 chore(T-001): complete                specs/version-flag.json
+2ac6230 feat(T-001): Add --version flag        greeting.sh
+318cbc3 chore(T-001): start                    specs/version-flag.json
+f5f9388 chore: add spec for Version flag       specs/version-flag.json
+```
+
+Confirmed via `python3`-parsed structural tool_use scan of run 1's
+stream: exactly one `Task`/`Agent` dispatch with
+`subagent_type:"ralph:ralph-builder"` for T-001, exactly one dispatch with
+`subagent_type:"ralph:ralph-verifier"`, and zero `git push` commands
+anywhere in the transcript (the run was cut off before reaching step 6).
+
+**Run 2** (same invocation, `/tmp/p2-build-uncommitted-spec-run2.jsonl`):
+exit 0. The orchestrator detected the resumed state ("entering this
+session, the spec was already fully built... I ran the completion path
+rather than rebuilding"), did not redispatch the builder or verifier, and
+completed Phase 4: rebase (no-op, `main` already an ancestor), push, `gh
+pr create` attempt.
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Preflight proceeds; branch `ralph/version-flag` created | `git branch -a` → `* ralph/version-flag`, `main` (run 1's transcript shows the branch-creation step; both runs operated on it) | PASS |
+| FIRST commit on the branch is `chore: add spec for Version flag` touching only `specs/version-flag.json` | `git log main..ralph/version-flag --oneline --name-only` (above) — last-listed (oldest) commit is `f5f9388 chore: add spec for Version flag`, sole file `specs/version-flag.json` | PASS |
+| Build completes: builder dispatch for T-001 | Run 1 tool_use: `{"description":"Build T-001 version flag","subagent_type":"ralph:ralph-builder",...}` | PASS |
+| Verifier PASS written to the spec | Run 1 tool_use: `{"description":"Verify version-flag build","subagent_type":"ralph:ralph-verifier",...}`; disk state `specs/version-flag.json` → `"verifier":{"verdict":"PASS","date":"2026-07-20",...}` | PASS |
+| Exactly one `git push` (grep tool_use Bash commands for "git push") | Structural scan across both run files combined: zero matches in run 1, exactly one in run 2 — `'git push -u origin ralph/version-flag 2>&1; echo "PUSH_EXIT=$?"'`, tool_result `PUSH_EXIT=0` | PASS |
+| Bare-remote refs (`git -C "$REMOTE" show-ref`) | `719794a06d4bb19ddbb0f1df7029eff0be3c47d6 refs/heads/ralph/version-flag` — matches the local branch tip exactly | PASS |
+| Honest report of the `gh pr create` failure against the local bare remote | tool_result for the `gh pr create` call: `"none of the git remotes configured for this repository point to a known GitHub host... GH_EXIT=1"`; final report: "PR not opened — environment limitation, not a conflict... In a normal GitHub-backed repo this would have produced a PR titled 'ralph: Version flag'..." | PASS |
+| `main` unchanged | `git log main --oneline` → still 1 line (`init: sandbox project with 2-task spec`) | PASS |
+| `.ralph-goal` absent afterward | `ls .ralph-goal` → "No such file or directory"; final report: "deleted in Phase 1 and never re-armed... absent" | PASS |
+
+### Prompt adjustments
+
+None. The two `build.md` edits (Phase 1 step 2 exception, new step 3a)
+worked as written on the first attempt for both smoke tests. The happy
+path's rerun was caused by the CLI's `--max-turns 25` budget being tight
+for a full builder+verifier+push+PR cycle in one session, not by any
+defect or ambiguity in the amendment's wording — no `build.md` change was
+made in response.
+
+### Cleanup
+
+- `cd / && rm -rf /tmp/ralph-sb-bcommit "$REMOTE"` run after both happy-path
+  runs completed, per the brief.
+- `/tmp/p2-build-dirty-abort.jsonl`, `/tmp/p2-build-uncommitted-spec.jsonl`,
+  and `/tmp/p2-build-uncommitted-spec-run2.jsonl` (run 1 and run 2 of the
+  happy path) were **kept** — per this task's instructions — in case the
+  final whole-branch review consults them; they are gitignored `/tmp`
+  paths, not part of the repo.
+- `git status` in the ralph-starter repo before committing: only
+  `plugin/commands/build.md` and this spike doc's edit are staged; no
+  sandbox or capture files leaked into the working tree.
