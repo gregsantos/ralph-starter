@@ -130,20 +130,21 @@ wraps, reimplemented directly since the plugin-command layer can't reach
    `k >= TURN_CAP` or more than 2 hours have elapsed since `BUILD_START`,
    go to Phase 5 now instead of dispatching, exactly as in the main loop.
    This applies per finding, not once for the whole batch — a fix round
-   with several findings can cross the cap partway through. Once every
-   finding for this round has either been dispatched-and-resolved or
-   routed to Phase 5, re-verify from step 1. Never argue with the
-   verifier; fix or surface.
+   with several findings can cross the cap partway through. If any cap
+   check routed to Phase 5, the build is over. Otherwise, once every
+   finding for this round is resolved, re-verify from step 1. Never argue
+   with the verifier; fix or surface.
 4. verdict PASS: write {"verifier": {"verdict": "PASS", "date": <today>,
    "summary": <one line>}} into the spec; commit; run the evidence script
    with --full; print it.
 5. Rebase onto the default branch. Conflicts: STOP — delete `.ralph-goal`
    (its condition can never be satisfied from here, and deleting it is
-   what lets the Stop hook allow the session to end), push and open a
-   draft PR titled "ralph: <project> (conflicts)" describing them. Never
-   auto-resolve. The PR title and body must contain no attribution lines
-   (no 'Generated with Claude Code', no Co-Authored-By trailers). Mention
-   the deletion in your final message.
+   what lets the Stop hook allow the session to end), `git rebase
+   --abort`, then push and open a draft PR titled "ralph: <project>
+   (conflicts)" describing them. Never auto-resolve. The PR title and
+   body must contain no attribution lines (no 'Generated with Claude
+   Code', no Co-Authored-By trailers). Mention the deletion in your final
+   message.
 6. Clean rebase: push ONCE (`git push -u origin <branch>`), then
    `gh pr create` — title "ralph: <project>", body = evidence block +
    task table + verifier summary. The PR title and body must contain no
