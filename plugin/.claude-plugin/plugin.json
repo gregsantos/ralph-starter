@@ -1,5 +1,6 @@
 {
   "name": "ralph",
-  "version": "0.0.1",
-  "description": "Native Ralph Loop plugin (spike scaffold)"
+  "version": "0.1.0",
+  "description": "Native Ralph Loop: goal-driven autonomous builds with fresh-context builders, PR-gated autonomy, and deterministic completion evidence.",
+  "author": { "name": "Greg Santos" }
 }
