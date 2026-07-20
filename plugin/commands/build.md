@@ -43,8 +43,12 @@ Stop hook lets the session end.
    execute at all (e.g. permission denied on the plugin root), ABORT with
    that error rather than proceeding without a working evidence chain —
    better to catch it here than mid-build.
-6. Compute TURN_CAP = 2 × (number of tasks). Record BUILD_START as the
-   current ISO 8601 timestamp — Phase 3 step 1 prints both every turn.
+6. Compute TURN_CAP = F × (number of tasks), where F is
+   `.claude/ralph.json` → `defaultBudgets.buildTurnsFactor` if that
+   file and field exist, else 2. Set HOURS_CAP from
+   `defaultBudgets.buildHours` the same way, else 2. Record BUILD_START
+   as the current ISO 8601 timestamp — Phase 3 step 1 prints these
+   every turn.
 
 ## Phase 2 — Arm the goal (fallback mechanism — see docs/superpowers/spikes/2026-07-goal-arming.md)
 A plugin command cannot arm the built-in `/goal` evaluator directly — no
@@ -63,8 +67,8 @@ command (confirmed by spike). Instead:
    reporting all tasks passed — <N> total | <N> passed — with zero
    in_progress/pending/blocked, every verify line exiting 0, and verifier:
    PASS — or the transcript shows a RALPH TURN line where k >= <TURN_CAP>,
-   or shows the build has run more than 2 hours past its printed start
-   timestamp."
+   or shows a RALPH TURN line whose 'now' timestamp is more than
+   <HOURS_CAP> hours past its 'build started' timestamp."
 
    (Keying on the always-present counts line rather than per-task lines
    matters because `ralph-evidence.sh` omits per-task listings once a spec
@@ -84,12 +88,13 @@ wraps, reimplemented directly since the plugin-command layer can't reach
 `/goal`'s UI.
 
 ## Phase 3 — Turn contract (repeat every turn until the goal clears)
-1. Print `RALPH TURN <k>/<TURN_CAP> (build started <BUILD_START>)` where
-   `k` is this turn's 1-based count. This line is the only way the Stop-hook
+1. Print `RALPH TURN <k>/<TURN_CAP> (build started <BUILD_START>, now
+   <current ISO 8601 timestamp>)` where `k` is this turn's 1-based
+   count. This line is the only way the Stop-hook
    evaluator — which judges only the transcript — can see the turn/time
    caps. Never omit it, and never change its format.
 2. Cap check — do this before anything else this turn, immediately after
-   printing the turn line: if `k >= TURN_CAP`, or more than 2 hours have
+   printing the turn line: if `k >= TURN_CAP`, or more than HOURS_CAP hours have
    elapsed since `BUILD_START`, go to Phase 5 now. Treat this exactly like
    task-exhaustion — a terminal condition — even when an eligible task
    remains. Do not dispatch another builder once the cap has hit.
@@ -138,7 +143,7 @@ wraps, reimplemented directly since the plugin-command layer can't reach
 3. verdict FAIL: for each finding, treat it as a fix task. Before
    dispatching EACH fix-builder: print the turn line (same format as
    Phase 3 step 1) and repeat the Phase 3 step 2 cap check — if
-   `k >= TURN_CAP` or more than 2 hours have elapsed since `BUILD_START`,
+   `k >= TURN_CAP` or more than HOURS_CAP hours have elapsed since `BUILD_START`,
    go to Phase 5 now instead of dispatching, exactly as in the main loop.
    This applies per finding, not once for the whole batch — a fix round
    with several findings can cross the cap partway through. If any cap

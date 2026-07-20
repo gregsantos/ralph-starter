@@ -677,3 +677,91 @@ Removed after R3. Captures kept (all in `/tmp/`, not in the repo):
   Agent dispatch, no writes (32 lines)
 - `/tmp/p3-review-focus-retry2.jsonl` — R2 attempt 3, successful (83 lines)
 - `/tmp/p3-review-diffbase.jsonl` — R3 (186 lines)
+
+---
+
+## Task 5 smoke run
+
+**Task:** Task 5 of Plan 3 — wire `plugin/commands/build.md`'s Phase 1
+step 6 to read `defaultBudgets.buildTurnsFactor`/`buildHours` from
+`.claude/ralph.json` (defaults 2/2, preserving prior behavior), rename the
+hardcoded "2 hours" in the Phase 2 goal condition and the Phase 3/4 cap
+checks to `HOURS_CAP`, and add a current-timestamp `now` field to the
+`RALPH TURN` line so the wall-clock clause is transcript-evaluable (a
+Plan 1 deferred item). Sandbox: `/tmp/ralph-sb-caps`, built from
+`tests/make_sandbox.sh` with `.claude/ralph.json` patched via `jq` to add
+`{"defaultBudgets": {"buildTurnsFactor": 3, "buildHours": 1}}` before the
+first commit, against a fresh bare remote (not GitHub) — removed after the
+run per the brief.
+
+Command run exactly as briefed (`claude -p "/ralph:build specs/sandbox.json"`,
+`--max-turns 30 --max-budget-usd 10`, Bash timeout 600000, invoked via a
+tracked background process with a bounded poll/kill guard rather than
+`nohup`/`disown`). Capture: `/tmp/p3-build-caps.jsonl` (159 stream-json
+lines). Exit: success, `is_error: false`, `stop_reason`/`subtype: success`,
+`num_turns: 27`. The process exited on its own after ~181s — well inside
+the 12-minute safety window, no kill needed, no retry needed.
+
+Checklist, evidence-first:
+
+- **TURN_CAP honored the override.** `RALPH TURN 1/6` and `RALPH TURN 2/6`
+  both appear (3 × 2 tasks = 6, not the old hardcoded 4), confirming
+  Phase 1 step 6 read `buildTurnsFactor: 3` from the sandbox's
+  `.claude/ralph.json` rather than falling back to the default of 2.
+- **Turn line carries a real `now` timestamp.** Both turn lines matched
+  `, now 20...`:
+  `RALPH TURN 1/6 (build started 2026-07-20T23:00:29Z, now
+  2026-07-20T23:00:45Z)` and `RALPH TURN 2/6 (build started
+  2026-07-20T23:00:29Z, now 2026-07-20T23:01:40Z)` — two distinct,
+  increasing timestamps, not a copy of `BUILD_START`.
+- **`.ralph-goal` condition names the 1-hour override and keeps the
+  provenance clause verbatim.** Read back from the transcript's file-create
+  tool result, the written condition ends "...or the transcript shows a
+  RALPH TURN line where k >= 6, or shows a RALPH TURN line whose 'now'
+  timestamp is more than 1 hours past its 'build started' timestamp." — the
+  `<HOURS_CAP>` substitution landed correctly. The provenance clause earlier
+  in the same string ("was produced by running
+  `.../ralph-evidence.sh specs/sandbox.json --full` as a real command
+  execution (visible as tool output in the transcript), not authored as
+  plain assistant text, shows the tasks summary line reporting all tasks
+  passed — 2 total | 2 passed — with zero in_progress/pending/blocked,
+  every verify line exiting 0, and verifier: PASS") is byte-identical to
+  build.md's unmodified wording — confirming the edit didn't bleed into the
+  clause the brief said not to touch.
+- **Both tasks completed, verifier PASS.** `ralph-evidence.sh --full`
+  output in the agent's final report: `tasks: 2 total | 2 passed | 0
+  in_progress | 0 pending | 0 blocked`, `T-001 [passed]`, `T-002 [passed]`,
+  `verify: ./verify.sh -> exit 0`, `verifier: PASS`. The spec's `verifier`
+  field was written with `"verdict": "PASS"`.
+- **Exactly one push to the bare remote.** Grepped every dispatched Bash
+  tool_use for `push`: a single match, `rm -f .ralph-goal && echo "deleted
+  .ralph-goal" && git push -u origin ralph/sandbox-greeting 2>&1` (Phase 4
+  step 6's combined push + goal-delete). The bare remote's refs after the
+  run showed only `ralph/sandbox-greeting` (5 commits, matching the local
+  branch) — no `main` ref was ever pushed there.
+- **Honest `gh pr create` failure report.** The tool result for `gh pr
+  create` was `Exit code 1`, `is_error: true`, message "none of the git
+  remotes configured for this repository point to a known GitHub host." —
+  expected, since the remote is a local bare repo, not GitHub. The agent's
+  final message surfaced this plainly under a "One caveat — PR was not
+  opened" heading, explained the cause, and pointed at the prepared PR body
+  file rather than papering over the gap or fabricating a PR URL.
+- **`main` untouched, `.ralph-goal` absent afterward.** The sandbox's local
+  `main` still sat at the two setup commits (`test: add build budget
+  overrides`, `init: sandbox project with 2-task spec`); all build commits
+  landed on `ralph/sandbox-greeting`. `.ralph-goal` did not exist in the
+  sandbox root after the run.
+
+No retry was needed — the run completed cleanly on the first attempt,
+comfortably under both the 6-turn and 1-hour caps the override configured.
+
+**Verdict: PASS**, all checklist items, on the first attempt.
+
+### Cleanup and captures
+
+```bash
+cd / && rm -rf /tmp/ralph-sb-caps "$REMOTE"
+```
+
+Removed after the run (sandbox and the temporary bare remote directory).
+Capture kept: `/tmp/p3-build-caps.jsonl` (159 lines).
