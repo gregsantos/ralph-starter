@@ -155,7 +155,9 @@ wraps, reimplemented directly since the plugin-command layer can't reach
 ## Phase 5 — Terminal stop (cap hit, or all remaining tasks blocked)
 Push the branch once and open a DRAFT PR labeled `ralph:partial` — title
 "ralph: <project> (partial)", body = the latest evidence block + which
-tasks are blocked/pending and why. Delete `.ralph-goal` before finishing
-(so the Stop hook allows the session to stop) and mention its deletion in
-your final message. Partial work is always surfaced, never abandoned.
-Report honestly: this is a partial result, not a completion.
+tasks are blocked/pending and why. The PR title and body must contain no
+attribution lines (no 'Generated with Claude Code', no Co-Authored-By
+trailers). Delete `.ralph-goal` before finishing (so the Stop hook allows
+the session to stop) and mention its deletion in your final message.
+Partial work is always surfaced, never abandoned. Report honestly: this is
+a partial result, not a completion.
