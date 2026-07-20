@@ -235,6 +235,68 @@ condition") must be replaced with "write the goal condition to
 both successful completion and terminal stop. `plugin/hooks/hooks.json`
 (prompt-type Stop hook, per above) ships alongside `build.md`.
 
+## Agent-type registration (Task 7)
+
+**Date:** 2026-07-19
+**Task:** Task 7, `plugin/agents/ralph-builder.md` — smoke-testing the
+Agent-tool dispatch that `build.md` (Task 10) will perform once per spec
+task.
+
+**Registered agent-type string: `ralph:ralph-builder`.** Confirmed
+directly from the `system/init` event's `agents` array on the very first
+headless probe (`--plugin-dir /Users/g8s/Dev/ralph-starter/plugin`, no
+prompt beyond "Say hello and stop.") — no discovery-by-trial-and-error was
+needed:
+
+```json
+"agents": [
+  "claude", "code-simplifier:code-simplifier", "Explore",
+  "feature-dev:code-architect", "feature-dev:code-explorer",
+  "feature-dev:code-reviewer", "general-purpose", "Plan",
+  "pr-review-toolkit:code-reviewer", "pr-review-toolkit:code-simplifier",
+  "pr-review-toolkit:comment-analyzer", "pr-review-toolkit:pr-test-analyzer",
+  "pr-review-toolkit:silent-failure-hunter",
+  "pr-review-toolkit:type-design-analyzer",
+  "ralph:ralph-builder",
+  "statusline-setup"
+]
+```
+
+This matches the `plugin:command` namespacing pattern already observed for
+slash commands (`ralph:goal-spike`, `ralph:status`): plugin name, colon,
+declared `name:` frontmatter field. **Task 10 should dispatch with
+`subagent_type: "ralph:ralph-builder"`**, not the bare `ralph-builder`.
+
+**New finding, not covered by Task 1/2 above: headless Bash dispatch needs
+`--allowedTools` even under `--permission-mode acceptEdits`.** The first
+smoke-test attempt (`--permission-mode acceptEdits`, no `--allowedTools`)
+had the dispatched `ralph:ralph-builder` subagent correctly `Edit` the
+`--shout` implementation into `greeting.sh` (auto-approved — `acceptEdits`
+covers file edits), but every subsequent `Bash` call — `git status`,
+running `./greeting.sh --shout`, `./verify.sh` — came back
+`"This command requires approval"` and was auto-rejected. After 15 stacked
+denials the session self-terminated: `"subtype":"error_during_execution"`,
+`"terminal_reason":"aborted_tools"`, `"stop_reason":"tool_use"`. This
+confirms the brief's anticipated failure mode: `acceptEdits` only
+auto-approves the `Edit`/`Write` tool family, not `Bash`, so a builder
+that must run verification commands (per Rule 7, "verify before
+claiming") cannot do so headlessly under `acceptEdits` alone.
+
+**Fix, confirmed working:** add `--allowedTools "Bash,Read,Write,Edit,Glob,Grep"`
+alongside `--permission-mode acceptEdits`. A clean re-run (fresh sandbox
+via `tests/make_sandbox.sh`, fresh `ralph/sandbox` branch) with this flag
+combination completed end-to-end in one shot: `Edit` → `Bash` verification
+(`./greeting.sh --shout`, `./greeting.sh`, `./verify.sh`, all `PASS`) →
+exactly one commit (`feat(T-001): Add --shout flag`, `greeting.sh` only,
+`02c9bf4`) → well-formed `BUILDER REPORT` (`result: DONE`), with zero
+entries in that run's `permission_denials` array and
+`"terminal_reason":"completed"`. **Task 10's `build.md` (and any future
+orchestrator invocation of `ralph:ralph-builder` or `ralph:ralph-verifier`)
+must pass `--allowedTools "Bash,Read,Write,Edit,Glob,Grep"` (or the
+equivalent settings-based allowlist) alongside `acceptEdits`** — relying on
+`acceptEdits` alone will strand the builder mid-task unable to verify its
+own work.
+
 ## Task 2: Stop-hook live test + evidence discrimination
 
 **Date:** 2026-07-19
