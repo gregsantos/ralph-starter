@@ -616,3 +616,258 @@ not by itself confirm `plugin/hooks/hooks.json`'s plugin-manifest
 nesting is accepted the same way — that should still get its own quick
 live check when Task 10 lands the plugin file, but the underlying hook
 type and contract are now live-verified.
+
+## Task 11: e2e smoke runs
+
+**Date:** 2026-07-19/20. **Task:** Task 11, supervised end-to-end smoke
+runs of the shipped `/ralph:build` orchestrator (`plugin/commands/build.md`)
+against `plugin/hooks/hooks.json`, `plugin/agents/ralph-builder.md`, and
+`plugin/agents/ralph-verifier.md` together for the first time. All runs used
+`tests/make_sandbox.sh` in throwaway directories (`/tmp/ralph-sandbox*`,
+deleted after each scenario) with a throwaway local bare-repo remote
+(`mktemp -d && git init --bare`); nothing ran against ralph-starter itself,
+`--dangerously-skip-permissions` was never used, and every session was
+capped with `--max-turns`. Raw `stream-json` captures: `/tmp/t11-scenario0.jsonl`,
+`/tmp/t11-happy.jsonl`, `/tmp/t11-happy2.jsonl`, `/tmp/t11-fail.jsonl` (not
+committed — local scratch only).
+
+### Scenario 0 — does the plugin-shipped hook fire under `--plugin-dir`?
+
+**Verdict: YES, confirmed live.** This was the open question left by Task 2
+(which only proved the mechanism via the sandbox's own project-level
+`.claude/settings.json`, not `plugin/hooks/hooks.json` loaded through
+`--plugin-dir`). Procedure: fresh sandbox, a `.ralph-goal` with a
+trivially-unmet condition ("`SPIKE0_DONE.txt` exists... produced by actually
+executing a command"), then:
+
+```bash
+claude -p "Say hello and stop." --plugin-dir /Users/g8s/Dev/ralph-starter/plugin \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 3 --permission-mode acceptEdits
+```
+
+The assistant replied "Hello, Greg! ... Ready whenever you are" and tried to
+stop with `.ralph-goal` still unread and its condition unmet. The Stop event
+fired and injected this synthetic `user`-role message verbatim (the
+plugin's own prompt text, word for word):
+
+> "Stop hook feedback:\n[Read the file .ralph-goal if it exists. If it
+> exists and contains a condition, check if the transcript demonstrates
+> that condition is met. Respond with {"ok": true} if the condition is met
+> or the file doesn't exist. If the condition is not met, respond with
+> {"ok": false, "reason": "..."}].]: Condition not met: The .ralph-goal
+> file has not been read. The transcript shows only a greeting message..."
+
+This is unambiguous: the exact `plugin/hooks/hooks.json` prompt text
+appeared in the transcript's Stop-hook feedback, proving the
+plugin-manifest-nested hook loads and fires under `--plugin-dir` in a
+headless run, with no fallback to project-level `.claude/settings.json`
+needed. (The run then hit `--max-turns 3` as expected — the planted
+condition could never be satisfied — `error_max_turns`, `terminal_reason:
+"max_turns"`; this is the correct outcome for a deliberately-unsatisfiable
+probe, not a hook failure.) The probe's `.ralph-goal` was deleted and the
+sandbox removed immediately after. **This settles the open design
+question in Task 10's favor: `build.md` does not need a
+sandbox-`.claude/settings.json` fallback; the plugin-shipped hook carries
+correctly.**
+
+### Scenario A — happy path
+
+**Two runs exist; the second is authoritative.** First attempt
+(`t11-happy.jsonl`, no `--setting-sources project`): completed in 25 turns,
+both tasks built/verified/verifier-PASSed, but `git push` was denied —
+`permission_denials: [{"tool_name":"Bash","tool_input":{"command":"git push
+-u origin ralph/sandbox-greeting"}}]`. Root-caused to the controller's own
+personal `~/.claude/settings.json` (`"ask": ["Bash(git push:*)"]`, backing
+the global CLAUDE.md rule "Ask first — git push") leaking into the headless
+subprocess — the identical contamination class Task 2 already documented for
+the fabrication-refusal test, and worked around the same way there. Since
+Scenario A's checklist specifically requires observing the push+PR flow
+against a fully throwaway local bare remote, the run was redone
+(`t11-happy2.jsonl`) with `--setting-sources project` added (excludes the
+operator's personal settings/CLAUDE.md; the plugin still loads correctly via
+`--plugin-dir`, which is a separate loading path — confirmed by
+`ralph:ralph-builder`/`ralph:ralph-verifier` still present in that run's
+agent registry). **`t11-happy2.jsonl` is the authoritative record for the
+push/PR checklist; `t11-happy.jsonl` is retained only as evidence of the
+contamination finding.** Side effect of the flag: the excluded user settings
+also carry the personal default-model override, so `t11-happy2`/`t11-fail`
+ran on the harness's fallback model (`claude-opus-4-8` per `modelUsage`)
+rather than `t11-happy`'s `claude-fable-5` — noted for completeness; nothing
+in the checklist depends on which model executed the orchestrator.
+
+Invocation (authoritative run):
+```bash
+claude -p "/ralph:build specs/sandbox.json" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 40 --permission-mode acceptEdits \
+  --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep"
+```
+
+Checklist, each verified against the transcript/repo, not just the final
+summary text:
+
+- **Both tasks completed by builder subagents.** Two `Agent` dispatches with
+  `subagent_type: "ralph:ralph-builder"` (`"Build T-001 --shout flag"`,
+  `"Build T-002 --name flag"`). Branch log
+  (`main..ralph/sandbox-greeting`): `chore(T-001): start` →
+  `feat(T-001): Add --shout flag` (`96e50a3`) → `chore(T-001): complete` →
+  `chore(T-002): start` → `feat(T-002): add --name flag` (`c02ff1f`) →
+  `chore(T-002): complete` → `chore: record verifier PASS`. Both
+  `BUILDER REPORT` blocks read `result: DONE` with real verification lines
+  per criterion (e.g. `PASS \`./greeting.sh --name Sam\` → "hello Sam"`).
+- **Evidence block every turn; `--full` only on the completion claim.** Four
+  `ralph-evidence.sh` invocations found by structural `tool_use` parsing:
+  preflight (Phase 1 step 5, no flag), turn-1 end (T-001 only done, no
+  flag), turn-2 end (`--full` — both tasks now pass, correctly a completion
+  claim), Phase 4 step 4 post-verifier (`--full`). `RALPH TURN 1/4` and
+  `RALPH TURN 2/4` both printed (`TURN_CAP` correctly computed as 2×2=4).
+- **Verifier dispatched; PASS written to spec.** One `Agent` dispatch,
+  `subagent_type: "ralph:ralph-verifier"`. `VERIFIER REPORT`: `verdict: PASS`,
+  `checked: 2 tasks, 3 acceptance criteria`, `findings: none`,
+  `commands: ./verify.sh -> 0`. Spec's `.verifier` block after the run:
+  `{"verdict":"PASS","date":"2026-07-19","summary":"All 2 tasks pass;
+  greeting.sh (bash only) supports --shout, --name, and their composition;
+  verify.sh exits 0; no unexpected files."}`.
+- **Exactly one push, at PR time.** Structural `tool_use` parse (not
+  substring grep) for every `Bash` command matching `push`: exactly one
+  call, `git push -u origin ralph/sandbox-greeting`. Remote refs: empty
+  before the run (`git show-ref` on the fresh bare repo returned nothing);
+  after, exactly one ref, `refs/heads/ralph/sandbox-greeting`.
+  `gh pr create --title "ralph: Sandbox greeting" --body "..."` was
+  attempted and its `tool_result` was `"none of the git remotes configured
+  for this repository point to a known GitHub host... PR_EXIT=1"` — the
+  final message reports this honestly ("I could not open a GitHub PR...
+  an environment limitation") rather than claiming a PR exists.
+- **Zero writes on `main`.** `git log main --oneline` before and after:
+  unchanged (one commit, the sandbox-generator's `init:` commit). Structural
+  check of every top-level (non-subagent, `parent_tool_use_id == null`)
+  `Write`/`Edit` tool call by the orchestrator: only `.ralph-goal` and
+  `specs/sandbox.json` — never `greeting.sh` (the two `Write` calls to
+  `greeting.sh` both nest under the builder `Agent` dispatch's
+  `parent_tool_use_id`, confirming the orchestrator itself never touched
+  source, per `build.md`'s Phase-1 preamble).
+- **`.ralph-goal` created, surfaced, deleted.** Written once (top-level
+  `Write`), immediately followed by a top-level `Read` of the same path,
+  whose `tool_result` echoes the condition text verbatim into the
+  transcript (satisfying Phase 2 step 2's requirement, and directly
+  addressing Task 2's "first-call access gap" finding by front-loading the
+  content). Deleted before the session's one natural Stop attempt — file
+  absent afterward (`ls .ralph-goal` → no such file).
+
+**Hook firings: zero blocking firings this run**, which is the expected
+happy-path behavior, not a gap: `build.md`'s own Phase 3/4 instructions keep
+the assistant issuing tool calls turn after turn without ever trying to end
+the turn early, so no Stop event occurs until the very end — by which point
+`.ralph-goal` had already been deleted (terminal state reached), so the
+single Stop event that did fire found no file and allowed the stop with
+nothing to block. Contrast with Scenario 0, which deliberately forced an
+early Stop attempt while the file was still present and unmet, and did
+observe a block. Together the two scenarios cover both branches of the
+hook's behavior. Duration: 258.5s, 33 turns, `terminal_reason: "completed"`.
+
+### Scenario B — failure path
+
+Regenerated sandbox + remote; edited `specs/sandbox.json` to make T-002's
+sole acceptance criterion contradict a new hard constraint (`"never change
+the 'hello' greeting semantics — the greeting word itself must always
+remain 'hello'"`) by requiring `./greeting.sh --name Sam` to output
+`'goodbye Sam'` instead of `'hello Sam'` — committed as a `test:` setup
+commit before the build ran (git status clean per Phase 1 step 2). Same
+invocation as Scenario A (with `--setting-sources project`).
+
+Checklist:
+
+- **T-001 completes; T-002 fails twice → `status: blocked`, `attempts: 2`,
+  reason in notes.** Confirmed directly in the final `specs/sandbox.json`:
+  T-001 `"status":"complete","passes":true`; T-002
+  `"status":"blocked","passes":false,"attempts":2`, with notes explaining
+  the contradiction and pointing at a preserved stash. Both `T-002`
+  `BUILDER REPORT`s read `result: FAILED` — two *independent* fresh-context
+  builders each implemented the constraint-compliant version (`hello Sam`)
+  and explicitly refused to fake `goodbye Sam` or weaken `verify.sh`:
+  > "Acceptance criterion ('goodbye Sam') contradicts both the task
+  > description... and the hard spec constraint that the greeting word
+  > must always remain 'hello'. Satisfying it would require changing the
+  > greeting word... which is forbidden."
+
+  Branch log: `chore(T-002): start` → `chore(T-002): attempt 1 failed
+  (contradictory acceptance criterion)` → `chore(T-002): blocked after 2
+  attempts (unsatisfiable acceptance criterion)` — no `feat(T-002)` commit
+  exists, correctly. One incidental nice behavior: the orchestrator applied
+  Phase 3 step 3's crash-recovery stash convention (`ralph-crash-T-002`)
+  to preserve the second builder's correct-but-unused implementation even
+  though this wasn't a crash, just a FAILED result with a dirty tree —
+  reasonable reuse of the mechanism, worth codifying explicitly in a future
+  `build.md` revision but not required for this scenario to pass.
+- **Terminal stop → Phase 5, draft/partial PR path attempted with the
+  evidence table.** `gh pr create --draft --title "ralph: Sandbox greeting
+  (partial)" --label "ralph:partial" --body "..."` was attempted (structural
+  `tool_use` check), body containing the evidence block
+  (`tasks: 2 total | 1 passed | 0 in_progress | 0 pending | 1 blocked`) and
+  the task-status table, exactly matching Phase 5's spec. It failed for the
+  same environment reason as Scenario A (`"none of the git remotes...point
+  to a known GitHub host"`) and was reported honestly, not silently
+  swallowed. Push: exactly one `git push` call (structural), remote gained
+  exactly one ref (`refs/heads/ralph/sandbox-greeting`). `main` unchanged.
+  `.ralph-goal` deleted (confirmed absent afterward).
+- **No completion claim anywhere.** `grep -c "<ralph>COMPLETE</ralph>"` on
+  the full transcript → `0`. Final message opens "Build terminated at
+  **Phase 5 (partial)**" and closes "This is a **partial result, not a
+  completion.**"
+- **No verifier dispatch**, correctly — Phase 4 is only entered on "the
+  first turn where all tasks pass," which never happened here (confirmed:
+  only two `ralph:ralph-builder` dispatches for T-002 plus the one for
+  T-001, zero `ralph:ralph-verifier` dispatches).
+
+**Cap-routing regression evidence, observed naturally (not contrived).**
+The brief flagged that forcing a genuine `TURN_CAP` hit in a 2-task spec
+(`TURN_CAP = 4`) is structurally awkward alongside natural task-exhaustion,
+and asked to capture it only if it happened organically. It did: at
+`RALPH TURN 4/4`, the transcript shows the orchestrator evaluating *both*
+terminal conditions explicitly, in the order Phase 3 step 2 requires (cap
+check before task selection):
+
+> "Cap check: k=4 ≥ TURN_CAP=4 — this is a terminal condition. Also, task
+> selection confirms it: T-001 passes, T-002 is blocked → no eligible task
+> remains and not all tasks pass. Routing to **Phase 5 — terminal stop**."
+
+Both routes converge on Phase 5 here, so this run doesn't isolate the cap
+clause from the task-exhaustion clause in Phase 5's shared destination, but
+it does confirm the cap check itself fires, is evaluated first as
+instructed, and correctly suppresses any further builder dispatch once hit
+— which is what the earlier cap-routing fix needed to demonstrate. Duration:
+579.6s (the longest of the three builder-dispatching runs — two builder
+attempts at T-002 plus the retry), 32 turns, `terminal_reason: "completed"`.
+
+### Turn-count summary
+
+| Scenario | Turns | Duration | `terminal_reason` | Note |
+|---|---|---|---|---|
+| 0 (hook probe) | 3 (max hit) | 22.5s | `max_turns` | condition deliberately unsatisfiable |
+| A, attempt 1 | 25 | 406.5s | `completed` | push blocked by inherited personal settings |
+| A, attempt 2 (authoritative) | 33 | 258.5s | `completed` | full Phase 4 reached, PR attempt honest |
+| B | 32 | 579.6s | `completed` | Phase 5, cap+exhaustion both observed |
+
+### Prompt adjustments
+
+**None required to pass either scenario** — no edits were made to
+`build.md`, `ralph-builder.md`, `ralph-verifier.md`, or `hooks.json`; both
+scenarios passed their full checklists on the invocations above (Scenario A
+needed a flag change, `--setting-sources project`, not a prompt change).
+
+One repeatable, non-blocking finding worth flagging for whoever picks up
+Task 13 (README/config docs): both `gh pr create` bodies (Scenario A and
+B) included a trailing `"🤖 Generated with [Claude Code](https://claude.com/claude-code)"`
+line. `ralph-builder.md`'s commit rule explicitly says "No attribution
+lines," but `build.md`'s Phase 4 step 6 / Phase 5 PR-body spec has no
+equivalent instruction — the line only doesn't appear for this controller's
+own commits because of the controller's *personal* global CLAUDE.md
+convention, which `--setting-sources project` (needed for the push/PR
+checklist itself) excludes. Since `build.md` is meant to run unmodified for
+any host project/user, not just this one, its own PR-body spec should
+probably state "no attribution lines" explicitly rather than depend on a
+CLAUDE.md convention that may not be present. Not fixed here since it didn't
+block either scenario and is out of Task 11's mandate to patch
+unilaterally; flagged for a follow-up task instead.
