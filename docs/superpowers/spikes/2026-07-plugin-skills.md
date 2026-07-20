@@ -499,3 +499,115 @@ made in response.
 - `git status` in the ralph-starter repo before committing: only
   `plugin/commands/build.md` and this spike doc's edit are staged; no
   sandbox or capture files leaked into the working tree.
+
+## Task 6 smoke runs
+
+**Date:** 2026-07-20
+**Task:** Task 6 of Plan 2 (see `.superpowers/sdd/task-6-brief.md`) —
+`plugin/commands/dev.md`, the full spec-to-build pipeline command that
+composes `/ralph:spec` and `/ralph:build` by Reading them from
+`${CLAUDE_PLUGIN_ROOT}` (the mechanism this repeats was spike-proven at
+the top of this document and re-proven live by Tasks 4/5), plus two
+supervised headless smoke runs (D1 full pipeline happy path, D2
+`--review` pause after Phase A).
+
+Both runs passed every checklist item on the first attempt. No wording
+adjustments to `dev.md` were needed, and no rerun of either test was
+required — D1 finished at `num_turns: 36` against its `--max-turns 40`
+budget, with `stop_reason: "end_turn"` and `terminal_reason: "completed"`
+(not a cap-out), so the "known from Task 5" outer-`--max-turns` risk this
+task's instructions flagged did not materialize here.
+
+### Invocations
+
+```bash
+# D1 — full pipeline, happy path
+bash tests/make_sandbox.sh /tmp/ralph-sb-dev && cd /tmp/ralph-sb-dev
+REMOTE=$(mktemp -d) && git init -q --bare "$REMOTE" && git remote add origin "$REMOTE"
+claude -p "/ralph:dev Add a --version flag to greeting.sh that prints 'greeting 1.0.0' and exits 0; extend verify.sh to check it; the default hello output must not change" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 40 --permission-mode acceptEdits \
+  --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 20 > /tmp/p2-dev-happy.jsonl 2>&1
+# exit 0, num_turns 36, terminal_reason "completed"
+
+# D2 — --review pauses after Phase A
+bash tests/make_sandbox.sh /tmp/ralph-sb-devrev && cd /tmp/ralph-sb-devrev
+claude -p "/ralph:dev --review Add a --version flag to greeting.sh that prints 'greeting 1.0.0' and exits 0" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 15 --permission-mode acceptEdits \
+  --allowedTools "Bash,Read,Write,Edit,Glob,Grep" \
+  --max-budget-usd 5 > /tmp/p2-dev-review.jsonl 2>&1
+# exit 0, num_turns 9, terminal_reason "completed"
+```
+
+### D1 — full pipeline, happy path
+
+Produced `specs/greeting-version-flag.json` ("Greeting version flag",
+1 task file with 2 tasks: T-001 add `--version`, T-002 extend `verify.sh`),
+built it, verified it, rebased, and pushed to the sandbox's local bare
+remote.
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Transcript shows Read tool_use of BOTH `spec.md` and `build.md` (and the skill via spec.md's procedure) | Structural scan of `tool_use` blocks: `Read` of `/Users/g8s/Dev/ralph-starter/plugin/commands/spec.md`, then `/Users/g8s/Dev/ralph-starter/plugin/commands/build.md`, then `/Users/g8s/Dev/ralph-starter/plugin/skills/writing-ralph-specs/SKILL.md`, in that order | PASS |
+| New spec validated by the evidence script (exit 0 tool_result); `verificationCommands == ["./verify.sh"]` | tool_result for the first `ralph-evidence.sh specs/greeting-version-flag.json` call: `=== RALPH EVIDENCE ===` / `tasks: 2 total \| 0 passed \| 0 in_progress \| 2 pending \| 0 blocked` / `EVIDENCE_EXIT=0`; disk state `jq '.context.verificationCommands' specs/greeting-version-flag.json` → `["./verify.sh"]` | PASS |
+| Branch `ralph/<slug>` created; FIRST commit `chore: add spec for <project>` | `git log main..ralph/greeting-version-flag --oneline --reverse` (oldest first): `c245d65 chore: add spec for Greeting version flag`, then the T-001/T-002 start/complete commits, then `de3a7d2 chore: record verifier PASS` | PASS |
+| >=1 `ralph:ralph-builder` dispatch; `ralph:ralph-verifier` dispatched; verifier PASS written into the spec | Structural scan of `Task`/`Agent` tool_use: two `subagent_type:"ralph:ralph-builder"` dispatches (T-001, T-002) and one `subagent_type:"ralph:ralph-verifier"` dispatch; disk state `jq .verifier specs/greeting-version-flag.json` → `{"verdict":"PASS","date":"2026-07-20","summary":"--version flag prints 'greeting 1.0.0'/exit 0, default 'hello' intact, verify.sh assertions are real and pass."}` | PASS |
+| Exactly one `git push`; `gh pr create` attempted and its local-remote failure reported honestly; `main` unchanged; `.ralph-goal` deleted (absent on disk) | Structural scan of Bash commands: exactly one command containing `git push` (`git push -u origin ralph/greeting-version-flag`); one `gh pr create --base main --head ralph/greeting-version-flag ...` whose tool_result read `none of the git remotes configured for this repository point to a known GitHub host`; final report: "One deviation to flag ... could not be opened ... environment constraint, not a build failure ... Never auto-merged"; `git log main --oneline` → still 1 line (init commit); `ls .ralph-goal` → No such file or directory | PASS |
+| No attribution lines in the attempted PR title/body or any commit message | `git log main..ralph/greeting-version-flag --format="%B"` grepped for `generated with\|co-authored-by\|claude code` → no matches; the constructed `gh pr create` command's `PR_BODY` heredoc (captured in the transcript) contains only a Summary/Evidence/Tasks/Verifier structure, no attribution trailer | PASS |
+
+Bonus structural checks: remote branch tip matches local
+(`git ls-remote origin` → `de3a7d2...refs/heads/ralph/greeting-version-flag`,
+identical to `git log ralph/greeting-version-flag -1 --format=%H`);
+`git status --porcelain` clean at the end.
+
+### D2 — `--review` pauses after Phase A
+
+| Checklist item | Evidence | Result |
+|---|---|---|
+| Session ends after Phase A (`terminal_reason: "completed"`), final message presents the spec and asks for approval | Result event: `"terminal_reason":"completed"`, `"stop_reason":"end_turn"`; result text ends "## Gate (`--review`) ... Do you approve this spec to proceed to Phase B (build)? Reply **approve** to continue... this session is non-interactive. If no approval arrives, the pipeline correctly ends here" | PASS |
+| Spec file exists, validated, untracked | `git status --porcelain` → `?? specs/greeting-version-flag.json`; tool_result for `ralph-evidence.sh` → `EVIDENCE_EXIT` path present, `tasks: 1 total \| 0 passed \| 0 in_progress \| 1 pending \| 0 blocked`, `check-ignore EXIT=1` | PASS |
+| NO branch beyond main | `git branch -a` → `* main` only | PASS |
+| NO Agent dispatches | Structural scan: zero `tool_use` blocks with `name` in `{Task, Agent}` | PASS |
+| NO `.ralph-goal` ever created | `ls -la .ralph-goal` → No such file or directory; no Bash command in the transcript references `.ralph-goal` | PASS |
+| Zero commits beyond init | `git log --oneline` → 1 line (`881110c init: sandbox project with 2-task spec`) | PASS |
+
+Note: the transcript shows `Read` of both `spec.md` and `build.md` early
+in the session (turns 8 and 10, before any writing), the same as D1 —
+the orchestrator reads both command files up front to understand the
+whole pipeline per `dev.md`'s framing ("you compose them by reading the
+command files below"), but only *executes* `spec.md`'s procedure in this
+run. Reading `build.md` without dispatching anything, branching, or
+committing does not violate any D2 checklist item, and Phase B's
+substance (branch creation, builder/verifier dispatch, commits) never
+ran.
+
+### Skipped: interactive `--review` approval check
+
+Per this task's controller decision, the brief's optional check —
+running `/ralph:dev --review …` in a supervised **interactive** session
+and approving when asked — was skipped. Headless D2 already proves the
+load-bearing mechanics (the gate stops the session cleanly after Phase A,
+with nothing beyond it executed); the interactive approve-and-continue
+path exercises no new platform fact and was left for a human-supervised
+session outside this task's scope.
+
+### Prompt adjustments
+
+None. `dev.md` as written in Step 1 of the Task 6 brief produced a
+passing result on the first run of both smoke tests.
+
+### Cleanup
+
+- `cd / && rm -rf /tmp/ralph-sb-dev /tmp/ralph-sb-devrev "$REMOTE"` run
+  after D2, per the brief.
+- `/tmp/p2-dev-happy.jsonl` and `/tmp/p2-dev-review.jsonl` (raw stream
+  captures) were **kept** — per this task's instructions — in case the
+  final whole-branch review consults them; they are gitignored `/tmp`
+  paths, not part of the repo.
+- `git status` in the ralph-starter repo before committing: only
+  `plugin/commands/dev.md` and this spike doc's edit are staged; no
+  sandbox or capture files leaked into the working tree.
