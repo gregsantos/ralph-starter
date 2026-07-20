@@ -141,12 +141,16 @@ wraps, reimplemented directly since the plugin-command layer can't reach
    (its condition can never be satisfied from here, and deleting it is
    what lets the Stop hook allow the session to end), push and open a
    draft PR titled "ralph: <project> (conflicts)" describing them. Never
-   auto-resolve. Mention the deletion in your final message.
+   auto-resolve. The PR title and body must contain no attribution lines
+   (no 'Generated with Claude Code', no Co-Authored-By trailers). Mention
+   the deletion in your final message.
 6. Clean rebase: push ONCE (`git push -u origin <branch>`), then
    `gh pr create` — title "ralph: <project>", body = evidence block +
-   task table + verifier summary. NEVER merge. Delete `.ralph-goal` now
-   that the build has reached a successful terminal state, and mention its
-   deletion in your final message. Report the PR URL.
+   task table + verifier summary. The PR title and body must contain no
+   attribution lines (no 'Generated with Claude Code', no Co-Authored-By
+   trailers). NEVER merge. Delete `.ralph-goal` now that the build has
+   reached a successful terminal state, and mention its deletion in your
+   final message. Report the PR URL.
 
 ## Phase 5 — Terminal stop (cap hit, or all remaining tasks blocked)
 Push the branch once and open a DRAFT PR labeled `ralph:partial` — title

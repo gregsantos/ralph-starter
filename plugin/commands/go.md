@@ -17,7 +17,9 @@ Procedure — deviations are failures:
    run them all and show real output. Otherwise run the repo's documented
    test/lint commands. Failures = fix and re-verify, don't report success.
 4. Commit `feat: <summary>` (or `fix:`/`chore:` as appropriate). No
-   attribution lines. DO NOT push.
+   attribution lines in the commit message. If `--pr` will be used, the PR
+   title and body must also contain no attribution lines (no 'Generated
+   with Claude Code', no Co-Authored-By trailers). DO NOT push.
 5. Only if `--pr` was passed: push the branch once (`git push -u origin
    <branch>`) and `gh pr create` with a body summarizing what/why/how
    verified. Never merge.
