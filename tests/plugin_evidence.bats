@@ -1,0 +1,81 @@
+#!/usr/bin/env bats
+
+# Tests for plugin/scripts/ralph-evidence.sh (status mode)
+
+EVIDENCE="$BATS_TEST_DIRNAME/../plugin/scripts/ralph-evidence.sh"
+
+make_spec() {
+    # make_spec <path> <tasks-json-array> [verifier-json]
+    local path="$1" tasks="$2" verifier="${3:-null}"
+    jq -n --argjson tasks "$tasks" --argjson verifier "$verifier" '{
+        project: "fixture",
+        context: { verificationCommands: ["true"] },
+        tasks: $tasks
+    } + (if $verifier != null then {verifier: $verifier} else {} end)' > "$path"
+}
+
+setup() {
+    SPEC="$BATS_TEST_TMPDIR/spec.json"
+    make_spec "$SPEC" '[
+        {"id":"T-001","title":"First","status":"complete","passes":true},
+        {"id":"T-002","title":"Second","status":"in_progress","passes":false},
+        {"id":"T-003","title":"Third","status":"pending","passes":false},
+        {"id":"T-004","title":"Fourth","status":"blocked","passes":false}
+    ]'
+}
+
+@test "evidence: prints frozen header and footer" {
+    run "$EVIDENCE" "$SPEC"
+    [[ "$status" -eq 0 ]]
+    [[ "${lines[0]}" == "=== RALPH EVIDENCE ===" ]]
+    # last-line check without negative indices (macOS default bash is 3.2)
+    last_line=$(echo "$output" | tail -n 1)
+    [[ "$last_line" == "=== END RALPH EVIDENCE ===" ]]
+}
+
+@test "evidence: counts by state" {
+    run "$EVIDENCE" "$SPEC"
+    [[ "$output" == *"tasks: 4 total | 1 passed | 1 in_progress | 1 pending | 1 blocked"* ]]
+}
+
+@test "evidence: one line per task when total <= 12" {
+    run "$EVIDENCE" "$SPEC"
+    [[ "$output" == *"T-001 [passed] First"* ]]
+    [[ "$output" == *"T-002 [in_progress] Second"* ]]
+    [[ "$output" == *"T-004 [blocked] Fourth"* ]]
+}
+
+@test "evidence: omits passed task lines when total > 12" {
+    BIG="$BATS_TEST_TMPDIR/big.json"
+    tasks=$(jq -n '[range(0;13) | {id: ("T-" + (. | tostring)), title: "t", status: (if . < 11 then "complete" else "pending" end), passes: (. < 11)}]')
+    make_spec "$BIG" "$tasks"
+    run "$EVIDENCE" "$BIG"
+    [[ "$output" == *"passed tasks omitted: 11"* ]]
+    [[ "$output" != *"T-3 [passed]"* ]]
+    [[ "$output" == *"T-12 [pending]"* ]]
+}
+
+@test "evidence: verifier PENDING when absent, PASS when set" {
+    run "$EVIDENCE" "$SPEC"
+    [[ "$output" == *"verifier: PENDING"* ]]
+    make_spec "$SPEC" '[{"id":"T-001","title":"First","status":"complete","passes":true}]' '{"verdict":"PASS"}'
+    run "$EVIDENCE" "$SPEC"
+    [[ "$output" == *"verifier: PASS"* ]]
+}
+
+@test "evidence: exit 2 on missing or invalid spec" {
+    run "$EVIDENCE" "$BATS_TEST_TMPDIR/nope.json"
+    [[ "$status" -eq 2 ]]
+    echo "not json" > "$BATS_TEST_TMPDIR/bad.json"
+    run "$EVIDENCE" "$BATS_TEST_TMPDIR/bad.json"
+    [[ "$status" -eq 2 ]]
+}
+
+@test "evidence: exit 3 when verificationCommands missing or empty" {
+    jq '.context.verificationCommands = []' "$SPEC" > "$BATS_TEST_TMPDIR/empty.json"
+    run "$EVIDENCE" "$BATS_TEST_TMPDIR/empty.json"
+    [[ "$status" -eq 3 ]]
+    jq 'del(.context)' "$SPEC" > "$BATS_TEST_TMPDIR/nocontext.json"
+    run "$EVIDENCE" "$BATS_TEST_TMPDIR/nocontext.json"
+    [[ "$status" -eq 3 ]]
+}
