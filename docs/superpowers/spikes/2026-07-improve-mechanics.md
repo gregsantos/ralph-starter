@@ -455,40 +455,136 @@ Checklist, evidence-first:
 Command run exactly as briefed (`--max-turns 15 --max-budget-usd 5`, Bash
 timeout 300000), same sandbox, findings.json already at 7 from R1.
 
-**Attempt 1** (`/tmp/p3-review-focus.jsonl`, 60 lines): the run wrote and
-validated `findings.json` correctly (`jq -e ...` → `true` inside the
-transcript, scope updated to `target: "greeting.sh"`, `focus: ["bug"]`) and
-then died mid-response — `result.is_error: true`,
+**Attempt 1** (`/tmp/p3-review-focus.jsonl`, 60 lines): the run DID Write
+`review-output/findings.json` (tool_use at line 68 of that capture, content
+verified: `scope` updated to `target: "greeting.sh"`, `focus: ["bug"]`,
+still 7 findings, F-004..F-007 each `"addressed": null`) and ran the
+required `jq -e '.summary.total == (.findings | length)'` validation
+immediately after, which printed `true` in the transcript — then died
+mid-response, immediately after that validation and before step 6
+(`REVIEW_REPORT.md` regeneration) ran: `result.is_error: true`,
 `result: "API Error: Connection closed mid-response..."`,
-`terminal_reason: "api_error"`, `num_turns: 8` — before step 6
-(`REVIEW_REPORT.md` regeneration) ran; the report file on disk still showed
-R1's stale scope line. This is a transport-layer failure (`server_error` on
-the trailing assistant event), not a review.md logic defect — the JSON the
-run had already written was internally consistent (dedup: 0 new findings,
-since the bug subagent found nothing not already in F-001/F-004/F-007) and
-the artifact file was left in a valid, unmodified-by-the-crash state.
+`terminal_reason: "api_error"`, `num_turns: 8`. `REVIEW_REPORT.md` on disk
+still showed R1's stale scope line (never reached). This is a
+transport-layer failure (`server_error` on the trailing assistant event),
+not a review.md logic defect. Critically, the write did NOT corrupt or
+duplicate anything: byte-diffing the written `findings` array against both
+R1's prior output and the eventual final state (attempt 3, below) shows all
+three identical — same 7 findings, same ids/categories/severities/titles,
+same `addressed: null` on F-004..F-007. The bug subagent had (correctly)
+found zero new findings, so this write's *content* was a no-op even though
+the *write itself* did execute — "no corruption" is accurate, "no write"
+is not.
 
 **Attempt 2** (`/tmp/p3-review-focus-retry.jsonl`, 32 lines): same
 transport error, this time before even dispatching the Agent call (transcript
 ends right after "Dispatching the single-category (bug) read-only
-subagent."). `findings.json`/`REVIEW_REPORT.md` mtimes confirmed unchanged
-by this attempt — no partial or corrupted writes; the failure mode is
-safely inert.
+subagent."). Unlike attempt 1, this attempt made no writes at all —
+`findings.json`/`REVIEW_REPORT.md` mtimes confirmed unchanged by this
+attempt. Both attempts' failure mode is safely inert (attempt 1 because the
+write was content-idempotent, attempt 2 because it never got far enough to
+write).
 
 **Attempt 3** (`/tmp/p3-review-focus-retry2.jsonl`, 83 lines): succeeded,
-`exit 0`. The single capture contains two `type: "result"` events sharing
-one `session_id` (`c8dcc4ea-...`) — a mid-stream connection drop followed by
-an automatic same-session resume (visible as a second `system init` +
-continued turns), landing on a real final result:
-`"Review complete. ... New findings this run: 0."`, `is_error: false`,
-`stop_reason: "end_turn"`. Two consecutive infra-level connection drops
-followed by a clean auto-recovered third attempt — recorded as an
-operational observation for future smoke runs (retry once or twice on
-`terminal_reason: "api_error"` before treating a run as failed), not a
-review.md defect.
+`exit 0`, and is the run whose output is credited as R2's pass. Investigated
+from the capture only (no re-run) because it surfaced something the brief
+specifically asked to be scrutinized: the single capture contains two
+`type: "result"` events and, unusually, two `type: "system", subtype: "init"`
+events, both sharing one `session_id` (`c8dcc4ea-15bc-4fe5-9649-afc0afd3b6d8`).
+
+*Field-by-field diff of the two `init` events* (full JSON at capture lines 1
+and 51): **identical** — `session_id`, `cwd`
+(`/private/tmp/ralph-sb-review`), `model` (`claude-opus-4-8`),
+`permissionMode` (`acceptEdits`), `apiKeySource`, `claude_code_version`
+(`2.1.215`), `plugins` (`ralph` at `/Users/g8s/Dev/ralph-starter/plugin`,
+v0.2.0 — still loaded), and `slash_commands` (still includes `ralph:review`
+and the rest of the plugin's commands). **Different**: `tools` — the first
+init lists the standard 32-tool baseline (`Task, Bash, ..., Read, ...,
+Write`, no `mcp__*` entries, no `ListMcpResourcesTool` /
+`ReadMcpResourceDirTool` / `ReadMcpResourceTool`); the second init's `tools`
+array adds those three MCP-resource tools plus ~90 `mcp__claude_ai_*` tool
+names (Ashby, Gmail, Google Calendar, Google Drive, Granola, Notion, Slack,
+Forgd Ashby Scorecard). **`mcp_servers`** — first init: `[]`; second init:
+29 entries with real connection state (`"claude.ai Slack": "connected"`,
+`"claude.ai Gmail": "connected"`, `"claude.ai Notion": "connected"`,
+`"claude.ai Google Drive": "connected"`, `"claude.ai Granola": "connected"`,
+`"claude.ai Ashby": "connected"`, `"claude.ai Forgd Ashby Scorecard":
+"connected"`, plus ~20 `"needs-auth"` entries for Asana/Atlassian/Box/
+Canva/Figma/HubSpot/Intercom/Linear/monday.com/etc.) — this is not a generic
+or sandboxed roster; it is the exact set of third-party integrations
+connected to the operator's real, ambient Claude account (the same names
+visible among this session's own deferred MCP tools), which
+`--setting-sources project` exists specifically to keep out of a headless
+sandbox run.
+
+*What the second leg actually was*, established from event correlation and
+timestamps: at capture line 22 the outer orchestrator dispatched the bug
+subagent via `Agent`, and the tool result (line 25) shows
+`"isAsync": true, "status": "async_launched"` — the SDK ran it as a
+background task (`task_id a3dda28ec846fff6d`), not nested synchronously
+in-message (this async-dispatch pattern is normal and appeared in R1 and R3
+too — both show `isAsync` 5 times each, once per parallel category
+subagent, with zero re-init anomaly in either). Two `system, subtype:
+api_retry` events appear in this capture only (lines 15 and 54;
+`attempt: 1, max_retries: 10, error_status: null, error: "unknown"`) — soft,
+auto-retried transient failures, structurally distinct from attempts 1/2's
+hard `terminal_reason: "api_error"` fatal drops. R1 and R3, which had zero
+`api_retry` events, also had exactly one `init` each; only this run — the
+one with `api_retry` events — shows the second `init`. The second `init`
+(line 51) lands immediately after the `task_notification` (line 50)
+reporting the bug subagent's completion, sharing the same outer
+`session_id` and carrying no `parent_tool_use_id`/`task_id` tag of its own
+(unlike the subagent's own nested transcript at lines 27-28+, which is
+correctly tagged `parent_tool_use_id: toolu_01HKfZzs3a5UY77yk934KCJm`
+throughout and shows no init duplication). This is the OUTER orchestrator
+session re-initializing itself upon resuming from the async task's
+notification — not the subagent's own init, and not a hard crash-and-restart
+like attempts 1/2 (this run's overall `result.is_error` is `false` throughout).
+
+*Which leg produced the final artifacts*: `findings.json` was never
+re-Written this run (0 new findings; the orchestrator only re-ran `jq`
+validation against it, at capture lines 62 and 79, both after line 51) —
+the only mutating write, `REVIEW_REPORT.md` (`Write` tool_use at line 68),
+also ran after line 51. So the leg that actually produced this run's
+user-visible output ran entirely under the second, ambient-roster `init`,
+not the original isolated one.
+
+*Mitigating fact, also load-bearing*: across this entire capture, every
+`tool_use` invoked is one of `Agent, Bash, Edit, Read, ToolSearch, Write` —
+grepping for any invoked tool name matching `mcp__` returns zero hits. The
+session became *able* to see and call dozens of live third-party
+integrations it should never have had visibility into, but nothing in this
+run actually called one.
+
+**PLATFORM FINDING — follow-up required.** A headless `claude -p` run under
+`--setting-sources project --plugin-dir <path>` is not guaranteed to keep
+its tool/MCP-server isolation for the full process lifetime: when a
+subagent dispatched via the async `Agent`-tool path (`isAsync: true`)
+completes and its `task_notification` triggers the outer session to resume
+(observed here alongside soft `api_retry` events — not the hard
+`terminal_reason: "api_error"` failures of attempts 1/2), the resumed leg's
+second `init` event advertised the operator's full ambient tool/MCP roster
+instead of the empty, isolated one the original invocation's flags produced
+— while `plugins`, `slash_commands`, `permissionMode`, `model`, and `cwd`
+all remained correctly pinned. Session identity (`session_id`) and the
+review command's own context survived intact; only the tool-surface
+isolation leaked. No `mcp__*` tool was actually invoked in this capture, so
+this run caused no observable side effect beyond the roster leak itself —
+but the capability was live, and a less carefully-scoped subagent prompt
+(or a less benign findings-writing step) could have reached it. This
+warrants a dedicated follow-up probe before this pattern is treated as
+covered by the worktree/parallel-dispatch findings above (probes (a)/(b)):
+specifically, whether async-Agent-dispatch + `task_notification` resume
+after any soft retry reliably re-derives the outer session's tool
+discovery from ambient settings rather than the original `--setting-sources
+project` invocation flags, and whether this also holds for `mcp_servers`
+that grant write/action capabilities rather than the read-oriented ones
+listed here.
 
 Checklist, evidence from the successful attempt 3 (state is cumulative —
-attempts 1-2 never wrote, so this is the only R2-attributable write):
+attempt 1's write was content-identical to what was already there, attempt
+2 made no writes, so attempt 3 is the only run in this sequence that changed
+what's actually credited as R2's output — the `REVIEW_REPORT.md` rewrite):
 
 - **Exactly ONE Agent dispatch (bug only).** `jq` count = 1;
   `input.description: "Bug review of greeting.sh"`.
@@ -558,10 +654,13 @@ Checklist, evidence-first:
 written in Task 4's brief — including the dedup nuance the brief flagged as
 the likeliest failure mode (F-001's unknown-flag issue being rediscovered
 and needing to merge rather than duplicate), which held on the first R1
-attempt. The two failures observed were infra-layer (`terminal_reason:
-"api_error"`, "Connection closed mid-response") during R2, unrelated to
-review.md's content, and resolved by retrying rather than editing the
-command.
+attempt. The two hard failures observed were infra-layer (`terminal_reason:
+"api_error"`, "Connection closed mid-response") during R2's attempts 1-2,
+unrelated to review.md's content, and resolved by retrying rather than
+editing the command. Separately, R2's successful attempt 3 surfaced a
+platform-level tool-isolation finding (see the "PLATFORM FINDING" callout
+in R2 above) — not a review.md defect, but a follow-up item for the
+headless-isolation story this plan otherwise relies on.
 
 ### Cleanup and captures
 
