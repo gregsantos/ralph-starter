@@ -38,7 +38,7 @@ the repo's documented test commands — if neither exists the command
 aborts rather than emit an unbuildable spec. The spec is left
 uncommitted for human review; `/ralph:build`'s preflight commits a fresh
 spec as the first commit on its `ralph/*` work branch (and refuses
-gitignored specs — see Artifact tracking above).
+gitignored specs — see Artifact tracking below).
 
 `/ralph:dev` chains the two: spec generation, an optional `--review`
 pause for human approval, then the full build engine. Headless example
@@ -60,9 +60,9 @@ The spec-writing guidance ships as a plugin skill
 
 ## Config
 
-Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — most are reserved for the review/improve/dev commands landing in Plans 2–3 and aren't read by anything yet:
+Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — most are reserved for the review/improve commands landing in Plan 3 and aren't read by anything yet:
 
-- `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). **Not** read by `/ralph:build` — that command sources its own verification commands from the spec's `context.verificationCommands` instead, see Spec format below.
+- `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). `/ralph:spec` (and therefore `/ralph:dev`, which chains it) also reads this field as the priority source for a generated spec's `context.verificationCommands`, before falling back to the repo's documented test commands. **Not** read by `/ralph:build` — that command sources its verification commands from the spec's `context.verificationCommands` instead (already populated by `/ralph:spec` from this field, if present), see Spec format below.
 - `sourceDirs` — **reserved**: intended as directories treated as source for review/improve scoping; no command reads this yet.
 - `defaultBudgets` — **reserved**: intended turn/hour/USD caps for build and improve cycles; `/ralph:build` currently hardcodes its own caps instead (`TURN_CAP = 2 × task count`, 2-hour wall clock — build.md Phase 1 step 6).
 - `reviewFocus` — **reserved**: intended categories for `/ralph:review` to fan subagents out across; `/ralph:review` doesn't exist yet.

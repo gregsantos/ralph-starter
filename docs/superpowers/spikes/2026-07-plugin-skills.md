@@ -199,11 +199,62 @@ skill-tool: worked as `ralph:spike-probe`
 plugin-root-read: ok
 ```
 
-**Final `result` event** (unrelated Stop-hook feedback and a
-`.ralph-goal` check appear after this in the stream — the sandbox
-generator's repo has no `.ralph-goal`, and the plugin's own Stop hook,
-per the goal-arming spike, correctly allowed the stop once it found no
-such file):
+**Final `result` event** — a `.ralph-goal` check and a JSON-shaped
+`{"ok": true}` fragment appear in the assistant's own result text below.
+
+**Correction (post-review, 2026-07-20):** this section originally
+attributed that text to the plugin's Stop hook "correctly" allowing the
+stop. That attribution was wrong and is corrected here. Step 4's
+invocation above used `--setting-sources project`, and the goal-arming
+spike's MAJOR FINDING
+(`docs/superpowers/spikes/2026-07-goal-arming.md`, ~lines 784–844)
+establishes that under that exact flag combination the plugin's Stop
+hook is completely inert — it produces zero hook events and no "Stop
+hook feedback" injection, ever. A fresh, minimal probe re-confirms this
+directly today rather than relying on inference alone. Run in a
+throwaway dir (`/tmp/ralph-probe-p2`, never against ralph-starter),
+same `--plugin-dir`/`--setting-sources project` combination as Step 4,
+a `.ralph-goal` file with a plainly, unambiguously unmet condition
+(`SPIKE0_DONE.txt` never created), `--include-hook-events` on:
+
+```bash
+claude -p "say hi and stop" \
+  --plugin-dir /Users/g8s/Dev/ralph-starter/plugin --setting-sources project \
+  --output-format stream-json --verbose --include-hook-events \
+  --max-turns 3 --permission-mode acceptEdits \
+  --max-budget-usd 2 > /tmp/p2-hook-probe.jsonl 2>&1
+```
+
+Verbatim inspection results:
+
+```
+$ grep -c 'hook_started\|hook_response' /tmp/p2-hook-probe.jsonl
+0
+$ grep -c "Stop hook feedback" /tmp/p2-hook-probe.jsonl
+0
+```
+
+Final `result` event, verbatim:
+
+```json
+{"type":"result","subtype":"success","is_error":false,"api_error_status":null,"duration_ms":4562,"duration_api_ms":5552,"ttft_ms":2580,"ttft_stream_ms":2483,"time_to_request_ms":42,"num_turns":1,"result":"Hi!","stop_reason":"end_turn","session_id":"17d38a21-47cf-4001-a1dc-30e800bd143e","total_cost_usd":0.0688595,"permission_denials":[],"terminal_reason":"completed"}
+```
+
+The session ended immediately, on the very first turn, with the
+`.ralph-goal` condition plainly unmet and nothing blocking the stop —
+zero hook events, zero injected feedback. **Fact 2 is re-confirmed on
+2026-07-20 by this probe.** Whatever produced the `.ralph-goal`-shaped
+text quoted below in this Task 1 run's (now-deleted) raw capture, it
+cannot have been the plugin's Stop hook — under this exact
+configuration that hook cannot fire, let alone "correctly allow"
+anything. It is preserved here only as a verbatim record of what that
+run's final assistant-visible text contained, not as evidence of hook
+activity; the deleted raw capture can no longer be inspected to
+determine what actually produced it (most plausibly ordinary assistant
+output following the now-removed probe command's own instructions).
+**Both of this task's verdicts (plugin-root-read, skill-tool
+registration) are unaffected** — they rest on the Skill-tool and
+Read-tool evidence quoted above, not on this hook byproduct:
 
 ```json
 {"type":"result","subtype":"success","is_error":false,"num_turns":6,"result":"The `.ralph-goal` file does not exist in the working directory.\n\n{\"ok\": true}","stop_reason":"end_turn","terminal_reason":"completed","total_cost_usd":0.18534199999999998,"permission_denials":[]}
@@ -584,6 +635,15 @@ run. Reading `build.md` without dispatching anything, branching, or
 committing does not violate any D2 checklist item, and Phase B's
 substance (branch creation, builder/verifier dispatch, commits) never
 ran.
+
+Correction to a plan-level overreach (not to the smoke evidence above):
+`/tmp/p2-dev-review.jsonl` (D2's capture) shows zero hook events, which
+per Task 11's MAJOR FINDING is exactly what an allow-path prompt-type
+Stop hook looks like when it is completely inert under
+`--setting-sources project` — an allow-path hook leaves no observable
+trace either way, so "the Stop hook allowed the stop" is unobservable
+from this capture rather than confirmed, regardless of which of those
+two states actually held during D2.
 
 ### Skipped: interactive `--review` approval check
 
