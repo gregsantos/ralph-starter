@@ -1,0 +1,26 @@
+---
+description: One-off Ralph task — branch-first, implement, verify, commit; --pr to open a PR
+argument-hint: "<what to do>" [--pr]
+model: sonnet
+---
+# /ralph:go — one-off task
+
+Execute this one-off task autonomously: $ARGUMENTS
+
+Procedure — deviations are failures:
+1. Preflight: `git status` must be clean; you must NOT be on the default
+   branch when committing. Create `ralph/go-<slug>` (slug: lowercase task
+   summary, hyphenated, ≤5 words) from the current HEAD.
+2. Implement the task fully. No stubs. Follow repo conventions (CLAUDE.md).
+   Never weaken tests, lint, or CI.
+3. Verify: if `.claude/ralph.json` exists and has `verificationCommands`,
+   run them all and show real output. Otherwise run the repo's documented
+   test/lint commands. Failures = fix and re-verify, don't report success.
+4. Commit `feat: <summary>` (or `fix:`/`chore:` as appropriate). No
+   attribution lines. DO NOT push.
+5. Only if `--pr` was passed: push the branch once (`git push -u origin
+   <branch>`) and `gh pr create` with a body summarizing what/why/how
+   verified. Never merge.
+6. Report: branch name, commit sha, verification output summary, PR URL if
+   created. If you could not complete the task, say exactly what's missing —
+   never claim partial work as done.
