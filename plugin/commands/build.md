@@ -124,11 +124,16 @@ wraps, reimplemented directly since the plugin-command layer can't reach
    task, not only the ones built this session.
 2. Wait for its final message and find its result by SEEKING the
    `VERIFIER REPORT` marker line, the same way as Phase 3 step 7.
-3. verdict FAIL: for each finding, treat it as a fix task — dispatch a
-   builder per finding (findings count against remaining turns; keep
-   printing the Phase 3 step 1 turn line on every one of these turns).
-   Then re-verify from step 1. Never argue with the verifier; fix or
-   surface.
+3. verdict FAIL: for each finding, treat it as a fix task. Before
+   dispatching EACH fix-builder: print the turn line (same format as
+   Phase 3 step 1) and repeat the Phase 3 step 2 cap check — if
+   `k >= TURN_CAP` or more than 2 hours have elapsed since `BUILD_START`,
+   go to Phase 5 now instead of dispatching, exactly as in the main loop.
+   This applies per finding, not once for the whole batch — a fix round
+   with several findings can cross the cap partway through. Once every
+   finding for this round has either been dispatched-and-resolved or
+   routed to Phase 5, re-verify from step 1. Never argue with the
+   verifier; fix or surface.
 4. verdict PASS: write {"verifier": {"verdict": "PASS", "date": <today>,
    "summary": <one line>}} into the spec; commit; run the evidence script
    with --full; print it.
