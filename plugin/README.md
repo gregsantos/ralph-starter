@@ -28,23 +28,33 @@ parity gate in the design doc passes — the two are not yet interchangeable.
 
 ## Config
 
-Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example):
+Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — most are reserved for the review/improve/dev commands landing in Plans 2–3 and aren't read by anything yet:
 
-- `verificationCommands` — commands run to verify a build; **required for
-  `/ralph:build`**, which refuses to start without at least one (no
-  independent verification, no evidence chain).
-- `sourceDirs` — directories treated as source for review/improve scoping.
-- `defaultBudgets` — turn/hour/USD caps for build and improve cycles.
-- `reviewFocus` — categories `/ralph:review` fans subagents out across.
-- `models` — model routing overrides for `go`/`builder`/`verifier`; `"inherit"` uses the invoking session's model.
-- `artifactPaths` — where specs and review output live; override for submodule or non-standard layouts.
+- `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). **Not** read by `/ralph:build` — that command sources its own verification commands from the spec's `context.verificationCommands` instead, see Spec format below.
+- `sourceDirs` — **reserved**: intended as directories treated as source for review/improve scoping; no command reads this yet.
+- `defaultBudgets` — **reserved**: intended turn/hour/USD caps for build and improve cycles; `/ralph:build` currently hardcodes its own caps instead (`TURN_CAP = 2 × task count`, 2-hour wall clock — build.md Phase 1 step 6).
+- `reviewFocus` — **reserved**: intended categories for `/ralph:review` to fan subagents out across; `/ralph:review` doesn't exist yet.
+- `models` — **reserved**: intended model routing overrides for `go`/`builder`/`verifier` (`"inherit"` would use the invoking session's model); `/ralph:go` currently hardcodes `model: sonnet` in its own frontmatter instead (go.md).
+- `artifactPaths` — **reserved**: intended override for where specs and review output live, for submodule or non-standard layouts; no command reads this yet.
 
 ## Spec format
 
 Specs use the `tasks[]` schema (see [`specs/example.json`](../specs/example.json)):
 `id`, `title`, `description`, `acceptanceCriteria`, `dependsOn`, `status`,
-`passes`, `effort`, `notes`. `/ralph:build` also reads and writes two
-fields not covered elsewhere:
+`passes`, `effort`, `notes`. A top-level `context` block is also part of
+the schema:
+
+- **`context.verificationCommands`** (array of strings) — **required for
+  `/ralph:build`**: the commands it runs to verify the build. Read by
+  `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh` directly from the
+  spec (build.md Phase 1 step 5), which exits 3 and aborts the build if
+  this is missing or empty — no independent verification, no evidence
+  chain. This is a field on the spec JSON itself, distinct from
+  `.claude/ralph.json`'s `verificationCommands` field above, which
+  `/ralph:build` never reads.
+
+`/ralph:build` also reads and writes two more fields not covered
+elsewhere:
 
 - **`attempts`** (per task, integer) — orchestrator-managed retry
   counter; a task moves to `status: blocked` once `attempts` reaches 2
@@ -85,11 +95,13 @@ claude -p "/ralph:build specs/feature.json" \
   --permission-mode acceptEdits \
   --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
   --setting-sources project \
-  --max-turns 40
+  --max-turns 40 \
+  --max-budget-usd 20
 ```
 
 - `--allowedTools` is required alongside `acceptEdits` (which only auto-approves `Edit`/`Write`) — otherwise `Bash` calls get rejected until the session dies (Task 7; full list including `Agent` validated end-to-end in Task 11, Scenario A, ~line 707).
 - `--setting-sources project` excludes the invoking user's personal settings — a real incident had a user-level `git push` approval gate silently deny a build's push.
+- `--max-budget-usd` is what backs the "headless spawns add a dollar cap" guardrail above — the recorded end-to-end runs (Task 7, Task 11) predate this flag being added to the invocation and ran without it; include it for any new headless spawn.
 - **Caveat:** under `--setting-sources project` the plugin's own Stop hook does not fire at all (Task 11's "MAJOR FINDING") — duplicate it into the host's `.claude/settings.json`:
 
   ```json
