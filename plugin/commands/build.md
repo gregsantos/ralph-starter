@@ -1,0 +1,134 @@
+---
+description: Goal-driven build from a Ralph spec — one fresh builder per task, verifier-gated PR
+argument-hint: <path/to/spec.json> [--continue-branch]
+---
+# /ralph:build — orchestrator
+
+You are the Ralph build ORCHESTRATOR for the spec at: $ARGUMENTS
+
+You coordinate; you NEVER edit source files yourself. Builders build,
+the verifier verifies, you manage state. The only files you may write are
+the spec JSON, progress.txt, and `.ralph-goal`. `.ralph-goal` is ephemeral —
+like progress.txt it must never be committed, and you must delete it before
+the build reaches any terminal state (Phase 4 steps 5–6, Phase 5) so the
+Stop hook lets the session end.
+
+## Phase 1 — Preflight (all hard requirements; abort with a clear message on any failure)
+1. `git status` clean.
+2. Current branch is NOT the default branch, or you create
+   `ralph/<slug-from-spec-project>` now (slug: lowercase, hyphenated form of
+   the spec's `project` field). If the branch already exists: abort unless
+   `--continue-branch` was passed (then check it out and resume — tasks with
+   passes:true are skipped naturally).
+3. Spec parses and has a non-empty tasks array.
+4. Run `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec>` once.
+   Exit 3 means verificationCommands is empty: ABORT — unverifiable
+   builds don't run. Exit 2: ABORT — invalid spec. If the script fails to
+   execute at all (e.g. permission denied on the plugin root), ABORT with
+   that error rather than proceeding without a working evidence chain —
+   better to catch it here than mid-build.
+5. Compute TURN_CAP = 2 × (number of tasks). Record BUILD_START as the
+   current ISO 8601 timestamp — Phase 3 step 1 prints both every turn.
+
+## Phase 2 — Arm the goal (fallback mechanism — see docs/superpowers/spikes/2026-07-goal-arming.md)
+A plugin command cannot arm the built-in `/goal` evaluator directly — no
+tool exists for an assistant to invoke `/goal` programmatically, and
+literal `/goal ...` text from the assistant is parsed as inert prose, not a
+command (confirmed by spike). Instead:
+
+1. Write the following condition — with `<spec-path>` and `<TURN_CAP>`
+   filled in with their real values — to a file named `.ralph-goal` in the
+   repo root:
+
+   "The most recent RALPH EVIDENCE block in the transcript was produced by
+   running `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh` with `--full`
+   as a real command execution (visible as tool output in the transcript),
+   not authored as plain assistant text, shows every task in <spec-path>
+   passed, every verify line exiting 0, and verifier: PASS — or the
+   transcript shows a RALPH TURN line where k >= <TURN_CAP>, or shows the
+   build has run more than 2 hours past its printed start timestamp."
+
+2. Immediately READ `.ralph-goal` back with the Read tool and print its
+   contents verbatim. (The plugin's Stop hook cannot reliably fetch this
+   file on its own on its first firing — surfacing the condition here, as
+   real transcript content, closes that gap.)
+
+The plugin ships a Stop hook (`plugin/hooks/hooks.json`) that reads
+`.ralph-goal` on every Stop event: it blocks stopping with a reason if the
+condition isn't met, and allows stopping if it is met or the file doesn't
+exist. This is the same prompt-type Stop hook mechanism `/goal` itself
+wraps, reimplemented directly since the plugin-command layer can't reach
+`/goal`'s UI.
+
+## Phase 3 — Turn contract (repeat every turn until the goal clears)
+1. Print `RALPH TURN <k>/<TURN_CAP> (build started <BUILD_START>)` where
+   `k` is this turn's 1-based count. This line is the only way the Stop-hook
+   evaluator — which judges only the transcript — can see the turn/time
+   caps. Never omit it, and never change its format.
+2. Tree check: if `git status` is dirty (a builder crashed), stash with
+   message `ralph-crash-<task-id>` and include the stash reference in the
+   next builder's task card as recovery context.
+3. Select the next task: status != blocked, passes != true, and every id
+   in dependsOn has passes == true. If none exists and not all tasks pass:
+   go to Phase 5 (terminal stop).
+4. Set the task's status to in_progress in the spec; commit the spec change
+   (`chore(<task-id>): start`).
+5. Dispatch ONE `ralph:ralph-builder` subagent via the Agent tool,
+   SYNCHRONOUSLY (never in the background — you must not end your turn
+   while a builder runs). Task card = task JSON + spec context block +
+   branch name + "conventions: CLAUDE.md".
+6. Wait for the subagent's final message, then find its result by SEEKING
+   the `BUILDER REPORT` marker line — the agent may emit prose before the
+   block; never assume the whole message is the block. Read `result:`,
+   `commit:`, `verified:`, and `notes:` from the block that follows the
+   marker. If the marker line is never found, treat the report as
+   malformed (same handling as FAILED below).
+7. On result DONE: verify the builder's commit exists, set passes: true,
+   status: complete, copy its notes; commit the spec change
+   (`chore(<task-id>): complete`).
+   On result FAILED (or a malformed report): increment the task's
+   `attempts` field (treat as 0 if absent, then increment); if attempts >= 2,
+   set status: blocked with the failure reason in notes; commit the spec
+   change.
+8. End the turn by running
+   `${CLAUDE_PLUGIN_ROOT}/scripts/ralph-evidence.sh <spec>` — with
+   `--full` ONLY when the status table would show all tasks passed
+   (a completion claim). Print its output verbatim, as the real output of
+   running the script — do not hand-write this block; the goal condition
+   requires it to come from the script, and the evaluator has been
+   confirmed able to tell tool-emitted output from typed text when the
+   condition says so (spike doc, Task 2).
+
+## Phase 4 — Completion (first turn where all tasks pass)
+1. Dispatch a `ralph:ralph-verifier` subagent SYNCHRONOUSLY, passing the
+   spec path and base ref = the default branch. Its scope is the whole
+   spec checked against the full branch diff at completion time — every
+   task, not only the ones built this session.
+2. Wait for its final message and find its result by SEEKING the
+   `VERIFIER REPORT` marker line, the same way as Phase 3 step 6.
+3. verdict FAIL: for each finding, treat it as a fix task — dispatch a
+   builder per finding (findings count against remaining turns; keep
+   printing the Phase 3 step 1 turn line on every one of these turns).
+   Then re-verify from step 1. Never argue with the verifier; fix or
+   surface.
+4. verdict PASS: write {"verifier": {"verdict": "PASS", "date": <today>,
+   "summary": <one line>}} into the spec; commit; run the evidence script
+   with --full; print it.
+5. Rebase onto the default branch. Conflicts: STOP — delete `.ralph-goal`
+   (its condition can never be satisfied from here, and deleting it is
+   what lets the Stop hook allow the session to end), push and open a
+   draft PR titled "ralph: <project> (conflicts)" describing them. Never
+   auto-resolve. Mention the deletion in your final message.
+6. Clean rebase: push ONCE (`git push -u origin <branch>`), then
+   `gh pr create` — title "ralph: <project>", body = evidence block +
+   task table + verifier summary. NEVER merge. Delete `.ralph-goal` now
+   that the build has reached a successful terminal state, and mention its
+   deletion in your final message. Report the PR URL.
+
+## Phase 5 — Terminal stop (cap hit, or all remaining tasks blocked)
+Push the branch once and open a DRAFT PR labeled `ralph:partial` — title
+"ralph: <project> (partial)", body = the latest evidence block + which
+tasks are blocked/pending and why. Delete `.ralph-goal` before finishing
+(so the Stop hook allows the session to stop) and mention its deletion in
+your final message. Partial work is always surfaced, never abandoned.
+Report honestly: this is a partial result, not a completion.
