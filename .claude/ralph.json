@@ -1,0 +1,14 @@
+{
+  "verificationCommands": ["make check"],
+  "sourceDirs": ["ralph.sh", "plugin/"],
+  "defaultBudgets": {
+    "buildTurnsFactor": 2,
+    "buildHours": 2,
+    "improveTurns": 15,
+    "improveHours": 1,
+    "improveUsd": 10
+  },
+  "reviewFocus": ["code-quality", "test-coverage", "architecture", "security", "bug"],
+  "models": { "go": "sonnet", "builder": "inherit", "verifier": "inherit" },
+  "artifactPaths": { "specs": "specs", "reviewOutput": "review-output" }
+}

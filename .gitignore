@@ -3,6 +3,7 @@
 .ralph-session.json
 .ralph-dev-session.json
 .ralph-launch-session.json
+.ralph-goal
 archive/
 review-output/
 
@@ -19,6 +20,7 @@ product-output/*
 .claude/*
 !.claude/skills/
 !.claude/skills/**
+!.claude/ralph.json
 
 # Dependencies
 node_modules/
