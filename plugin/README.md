@@ -21,10 +21,42 @@ parity gate in the design doc passes — the two are not yet interchangeable.
 | `/ralph:go "<task>" [--pr]` | One-off task: branch-first, implement, verify, commit; `--pr` opens a PR |
 | `/ralph:build <spec.json>` | Goal-driven build from a spec: fresh builder per task, verifier-gated PR |
 | `/ralph:status` | Read-only dashboard: active goal, spec progress, open `ralph/*` PRs, worktrees |
-| `/ralph:spec` | Coming in Plans 2–3 |
-| `/ralph:dev` | Coming in Plans 2–3 |
-| `/ralph:review` | Coming in Plans 2–3 |
-| `/ralph:improve` | Coming in Plans 2–3 |
+| `/ralph:spec "<prompt>" \| -f <file> \| --from-findings [path]` | Generate a validated spec JSON in `specs/` (no commit — review, then build) |
+| `/ralph:dev "<prompt>" [--review]` | Full pipeline: generate spec → build it; `--review` pauses for spec approval |
+| `/ralph:review` | Coming in Plan 3 |
+| `/ralph:improve` | Coming in Plan 3 |
+
+## Spec generation & the dev pipeline
+
+`/ralph:spec` writes `specs/<slug>.json` from one input source — inline
+text, `-f <requirements-file>`, or `--from-findings [findings.json]`
+(fix-spec from a review backlog; default path
+`review-output/findings.json`). Every generated spec is validated with
+the plugin's evidence script before the command reports success, and
+`context.verificationCommands` is sourced from `.claude/ralph.json` or
+the repo's documented test commands — if neither exists the command
+aborts rather than emit an unbuildable spec. The spec is left
+uncommitted for human review; `/ralph:build`'s preflight commits a fresh
+spec as the first commit on its `ralph/*` work branch (and refuses
+gitignored specs — see Artifact tracking above).
+
+`/ralph:dev` chains the two: spec generation, an optional `--review`
+pause for human approval, then the full build engine. Headless example
+(same flag requirements as the build invocation below):
+
+    claude -p "/ralph:dev Add feature X" \
+      --plugin-dir /path/to/ralph-starter/plugin \
+      --permission-mode acceptEdits \
+      --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" \
+      --setting-sources project \
+      --max-turns 40 \
+      --max-budget-usd 20
+
+Do not pass `--review` headlessly — with no one to approve, the session
+ends after spec generation (safe, but probably not what you wanted).
+
+The spec-writing guidance ships as a plugin skill
+(`plugin/skills/writing-ralph-specs/`), which both commands follow.
 
 ## Config
 
