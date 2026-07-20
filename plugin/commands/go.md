@@ -1,6 +1,6 @@
 ---
 description: One-off Ralph task — branch-first, implement, verify, commit; --pr to open a PR
-argument-hint: "<what to do>" [--pr]
+argument-hint: '"<what to do>" [--pr]'
 model: sonnet
 ---
 # /ralph:go — one-off task
