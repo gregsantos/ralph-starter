@@ -92,16 +92,25 @@ silently.
        there), ASK, and apply the merge only on approval. If declined,
        WARN prominently that unattended runs here have no Stop-hook
        safety net.
-   - **Artifact tracking check (advisory only — never edit files):** run
-     `git check-ignore -v specs/example.json review-output/findings.json
-     .claude/ralph.json .claude/settings.json`. Any match is a WARN with
-     the matched rule shown: ignored `specs/`/`review-output/` silently
-     vanish in worktrees and fresh clones and defeat the improve loop
-     (plugin README, "Artifact tracking"); an ignored `.claude/` is
-     worse — this command's own config and safety hook would vanish the
-     same way, making initialization an illusion. Print the exact
-     ignore rule(s) to remove and the `git add` to run, but do NOT
-     modify `.gitignore` — that edit is the user's.
+   - **Artifact tracking check (advisory only — never edit files):**
+     test each of these four paths INDIVIDUALLY with
+     `git check-ignore -q <path>`:
+     `specs/ralph-init-ignore-probe.json` (a deliberately untracked
+     sentinel — never probe `specs/example.json`, whose historical
+     `!specs/example.json` allow-rule would mask a `specs/*` ignore
+     that still eats every NEW spec), `review-output/findings.json`,
+     `.claude/ralph.json`, `.claude/settings.json`. Only when `-q`
+     exits 0 (that path IS ignored), run `git check-ignore -v <path>`
+     on it to display the responsible rule in the warning. Never treat
+     a negated (`!`) allow-rule as a problem or suggest removing one —
+     negations are what KEEP these files tracked. The warnings: ignored
+     `specs/`/`review-output/` silently vanish in worktrees and fresh
+     clones and defeat the improve loop (plugin README, "Artifact
+     tracking"); an ignored `.claude/` is worse — this command's own
+     config and safety hook would vanish the same way, making
+     initialization an illusion. Print the exact ignore rule(s) to
+     remove and the `git add` to run, but do NOT modify `.gitignore` —
+     that edit is the user's.
    - WARN (do NOT fail) on any of: not a git repo, no `gh` auth
      (`gh auth status`), or no `origin` remote (`git remote get-url
      origin`). These block PR-time steps later but not initialization.
