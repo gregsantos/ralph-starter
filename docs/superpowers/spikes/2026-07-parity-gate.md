@@ -318,7 +318,11 @@ no eligible task remained (T-002 blocked, no dependents).
 4. **T4 platform finding — MCP-roster resume leak.** During Plan 3 Task
    4's R2 (third attempt), a headless session's resume-after-async-task
    leg re-initialized advertising the operator's full ambient MCP roster
-   (30 servers) despite `--setting-sources project`, while `session_id`,
+   — the appendix records 29 entries with real connection state, plus
+   ~20 `needs-auth` entries (the appendix prose counts 29; a ledgered
+   riding minor notes one entry — Google Calendar — was omitted from
+   that count, making the underlying roster 30; flagged for the final
+   review) — despite `--setting-sources project`, while `session_id`,
    `plugins`, `slash_commands`, `permissionMode`, `model`, and `cwd` all
    stayed correctly pinned and zero `mcp__*` tool was actually invoked.
    This is an isolation-leak surface relevant to any long unattended run
