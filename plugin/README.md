@@ -61,6 +61,9 @@ The spec-writing guidance ships as a plugin skill
 
 ## Review & the improve flywheel
 
+> Operator runbook — running, watching, recovering, and tuning the
+> flywheel: [docs/RALPH_PLUGIN_REF.md](../docs/RALPH_PLUGIN_REF.md).
+
 `/ralph:review` writes `review-output/findings.json` (the tracked
 backlog; schema in `plugin/skills/reviewing-codebase/`) and a
 regenerated `REVIEW_REPORT.md`, never committing. Each finding carries
