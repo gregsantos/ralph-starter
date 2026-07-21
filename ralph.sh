@@ -3152,25 +3152,36 @@ archive_branch_state() {
 
     # Archive spec file if exists
     if [ -f "$SPEC_FILE" ]; then
-        cp "$SPEC_FILE" "$archive_subdir/"
-        echo -e "     ${DIM}→${RESET} Archived $(basename "$SPEC_FILE")"
+        if cp "$SPEC_FILE" "$archive_subdir/"; then
+            echo -e "     ${DIM}→${RESET} Archived $(basename "$SPEC_FILE")"
+        else
+            echo -e "     ${YELLOW}${SYM_WARN:-!}${RESET} Failed to archive $(basename "$SPEC_FILE")"
+        fi
     fi
 
     # Archive plan file if exists
     if [ -f "$PLAN_FILE" ]; then
-        cp "$PLAN_FILE" "$archive_subdir/"
-        echo -e "     ${DIM}→${RESET} Archived $(basename "$PLAN_FILE")"
+        if cp "$PLAN_FILE" "$archive_subdir/"; then
+            echo -e "     ${DIM}→${RESET} Archived $(basename "$PLAN_FILE")"
+        else
+            echo -e "     ${YELLOW}${SYM_WARN:-!}${RESET} Failed to archive $(basename "$PLAN_FILE")"
+        fi
     fi
 
-    # Archive progress file if exists
+    # Archive progress file if exists.
+    # Only reset progress.txt when the archival copy actually succeeded — never
+    # truncate the original if we failed to preserve a copy first.
     if [ -f "$PROGRESS_FILE" ]; then
-        cp "$PROGRESS_FILE" "$archive_subdir/"
-        echo -e "     ${DIM}→${RESET} Archived $(basename "$PROGRESS_FILE")"
-        # Reset progress file for new branch
-        echo "# Progress for branch: $CURRENT_BRANCH" > "$PROGRESS_FILE"
-        echo "# Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
-        echo "" >> "$PROGRESS_FILE"
-        echo -e "     ${DIM}→${RESET} Reset progress.txt for new branch"
+        if cp "$PROGRESS_FILE" "$archive_subdir/"; then
+            echo -e "     ${DIM}→${RESET} Archived $(basename "$PROGRESS_FILE")"
+            # Reset progress file for new branch
+            echo "# Progress for branch: $CURRENT_BRANCH" > "$PROGRESS_FILE"
+            echo "# Started: $(date '+%Y-%m-%d %H:%M:%S')" >> "$PROGRESS_FILE"
+            echo "" >> "$PROGRESS_FILE"
+            echo -e "     ${DIM}→${RESET} Reset progress.txt for new branch"
+        else
+            echo -e "     ${YELLOW}${SYM_WARN:-!}${RESET} Failed to archive $(basename "$PROGRESS_FILE"); leaving progress.txt intact"
+        fi
     fi
 
     echo -e "     ${GREEN}${SYM_CHECK}${RESET} Archived to: ${DIM}${archive_subdir}${RESET}\n"
@@ -3195,9 +3206,14 @@ check_branch_change() {
 
 # Check for branch change and archive if needed.
 # Dry-run must remain read-only and should not archive or rewrite progress files.
+# Guarded from test-time execution: sourcing under RALPH_TESTING must not run
+# check_branch_change (CURRENT_BRANCH is unset in tests, which would corrupt the
+# repo's real .ralph-last-branch and could archive/reset progress).
+if [[ "${RALPH_TESTING:-}" != "true" ]]; then # Guard E: branch-change archiving
 if [ "$DRY_RUN" != true ]; then
     check_branch_change
 fi
+fi # Guard E: branch-change archiving
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # PIPELINE MODE ORCHESTRATION
