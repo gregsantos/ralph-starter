@@ -1,0 +1,96 @@
+{
+  "project": "Ralph Init Command",
+  "description": "Interactive /ralph:init onboarding command: stack detection, verification-suite confirmation, config + templates, and a new-repo quickstart (closes #15).",
+  "context": {
+    "currentState": "The plugin has no onboarding command. New repos must hand-author .claude/ralph.json and know README deep-cuts (settings.json hook copy, artifact-tracking gitignore rules). /ralph:spec correctly aborts when no verificationCommands can be found, which is a dead end for a fresh repo. There is no plugin/templates/ directory.",
+    "targetState": "A /ralph:init command (plugin/commands/init.md) interactively detects the stack, confirms the verification suite with the user before writing anything, writes .claude/ralph.json from a stack-matched template in plugin/templates/, wires up safety plumbing (settings.json hook copy, gitignore warnings, git/gh warnings), and prints a next-steps card. plugin/templates/ ships node/python/bash/greenfield config templates plus verify-starter.sh. plugin/README.md gains a New-repo-quickstart section and a commands-table row. A bats test asserts the JSON templates are valid.",
+    "constraints": [
+      "Do NOT modify plugin/commands/spec.md, plugin/commands/build.md, or plugin/commands/dev.md (companion issue #16, out of scope).",
+      "/ralph:init is an interactive command: its markdown must instruct asking the user for confirmation before every write, and must never overwrite an existing .claude/ralph.json without explicit confirmation (show a diff).",
+      "Command markdown reads templates from ${CLAUDE_PLUGIN_ROOT}/templates/ (never a hardcoded absolute path).",
+      "make lint (shellcheck) only targets ralph.sh, plugin/scripts/ralph-evidence.sh, and tests/make_sandbox.sh — verify-starter.sh is a shipped template, not linted by the repo, but should still be clean, POSIX-friendly bash.",
+      "Config templates must carry defaultBudgets {buildTurnsFactor:2, buildHours:2, improveTurns:50, improveUsd:15, improveFindings:3} and all five reviewFocus categories."
+    ],
+    "verificationCommands": ["make check", "claude plugin validate ./plugin"]
+  },
+  "tasks": [
+    {
+      "id": "T-001",
+      "title": "Add config + verify-starter templates under plugin/templates/",
+      "description": "Create the plugin/templates/ directory and populate it with the four config templates and the verify-starter script that /ralph:init will read from ${CLAUDE_PLUGIN_ROOT}/templates/. Files: plugin/templates/ralph-node.json, plugin/templates/ralph-python.json, plugin/templates/ralph-bash.json, plugin/templates/ralph-greenfield.json, plugin/templates/verify-starter.sh. Each JSON config mirrors the live .claude/ralph.json schema (verificationCommands, sourceDirs, defaultBudgets, reviewFocus, models, artifactPaths) but with stack-appropriate placeholder verificationCommands and sourceDirs that /ralph:init later confirms/overrides: node -> verificationCommands like [\"npm test\", \"npm run lint\"], sourceDirs [\"src\"]; python -> e.g. [\"pytest\", \"ruff check .\"], sourceDirs [\"src\"]; bash -> e.g. [\"bats tests/\", \"shellcheck *.sh\"] (or [\"make check\"]), sourceDirs [\".\"]; greenfield -> verificationCommands MUST be [\"bash verify.sh\"] (it pairs with the scaffolded verify.sh) and sourceDirs [\"src\"]. verify-starter.sh is an executable-style bash starter: shebang, 'set -euo pipefail', explanatory comments telling the user to replace the examples with real checks, and 2-3 example assertions (e.g. asserting a file exists, echoing a check, a placeholder command) that exit non-zero on failure. Do not touch spec.md/build.md/dev.md.",
+      "acceptanceCriteria": [
+        "plugin/templates/ exists containing ralph-node.json, ralph-python.json, ralph-bash.json, ralph-greenfield.json, verify-starter.sh",
+        "jq . plugin/templates/ralph-node.json plugin/templates/ralph-python.json plugin/templates/ralph-bash.json plugin/templates/ralph-greenfield.json all succeed (exit 0 = valid JSON)",
+        "Each JSON template's defaultBudgets equals {buildTurnsFactor:2, buildHours:2, improveTurns:50, improveUsd:15, improveFindings:3} (verify with jq, e.g. jq '.defaultBudgets.improveUsd' returns 15 for every template)",
+        "Each JSON template's reviewFocus contains all five categories: code-quality, test-coverage, architecture, security, bug",
+        "Each JSON template has a non-empty verificationCommands array and a non-empty sourceDirs array",
+        "ralph-greenfield.json verificationCommands is exactly [\"bash verify.sh\"]",
+        "verify-starter.sh starts with a #!/usr/bin/env bash (or #!/bin/bash) shebang, contains 'set -euo pipefail', has explanatory comments, and contains 2-3 example assertion lines",
+        "make check passes",
+        "claude plugin validate ./plugin passes"
+      ],
+      "dependsOn": [],
+      "status": "pending",
+      "passes": false,
+      "effort": "medium",
+      "notes": "",
+      "attempts": 0
+    },
+    {
+      "id": "T-002",
+      "title": "Add a bats test asserting the JSON templates are valid",
+      "description": "Add a new bats test file tests/templates.bats that asserts every plugin/templates/*.json file parses as valid JSON (run jq . on each and assert success), matching the acceptance-criteria suggestion in issue #15. Follow the existing bats conventions in tests/ (load test_helper.bash if the other tests do; use @test blocks; use the 'run' helper and assert status 0). Optionally also assert the required defaultBudgets defaults and reviewFocus categories are present via jq. The test must pass under 'bats tests/' / 'make test'. Do not modify unrelated test files.",
+      "acceptanceCriteria": [
+        "tests/templates.bats exists and follows the conventions of the existing files in tests/ (e.g. tests/plugin_evidence.bats)",
+        "It contains at least one @test that runs jq over each plugin/templates/*.json and asserts exit status 0",
+        "bats tests/templates.bats passes",
+        "make check passes (full suite green, including the new test)"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "passes": false,
+      "effort": "small",
+      "notes": "",
+      "attempts": 0
+    },
+    {
+      "id": "T-003",
+      "title": "Create plugin/commands/init.md implementing /ralph:init",
+      "description": "Author plugin/commands/init.md, a new slash command following the style/frontmatter conventions of the sibling commands (plugin/commands/go.md, review.md, spec.md): YAML frontmatter with a 'description' and an 'argument-hint', then a '# /ralph:init' heading and a numbered procedure. The command must document exactly the six behaviors from issue #15: (1) detect the stack from package.json / pyproject.toml / Cargo.toml / Makefile / plain bash / empty dir, and harvest candidate test/lint commands from scripts, Makefile targets, CI configs, and repo docs; (2) ASK the user to confirm the verification suite before writing anything, offering the detected commands, a custom command they type, or (greenfield/empty) scaffolding a starter verify.sh from ${CLAUDE_PLUGIN_ROOT}/templates/verify-starter.sh and using 'bash verify.sh' — never guess silently; (3) write .claude/ralph.json from the matching template in ${CLAUDE_PLUGIN_ROOT}/templates/ with defaults buildTurnsFactor 2, buildHours 2, improveTurns 50, improveUsd 15, improveFindings 3, all five reviewFocus categories, and detected sourceDirs, and NEVER overwrite an existing .claude/ralph.json without explicit confirmation (show a diff of what would change); (4) safety plumbing — copy ${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json to .claude/settings.json if absent, explaining why (plugin hooks are inert under --setting-sources project), warn if specs/ or review-output/ are gitignored and offer the fix, and warn (not fail) if not a git repo / no gh auth / no origin remote; (5) finish with a next-steps card listing /ralph:go (quick task), /ralph:dev (feature), /ralph:review (backlog), /ralph:improve (autopilot), each one line; (6) state that /ralph:init changes nothing outside .claude/ and (optionally, greenfield) verify.sh, and never commits. Because Cargo.toml/Rust has no dedicated template, the command must handle a detected stack that has no matching template by taking the custom-commands path (confirm commands with the user) rather than guessing. Templates must be referenced via ${CLAUDE_PLUGIN_ROOT}/templates/, not absolute paths. Do NOT modify spec.md/build.md/dev.md.",
+      "acceptanceCriteria": [
+        "plugin/commands/init.md exists with YAML frontmatter containing 'description' and 'argument-hint' and a '# /ralph:init' heading",
+        "The procedure documents all six numbered behaviors from issue #15 (stack detection + command harvesting; confirm-before-write with detected/custom/greenfield-verify.sh options; write .claude/ralph.json from a ${CLAUDE_PLUGIN_ROOT}/templates/ template with the exact listed defaults; settings.json hook copy + gitignore warnings + git/gh warnings; next-steps card; changes-nothing-outside-.claude/verify.sh and never commits)",
+        "The command text explicitly instructs asking the user for confirmation before every write in steps 2 and 3, and never overwriting an existing .claude/ralph.json without explicit confirmation (showing a diff)",
+        "Template and hook paths are referenced as ${CLAUDE_PLUGIN_ROOT}/templates/... and ${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json (no hardcoded absolute paths)",
+        "The next-steps card lists /ralph:go, /ralph:dev, /ralph:review, and /ralph:improve, one line each",
+        "The command states it never commits and changes nothing outside .claude/ (and optionally verify.sh)",
+        "claude plugin validate ./plugin passes",
+        "make check passes"
+      ],
+      "dependsOn": ["T-001"],
+      "status": "pending",
+      "passes": false,
+      "effort": "medium",
+      "notes": "",
+      "attempts": 0
+    },
+    {
+      "id": "T-004",
+      "title": "Add New-repo quickstart + /ralph:init row to plugin/README.md",
+      "description": "Update plugin/README.md: (a) add a 'New repo quickstart' section near the top (right after the Install section) that is roughly five lines and walks install -> /ralph:init -> /ralph:dev \"first feature\"; (b) add a '/ralph:init' row to the existing Commands table (the markdown table under the '## Commands' heading, currently rows for go/build/status/spec/dev/review/improve/improve-cycle) describing the interactive onboarding command. Keep the table's existing formatting. Do NOT modify spec.md/build.md/dev.md.",
+      "acceptanceCriteria": [
+        "plugin/README.md contains a 'New repo quickstart' (or clearly equivalent) heading placed near the top, after the Install section and before or around the Commands table",
+        "That section is concise (~5 lines) and shows the install -> /ralph:init -> /ralph:dev \"first feature\" path",
+        "The Commands table in plugin/README.md has a new row for /ralph:init describing interactive onboarding",
+        "make check passes",
+        "claude plugin validate ./plugin passes"
+      ],
+      "dependsOn": ["T-003"],
+      "status": "pending",
+      "passes": false,
+      "effort": "small",
+      "notes": "",
+      "attempts": 0
+    }
+  ]
+}
