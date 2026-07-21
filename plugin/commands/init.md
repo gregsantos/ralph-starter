@@ -6,11 +6,14 @@ argument-hint: '(no arguments)'
 
 Onboard the current repo to the ralph plugin: $ARGUMENTS
 
-This command changes NOTHING outside `.claude/` (and, only on the
-greenfield path and only with your confirmation, a `verify.sh` at the
-repo root). It never commits, never creates branches, and never pushes —
-you review what it wrote and commit it yourself. Every write is
-confirmed with you first; nothing is guessed silently.
+This command writes at most three files, EVERY one only after showing
+you the content and getting your confirmation: `.claude/ralph.json`,
+`.claude/settings.json` (copy or Stop-hook merge), and — greenfield path
+only — a `verify.sh` at the repo root. It never edits `.gitignore` or
+any other file (gitignore problems are reported with the exact fix, not
+applied), never commits, never creates branches, and never pushes — you
+review what it wrote and commit it yourself. Nothing is guessed
+silently.
 
 ## Procedure — deviations are failures
 
@@ -39,7 +42,10 @@ confirmed with you first; nothing is guessed silently.
    anything.** Present the detected stack and harvested candidates, then
    offer exactly these choices and WAIT for an answer — never guess
    silently:
-   - Use the detected commands as-is.
+   - Use the detected commands as-is — offer this ONLY when detection
+     found at least one candidate command. A manifest with no test/lint
+     scripts detects NOTHING; do not present an as-is option that would
+     accept an empty suite.
    - Type a custom command (or commands) to use instead — this is also
      the path for any detected stack with no matching template (e.g.
      Rust/`Cargo.toml`): confirm the commands with the user rather than
@@ -49,6 +55,11 @@ confirmed with you first; nothing is guessed silently.
      `verify.sh` at the repo root, and set the verification command to
      `bash verify.sh`. Ask before writing `verify.sh`; it is the one
      file this command may create outside `.claude/`.
+
+   The confirmed suite MUST contain at least one non-empty command —
+   `verificationCommands: []` would make `/ralph:spec` abort later, the
+   exact dead end this command exists to prevent. If the user declines
+   every option, STOP without writing anything and say why.
 
 3. **Write `.claude/ralph.json`** from the matching template in
    `${CLAUDE_PLUGIN_ROOT}/templates/`, applying the confirmed
@@ -63,18 +74,34 @@ confirmed with you first; nothing is guessed silently.
    user approves; otherwise leave it untouched.
 
 4. **Safety plumbing.**
-   - If `.claude/settings.json` is ABSENT, copy
-     `${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json` to `.claude/settings.json`,
-     explaining WHY: the plugin's own Stop hook does not fire under
-     `--setting-sources project` (how headless builds run), so the host
-     repo needs the hook duplicated into its own `.claude/settings.json`
-     (plugin README, "Running headless / unattended"). If it already
-     exists, leave it and say so.
-   - Run `git check-ignore specs review-output` (and the files beneath):
-     if `specs/` or `review-output/` are gitignored, WARN — an ignored
-     spec or findings backlog silently vanishes in worktrees and fresh
-     clones and defeats the improve loop (plugin README, "Artifact
-     tracking") — and offer to drop the ignore rules as the fix.
+   - **Stop-hook settings** — explain WHY first: the plugin's own Stop
+     hook does not fire under `--setting-sources project` (how headless
+     builds run), so the host repo needs the hook duplicated into its
+     own `.claude/settings.json` (plugin README, "Running headless /
+     unattended"). Then:
+     - `.claude/settings.json` ABSENT: show what will be written (a copy
+       of `${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json`), ASK, and copy on
+       approval.
+     - PRESENT and already containing the plugin's Stop hook (compare
+       against the `Stop` entry in `${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json`):
+       say so and leave it untouched.
+     - PRESENT but MISSING the Stop hook (ordinary existing settings):
+       do NOT leave it silently — headless builds in this repo would run
+       unprotected. Show a diff of the existing file versus the file
+       with the Stop hook entry merged in (preserving everything already
+       there), ASK, and apply the merge only on approval. If declined,
+       WARN prominently that unattended runs here have no Stop-hook
+       safety net.
+   - **Artifact tracking check (advisory only — never edit files):** run
+     `git check-ignore -v specs/example.json review-output/findings.json
+     .claude/ralph.json .claude/settings.json`. Any match is a WARN with
+     the matched rule shown: ignored `specs/`/`review-output/` silently
+     vanish in worktrees and fresh clones and defeat the improve loop
+     (plugin README, "Artifact tracking"); an ignored `.claude/` is
+     worse — this command's own config and safety hook would vanish the
+     same way, making initialization an illusion. Print the exact
+     ignore rule(s) to remove and the `git add` to run, but do NOT
+     modify `.gitignore` — that edit is the user's.
    - WARN (do NOT fail) on any of: not a git repo, no `gh` auth
      (`gh auth status`), or no `origin` remote (`git remote get-url
      origin`). These block PR-time steps later but not initialization.
@@ -85,7 +112,9 @@ confirmed with you first; nothing is guessed silently.
    - `/ralph:review` — build the tracked findings backlog.
    - `/ralph:improve` — bounded autopilot: review → fix-spec → build → PR.
 
-6. **Scope statement.** State plainly that `/ralph:init` changed nothing
-   outside `.claude/` (and, on the greenfield path only, `verify.sh`),
-   and that it never commits — the user reviews and commits the new
-   files themselves.
+6. **Scope statement.** State plainly which of the three permitted
+   files (`.claude/ralph.json`, `.claude/settings.json`, greenfield
+   `verify.sh`) were actually written, each with the user's recorded
+   confirmation; that nothing else changed (`.gitignore` advice was
+   advisory only); and that nothing was committed — the user reviews
+   and commits the new files themselves.

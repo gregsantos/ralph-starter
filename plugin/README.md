@@ -21,7 +21,9 @@ New to the plugin in a fresh repo? Three steps:
 1. Install (above).
 2. `/ralph:init` — interactive onboarding: detects your stack, confirms
    the verification suite, and writes `.claude/ralph.json` plus safety
-   plumbing (changes nothing outside `.claude/`, never commits).
+   plumbing (every write confirmed first; nothing outside `.claude/`
+   except an optional, confirmed `verify.sh` on the greenfield path;
+   never commits).
 3. `/ralph:dev "first feature"` — generate a spec, then build it.
 
 ## Commands
