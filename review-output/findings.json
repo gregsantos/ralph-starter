@@ -13,12 +13,12 @@
     ]
   },
   "summary": {
-    "total": 28,
+    "total": 47,
     "critical": 0,
     "high": 5,
-    "medium": 13,
-    "low": 8,
-    "info": 2
+    "medium": 22,
+    "low": 16,
+    "info": 4
   },
   "findings": [
     {
@@ -102,7 +102,7 @@
       "suggestion": "Wrap the check_branch_change call (and any other top-level statements in that region) in the same RALPH_TESTING guard used elsewhere, or make test_helper.bash isolate LAST_BRANCH_FILE/ARCHIVE_DIR to a scratch dir before sourcing. Add bats tests for check_branch_change (no branch file, matching branch, changed branch) and for archive_branch_state that assert progress.txt is only reset when every cp actually succeeds. Also restore the current .ralph-last-branch file from the real branch name to undo the corruption already present.",
       "effort": "medium",
       "id": "F-007",
-      "addressed": null
+      "addressed": 4
     },
     {
       "category": "test-coverage",
@@ -350,6 +350,248 @@
       "suggestion": "Take a simple lock (e.g. `mkdir .ralph-session.lock` or `flock` on a sentinel file) at startup and abort with a clear message if a live session is already using the same session file, releasing it in the existing cleanup/finalize paths.",
       "effort": "medium",
       "id": "F-028",
+      "addressed": null
+    },
+    {
+      "id": "F-029",
+      "category": "security",
+      "severity": "medium",
+      "file": "ralph.sh",
+      "line": 4205,
+      "title": "Autonomous loop pushes current branch with no default-branch guard",
+      "description": "After every iteration the main loop runs 'git push origin \"$CURRENT_BRANCH\"' (and 'git push -u' as a fallback) whenever PUSH_ENABLED is true, which is the default. There is no check that CURRENT_BRANCH is not the repository's default branch (main/master). Because the loop drives Claude fully unattended and push is on by default, running ralph.sh while checked out on main will push unreviewed, machine-generated commits straight to the default branch on origin after each iteration. The plugin command layer (go.md/build.md) explicitly enforces branch-first and 'never the default branch', but the standalone bash runner enforces no such protection.",
+      "suggestion": "Before pushing, resolve the repo's default branch (e.g. 'git symbolic-ref refs/remotes/origin/HEAD' or a configurable DEFAULT_BRANCH) and refuse to push when CURRENT_BRANCH matches it, aborting with a clear message that autonomous runs must operate on a non-default branch. Alternatively require an explicit --allow-default-branch-push opt-in.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-030",
+      "category": "security",
+      "severity": "medium",
+      "file": "ralph.sh",
+      "line": 843,
+      "title": "All modes (incl. read-only 'review') run under --dangerously-skip-permissions",
+      "description": "run_with_retry invokes 'claude -p --dangerously-skip-permissions ...' unconditionally for every mode. This bypasses all tool-permission prompts, granting the agent unrestricted Bash/Write/Edit for the entire session with no allowlist or sandbox. Notably 'review' mode is documented and presented as read-only analysis (PUSH is disabled for it at line 1540), yet the agent still runs fully permission-skipped and can execute arbitrary Bash and modify files. This also amplifies the impact of the spec/product input paths (lines 2947-2984), where the contents of a -f requirements file or product-output/*.md artifacts are concatenated verbatim into the prompt.",
+      "suggestion": "Do not use --dangerously-skip-permissions unconditionally. For review mode, pass a read-only tool allowlist (e.g. Read/Grep/Glob only) so the documented read-only contract is enforced. For build/spec/product modes prefer an explicit --allowedTools allowlist over blanket permission-skipping, and treat -f/product-artifact content as untrusted data.",
+      "effort": "medium",
+      "addressed": null
+    },
+    {
+      "id": "F-031",
+      "category": "security",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 2123,
+      "title": "Webhook URL unvalidated; session metadata and commit messages exfiltrated",
+      "description": "send_webhook POSTs a JSON payload to NOTIFY_WEBHOOK (settable via --notify-webhook, RALPH_NOTIFY_WEBHOOK, or ralph.conf). The payload includes branch name, mode/model, and the last commit subject. The URL is never validated to be https, so an http:// endpoint sends this repository metadata in cleartext, and no host allowlisting exists, so a misconfigured or attacker-supplied config value silently forwards internal branch/commit information to an arbitrary destination.",
+      "suggestion": "Reject non-https webhook URLs (or warn loudly), and consider omitting the commit subject from the payload or making its inclusion opt-in. Optionally support a host allowlist for the notification endpoint.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-032",
+      "category": "security",
+      "severity": "info",
+      "file": "ralph.sh",
+      "line": 2681,
+      "title": "Positive: config files parsed with a safe whitelist parser, not sourced",
+      "description": "safe_load_config parses ralph.conf / ~/.ralph/config line-by-line against an explicit ALLOWED_CONFIG_KEYS whitelist and rejects path values containing shell-command patterns in validate_config_value, rather than sourcing the file. This correctly prevents arbitrary code execution from configuration files.",
+      "suggestion": "Keep this pattern; when adding new config keys, add matching type/shell-pattern validation and avoid ever eval/source-ing config content.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-033",
+      "category": "bug",
+      "severity": "medium",
+      "file": "ralph.sh",
+      "line": 2414,
+      "title": "${response,,} lowercase expansion breaks on bash 3.2 (macOS default)",
+      "description": "prompt_continue() uses the bash 4.0+ case-conversion expansion 'case \"${response,,}\" in'. The script's shebang is '#!/bin/bash', which on macOS (the documented darwin target) resolves to bash 3.2, where ${var,,} is an unsupported 'bad substitution' runtime error. The rest of the codebase deliberately uses the portable 'tr [:upper:] [:lower:]' (e.g. is_retryable_error line 711). When a user runs in --interactive mode on stock macOS bash, the first confirmation prompt triggers a bad-substitution error that aborts the run mid-session.",
+      "suggestion": "Lowercase with a portable construct instead, e.g. 'resp_lc=$(printf %s \"$response\" | tr [:upper:] [:lower:]); case \"$resp_lc\" in ...', matching the approach used elsewhere in the script.",
+      "effort": "low",
+      "addressed": null
+    },
+    {
+      "id": "F-034",
+      "category": "bug",
+      "severity": "medium",
+      "file": "plugin/scripts/ralph-evidence.sh",
+      "line": 28,
+      "title": "Task with missing .status or .title crashes jq string concatenation under set -e",
+      "description": "The task-line formatter concatenates fields with '+': '.tasks[] | (.id + \" [\" + (if .passes == true then \"passed\" else .status end) + \"] \" + .title)' (line 28, reused at line 33). In jq, adding a string to null throws 'string and null cannot be added'. If any task object lacks a status or title key (or has them null) — plausible for a freshly-added task before the builder fills it in — jq exits non-zero, and because the script runs under 'set -euo pipefail', the whole evidence generation aborts with an opaque jq exit code. Distinct from a tasks-less spec: it triggers on well-formed .tasks arrays containing one malformed entry. (Fixing this also closes the corresponding untested-error-path coverage gap.)",
+      "suggestion": "Guard the fields with defaults, e.g. '(.id // \"?\") + \" [\" + (if .passes == true then \"passed\" else (.status // \"unknown\") end) + \"] \" + (.title // \"(no title)\")', in both the <=12 branch (line 28) and the >12 branch (line 33). Add a bats case feeding a task with missing title/status.",
+      "effort": "low",
+      "addressed": null
+    },
+    {
+      "id": "F-035",
+      "category": "bug",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 611,
+      "title": "jq [0:N] slice placed outside interpolation prints literal '[0:40]' instead of truncating",
+      "description": "Two jq format strings intend to truncate the commit message but place the slice outside the \\(...) interpolation: '... \\(.commit_message // \"no commit\")[0:40]' (line 611, resume history) and '... \\(.commit_message // \"-\")[0:50] |' (line 2255, summary markdown table). Because [0:40]/[0:50] sits in the literal portion of the string rather than inside the interpolation, jq emits the full untruncated commit message followed by the literal text '[0:40]'/'[0:50]'. Long commit messages are not truncated, and summary table rows are polluted with a stray '[0:50]'.",
+      "suggestion": "Move the slice inside the interpolation and apply it to the string value, e.g. '\\((.commit_message // \"no commit\")[0:40])' and '\\((.commit_message // \"-\")[0:50])'. Affects 2 locations (lines 611 and 2255).",
+      "effort": "low",
+      "addressed": null
+    },
+    {
+      "id": "F-036",
+      "category": "code-quality",
+      "severity": "medium",
+      "file": "ralph.sh",
+      "line": 3800,
+      "title": "parse_claude_output is a ~256-line function mixing five concerns",
+      "description": "parse_claude_output (lines 3800-4056) spans roughly 256 lines and interleaves five distinct responsibilities: raw-log persistence, completion-marker detection, per-tool dispatch/rendering (the large case block 3864-3926), multi-branch error detection (result/error/tool_result/system errors), and the final accomplishment-summary rendering (3995-4044). It far exceeds CLAUDE.md's 'under 30 lines' guidance and the category's ~50 LOC threshold, and the nested while-read-inside-while-read plus inline jq/cut extraction makes the control flow hard to follow and test.",
+      "suggestion": "Extract cohesive helpers: e.g. handle_tool_use_line (the tool_use parse + case dispatch), detect_stream_errors (the four error branches that all write 'failed' to ITERATION_STATUS_FILE), and render_iteration_summary (the accomplishment block). The top-level loop then reads as a dispatcher, and each concern becomes independently testable.",
+      "effort": "medium",
+      "addressed": null
+    },
+    {
+      "id": "F-037",
+      "category": "code-quality",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 3517,
+      "title": "Pipeline phase iteration caps are magic numbers duplicated across preview and invocation",
+      "description": "run_pipeline hardcodes phase iteration caps as bare literals in two places that must stay in sync: the DRY_RUN preview prints 'run (max 15)' for product and 'run (max 5)' for spec (lines 3517, 3526), while the real invocations pass 15 (line 3545) and 5 (lines 3561/3566/3571). calculate_pipeline_build_iterations similarly hardcodes guardrail bounds 5 and 200 (lines 3438-3439). CLAUDE.md's Code Style says avoid magic numbers. Changing the product cap requires editing both the preview string and the invocation, an easy drift bug.",
+      "suggestion": "Introduce named readonly constants (e.g. PRODUCT_PHASE_MAX_ITER=15, SPEC_PHASE_MAX_ITER=5, BUILD_ITER_MIN=5, BUILD_ITER_MAX=200) near the other config defaults and reference them in both the preview and the invocation.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-038",
+      "category": "code-quality",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 2615,
+      "title": "validate_config_value repeats the warning-echo + return-1 block across four arms",
+      "description": "validate_config_value has four case arms (MODEL, MAX_ITERATIONS/PIPELINE_BUFFER, PUSH_ENABLED, LOG_FORMAT) that each end in a near-identical two-line pattern: echo a yellow Warning to stderr and return 1. Only the 'expected' hint differs. This is low-grade duplication of the same rejection idiom four times.",
+      "suggestion": "Extract a small helper, e.g. reject_config_value(key, value, expected) that emits the standardized warning and returns 1, so each arm becomes a single validate-or-reject line and the message format lives in one place.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-039",
+      "category": "code-quality",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 727,
+      "title": "is_retryable_error carries a misleading comment about exit code 1",
+      "description": "In is_retryable_error the comment block (lines 727-729) states '1 = general error (could be transient)', implying exit code 1 might be retried, but no code acts on that: after the FATAL/RETRYABLE pattern loops, only exit_code >= 128 is handled explicitly and everything else (including 1) falls through to 'Default: not retryable'. The comment describes behavior the function does not implement.",
+      "suggestion": "Delete or correct the exit-code-1 comment so it matches the conservative default (retryability is decided by message-pattern matching, not by exit code 1), leaving only the accurate note about signal codes 128+.",
+      "effort": "small",
+      "addressed": null
+    },
+    {
+      "id": "F-040",
+      "category": "test-coverage",
+      "severity": "medium",
+      "file": "ralph.sh",
+      "line": 826,
+      "title": "run_with_retry orchestration (backoff, max-retry boundary, branches) untested",
+      "description": "is_retryable_error is unit-tested in isolation, but the retry loop that consumes it in run_with_retry has zero coverage. Untested logic includes: the exponential backoff formula delay=RETRY_BACKOFF_BASE*(3**(attempt-1)); the max-retry boundary 'attempt > MAX_RETRIES' (allows MAX_RETRIES+1 total attempts — an off-by-one worth locking down); the RETRY_ENABLED=false short-circuit; the fatal-vs-transient branch that returns immediately on non-retryable errors; and the LAST_ERROR_MSG extraction. The retry-attempt persistence helpers log_retry_attempt/clear_retry_attempts (atomic jq write + rename) are also uncovered.",
+      "suggestion": "Extract the classification/backoff decision (given error msg, exit_code, attempt, MAX_RETRIES, RETRY_ENABLED -> retry|give-up|abort + delay) into a pure helper and add bats cases: retryable transient retries with correct delays, exhaustion at the boundary, --no-retry short-circuit, and fatal-error abort. Test log_retry_attempt/clear_retry_attempts against a temp SESSION_FILE asserting the resulting JSON.",
+      "effort": "medium",
+      "addressed": null
+    },
+    {
+      "id": "F-041",
+      "category": "test-coverage",
+      "severity": "medium",
+      "file": "tests/integration_dryrun.bats",
+      "line": 59,
+      "title": "Dry-run mode tests assert on generic mode-name substrings, not resolved MODE",
+      "description": "Most mode dry-run tests (plan/product/launch/dev/build/inline) assert only that the bare mode word appears somewhere in verbose output. These words also appear in banners, the preset list, and config echoes, so the assertions can pass even if arg parsing routed to the wrong preset. They verify 'the script printed a common word' rather than 'MODE/PRESET_NAME resolved to the expected value'. Broader instance than the known push-disabled-substring issue (F-013).",
+      "suggestion": "Have --dry-run emit a stable, unambiguous line such as 'resolved-mode: <preset>' (or assert on the config-precedence block that prints the concrete MODE) and match that exact token, so a routing regression fails the test.",
+      "effort": "low",
+      "addressed": null
+    },
+    {
+      "id": "F-042",
+      "category": "test-coverage",
+      "severity": "low",
+      "file": "ralph.sh",
+      "line": 2052,
+      "title": "send_webhook payload construction and HTTP classification untested",
+      "description": "send_webhook builds a JSON payload with jq and maps event_type -> summary, then classifies success as 2xx. None of this is covered. '--argjson iterations' and '--argjson failed' will make jq fail if those globals are ever non-numeric, and the event->summary case mapping and the 200-299 success boundary are unverified.",
+      "suggestion": "Refactor the payload-building and event->summary mapping into a pure function that takes explicit args and returns JSON; add bats cases asserting the JSON for each event_type and that numeric fields are emitted as numbers. Optionally test the 2xx/non-2xx branch by injecting a stub curl.",
+      "effort": "low",
+      "addressed": null
+    },
+    {
+      "id": "F-043",
+      "category": "architecture",
+      "severity": "medium",
+      "file": "plugin/commands/improve.md",
+      "line": 19,
+      "title": "Worktree pid-sidecar state model reimplemented in three files",
+      "description": "The convention for improve-tick runtime state — pid at <path>.pid, log at <path>.log, scratch at <path>.selected.json, all SIDECARS next to (never inside) the worktree — plus the RUNNING/CRASHED/FINISHED classification derived from pid-sidecar presence and 'kill -0' liveness, is independently re-specified in improve.md (Busy checks 1), status.md (step 5), and consumed again in improve-cycle.md (Cleanup steps 1-2). No single file owns this contract; a change to the sidecar naming or the liveness/cleanup semantics must be mirrored across all three or the launcher, dashboard, and cycle silently disagree about whether a tick is alive.",
+      "suggestion": "Define the sidecar layout and the RUNNING/CRASHED/FINISHED state machine once (a short shared reference section, or a helper script the three commands invoke) and have improve.md, status.md, and improve-cycle.md cite it rather than each restating the paths and liveness rules.",
+      "effort": "medium",
+      "references": [
+        "plugin/commands/status.md",
+        "plugin/commands/improve-cycle.md"
+      ],
+      "addressed": null
+    },
+    {
+      "id": "F-044",
+      "category": "architecture",
+      "severity": "medium",
+      "file": "plugin/commands/build.md",
+      "line": 37,
+      "title": "Composing commands couple to build.md's internal phase/step numbers",
+      "description": "Because a slash command cannot invoke another, dev.md and improve-cycle.md compose build.md by reading it and executing its procedure — and both reference build.md's internal structure by number: dev.md Phase B says the spec is committed 'via its Phase 1 step 3a', improve-cycle.md Phase I-4 says the same 'Phase 1 step 3a', and improve.md refers to 'build.md's clean-tree preflight'. These cross-file references treat build.md's phase/step numbering as a stable public API. Renumbering or restructuring build.md's phases leaves these pointers dangling with no compiler or test to catch the drift.",
+      "suggestion": "Give the load-bearing behaviors stable named anchors (e.g. a 'spec-commit' or 'clean-tree preflight' labeled step) and have dev.md/improve-cycle.md/improve.md reference the name rather than 'Phase 1 step 3a'.",
+      "effort": "small",
+      "references": [
+        "plugin/commands/dev.md",
+        "plugin/commands/improve-cycle.md"
+      ],
+      "addressed": null
+    },
+    {
+      "id": "F-045",
+      "category": "architecture",
+      "severity": "low",
+      "file": "plugin/commands/review.md",
+      "line": 46,
+      "title": "review.md restates the finding schema the skill already owns",
+      "description": "review.md step 3 spells out the subagent output contract as an inline field list (category/severity/file/line?/title/description/suggestion/effort/references?, minus id/addressed). The reviewing-codebase SKILL.md already defines the authoritative Findings JSON Schema table, and review.md step 1 instructs reading that skill 'exactly'. The schema now lives in two places; adding or renaming a finding field requires editing both, and they can silently diverge.",
+      "suggestion": "Have review.md's subagent instructions point at the skill's Findings JSON Schema (noting only the two orchestrator-assigned exclusions, id and addressed) instead of re-enumerating the fields, keeping the schema single-sourced in the skill.",
+      "effort": "small",
+      "references": [
+        "plugin/skills/reviewing-codebase/SKILL.md"
+      ],
+      "addressed": null
+    },
+    {
+      "id": "F-046",
+      "category": "architecture",
+      "severity": "low",
+      "file": "plugin/scripts/ralph-evidence.sh",
+      "line": 29,
+      "title": "Evidence script's 12-task display truncation leaks into goal-condition design",
+      "description": "ralph-evidence.sh serves two audiences at once: a human-readable report and the machine completion signal the Stop-hook goal evaluates. Its presentation choice to omit per-task lines above 12 tasks (line 29) is load-bearing for correctness — build.md Phase 2 must key its goal condition on the summary counts line precisely because per-task lines vanish at scale. A rendering tweak to the script (changing the 12 threshold, reordering, or altering the summary line wording) can silently break the goal condition's ability to detect completion.",
+      "suggestion": "Treat the summary counts line as an explicit, stable machine contract — document it as such in the script header and keep it invariant regardless of task-count display mode — or add a dedicated --summary machine mode the goal keys on.",
+      "effort": "small",
+      "references": [
+        "plugin/commands/build.md"
+      ],
+      "addressed": null
+    },
+    {
+      "id": "F-047",
+      "category": "architecture",
+      "severity": "info",
+      "file": "plugin/commands/improve-cycle.md",
+      "line": 43,
+      "title": "Good pattern: ephemeral runtime state kept as sidecars outside the tracked tree",
+      "description": "The improve pipeline consistently isolates ephemeral runtime state from the git working tree so build.md's strict clean-tree preflight stays satisfiable: the selected-findings scratch file is written to $(pwd).selected.json outside the worktree, and pid/log live as <path>.pid/<path>.log sidecars beside the worktree rather than in it.",
+      "suggestion": "No change needed — preserve this boundary if the sidecar convention is ever consolidated; keep scratch and runtime state out of the worktree.",
+      "effort": "small",
       "addressed": null
     }
   ]
