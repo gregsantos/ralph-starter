@@ -17,5 +17,10 @@ Report Ralph state, read-only (change nothing):
    the command fails; don't guess).
 4. Branches/worktrees: `git branch --list 'ralph/*'` and
    `git worktree list` entries containing "ralph".
+5. Improve ticks: for each `git worktree list` entry whose path
+   contains `ralph-improve-`: report path, branch, and state —
+   RUNNING (`<path>.pid` sidecar present, process alive), CRASHED
+   (pid sidecar present, process dead — needs human inspection), or
+   FINISHED (no pid sidecar; removable if clean).
 Summarize in a short table. No recommendations unless something is stuck
 (blocked tasks, draft partial PRs, conflicts).

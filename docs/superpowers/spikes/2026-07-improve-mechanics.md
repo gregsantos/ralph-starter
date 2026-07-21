@@ -900,3 +900,195 @@ Worktree removed (`git worktree remove --force`), sandbox and bare remote
 deleted. Captures kept: `/tmp/p3-cycle-guard.jsonl`,
 `/tmp/p3-cycle-full-attempt{1,2,3,4*,5}.jsonl` (volatile `/tmp` copies;
 this appendix is the durable record).
+
+## Task 7 smoke runs
+
+**Task:** Task 7 of Plan 3 — `plugin/commands/improve.md`, the
+`/ralph:improve` launcher (busy checks → fresh worktree → capped headless
+spawn of `/ralph:improve-cycle` → report or `--wait`), plus
+`status.md`'s new tick-reporting step 5. Binding controller overrides
+applied to the brief text: `improveTurns` default is **50**, not 15; the
+native-`/goal` wrapped spawn-prompt alternative is **omitted** (Task 1's
+verdict (d) was NO-GO — `-p "/goal …"` is forwarded as literal text, so
+the spawn prompt is plainly `/ralph:improve-cycle`); step 5's lifetime
+sentence reflects **CHILD-SURVIVES** (Task 1 verdict (c)) — the spawned
+tick outlives the launching session, bounded only by its caps, with the
+pid sidecar as the mandatory kill switch. `claude plugin validate
+./plugin` passed before any smoke ran.
+
+### L1 — fire-and-forget launch: PASS
+
+Sandbox `/tmp/ralph-sb-launch` + bare remote
+`/tmp/ralph-sb-launch-remote.git` added as `origin`. First invocation
+exactly as briefed (`--max-turns 10 --max-budget-usd 3`,
+`Bash,Read,Glob,Grep`), capture `/tmp/p3-launch-fire.jsonl`: `subtype:
+success`, `num_turns: 12`, cost $0.43.
+
+- **Busy checks correct.** No existing `ralph-improve-` worktrees; `gh pr
+  list` failed (`none of the git remotes … point to a known GitHub
+  host`) — warned and continued, per spec.
+- **Caps read correctly.** Sandbox `.claude/ralph.json` has no
+  `defaultBudgets` → the launcher reported "defaults apply —
+  `improveTurns=50`, `improveUsd=10`" verbatim, confirming the Step-1
+  override (else 50, not else 15) is live.
+- **Worktree + branch:** `/tmp/ralph-improve-20260721-092622` on
+  `ralph/improve-20260721-092622`, created off `main`.
+- **Stop-hook carry side-finding:** the launcher's `cp` command for
+  `$WT/.claude/settings.json` hit a permission prompt (compound `if`
+  command) and was denied once — but the file already existed, because
+  `.claude/settings.json` is git-tracked (Task 2) and materialized
+  automatically when `git worktree add` checked out the branch. The
+  launcher's own existence check (`if [ ! -f … ]`) correctly detected
+  this on retry and skipped the redundant copy, exactly as Step 3
+  specifies. Not a defect — the carry logic degrades gracefully when the
+  file arrives by another path.
+- **Spawn command matched the brief's shape verbatim**
+  (`--plugin-dir …/plugin --setting-sources project --permission-mode
+  acceptEdits --allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep"
+  --max-turns 50 --max-budget-usd 10 --output-format stream-json
+  --verbose … & echo $! > "$WT.pid"`, spawn prompt plainly
+  `/ralph:improve-cycle` — no `/goal` wrapping). Pid sidecar named a real
+  process: `ps -p 81604` showed the exact `claude -p /ralph:improve-cycle
+  …` command line.
+- **Final message complete:** path, branch, PID (81604, "confirmed
+  alive"), log path, caps table (50 turns / $10), watch instructions
+  (`tail -f`, `/ralph:status`), kill instructions (`kill 81604`), and the
+  CHILD-SURVIVES sentence verbatim ("survives this session … bounded
+  only by its caps … PID sidecar … is the kill switch").
+
+**Full-cycle end state (spike verdict (c), CHILD-SURVIVES branch).**
+Polled PID 81604 from the controlling shell in bounded loops (`kill -0`
+every 15s); it exited after ~570s (~9.5 min). Verified against Task 6
+C2's class:
+
+- Pid sidecar `/tmp/ralph-improve-20260721-092622.pid` — **gone**.
+- `.selected.json` — **gone**. Worktree `git status --porcelain` —
+  **empty**.
+- Worktree log: `chore: review backlog for improve cycle` → `chore: add
+  spec for Improve 2026-07-21` → T-001/T-002 complete → `chore: verifier
+  PASS for Improve 2026-07-21`.
+- Bare remote refs: exactly `refs/heads/ralph/improve-20260721-092622` —
+  one push, no PR ref (matches "exactly one push" from Task 6 C2).
+- Log's final message: honest `gh pr create` failure (local bare remote
+  is not a GitHub host); findings F-001/F-002/F-005 reported open for the
+  next cycle.
+- Sandbox `main` untouched: single init commit, clean tree.
+
+**Kill-switch + CRASHED-detection probe (second tick).** Re-invoked the
+launcher (capture `/tmp/p3-launch-fire2.jsonl`): the outer result was
+`subtype: error_max_turns` at `num_turns: 11` against the smoke's own
+`--max-turns 10` cap — **a deviation, disclosed honestly**: the
+transcript shows the launcher's actual work (busy check found the first
+worktree finished-and-clean → removed it + its log → created
+`/tmp/ralph-improve-20260721-093825` on `ralph/improve-20260721-093825`
+→ spawned PID 84290, confirmed alive → delivered the full path/branch
+/pid/log/caps/kill report) **completed correctly before** the max-turns
+cutoff; the same compound-command permission prompt from L1 fired again
+and cost an extra turn, which then ran out during a trailing Stop-hook
+evaluation turn. The launcher's own logic was not at fault — this is an
+artifact of the smoke's tight 10-turn outer cap combined with permission-
+prompt retry overhead, not a `/ralph:improve` defect. Killed PID 84290
+mid-flight (`kill 84290`); confirmed dead 1s later; the pid sidecar was
+left in place (the cycle only removes it as its own last act, so a
+killed cycle correctly leaves a stale sidecar behind). Third invocation
+(capture `/tmp/p3-launch-busy-crashed.jsonl`): `subtype: success`,
+`num_turns: 6`, cost $0.33 — reported the tick as **CRASHED**
+(worktree/branch/dead-PID table, inspect/`git worktree remove --force`
+instructions), **stopped**, and created no third worktree
+(`git worktree list` confirmed only the sandbox + the crashed worktree
+afterward). Manually cleaned the crashed worktree per its own
+instructions.
+
+**Verdict: PASS.** Every L1 checklist item held: worktree/branch/pid/log/
+caps/kill-instructions present on first launch; full-cycle end state
+matches Task 6 C2's class; the kill switch works and the next launcher
+invocation correctly reports CRASHED and stops rather than auto-removing
+or stacking.
+
+### L2 — busy-check triple: PASS
+
+Same sandbox. Manufactured each state with a fake worktree
+`/tmp/ralph-improve-fake` on branch `ralph/improve-fake`.
+
+1. **RUNNING:** `sleep 600 &` backgrounded from the controller shell
+   (PID 84895, confirmed to persist across tool calls — CHILD-SURVIVES
+   holds for plain shell children too), pid written to
+   `/tmp/ralph-improve-fake.pid`. Invocation (capture
+   `/tmp/p3-launch-busy-running.jsonl`): `subtype: success`, `num_turns:
+   5`. Reported "a tick is already **RUNNING**" with worktree/branch/PID
+   84895 "alive — verified with `kill -0`", stopped; `git worktree list`
+   confirmed no new worktree. Killed the sleep afterward.
+2. **CRASHED:** left the now-dead PID in the sidecar. Invocation
+   (capture `/tmp/p3-launch-busy-crashed2.jsonl` — distinct from L1's
+   `p3-launch-busy-crashed.jsonl` to avoid collision): `subtype: success`,
+   `num_turns: 4`. Reported **CRASHED**, dead PID 84895, inspect/remove
+   instructions, stopped; no new worktree.
+3. **FINISHED:** `rm /tmp/ralph-improve-fake.pid` (tree clean).
+   Invocation (capture `/tmp/p3-launch-busy-finished.jsonl`): `subtype:
+   success`, `num_turns: 1`. Removed the fake worktree, then created and
+   spawned a real tick (`/tmp/ralph-improve-20260721-094352` on
+   `ralph/improve-20260721-094352`, PID 85716 confirmed alive) — the
+   full launch path exactly as L1.
+
+**Status tick reporting.** While PID 85716's tick was RUNNING, ran
+`/ralph:status` once (read-only allowlist, capture
+`/tmp/p3-status-tick.jsonl`): `subtype: success`, `num_turns: 7`. Output
+included the new step-5 row verbatim in shape: `**Improve tick**
+`ralph-improve-20260721-094352` | **RUNNING** (pid 85716 alive)` —
+confirming status.md's appended step fires correctly alongside steps 1–4
+(goal none active, spec 2 pending, PRs "gh unavailable", branches/
+worktrees table).
+
+Killed PID 85716 and force-removed its worktree + sidecars afterward
+(full-cycle end state was already proven by L1 and is proven again by
+L3; no need to let a second full cycle run to completion here).
+
+**Verdict: PASS.** All three busy-check states detected correctly (no
+stacking in RUNNING/CRASHED; correct auto-clean-then-launch in FINISHED),
+and `/ralph:status` step 5 renders the tick line while a tick exists.
+
+### L3 — `--wait`: PASS
+
+Fresh sandbox `/tmp/ralph-sb-launch-wait` + bare remote
+`/tmp/ralph-sb-launch-wait-remote.git`. Invocation exactly as briefed
+(`--max-turns 25 --max-budget-usd 15`, capture
+`/tmp/p3-launch-wait.jsonl`), run via the Bash tool's `run_in_background`
+facility and polled in two bounded active-poll windows (10 min + ~9 min;
+no bare `sleep` chains, no Monitor/notification standby — checked
+`pgrep -f "claude -p .ralph:improve --wait."` and the capture file's
+tail every 20s inside each window) until the outer process exited.
+
+**Outer launcher result:** `subtype: success`, `num_turns: 15`,
+`total_cost_usd: $0.54`, `duration_ms: 866273` (~14.4 min wall-clock —
+comfortably inside the 25-turn/$15 cap; polling loops cost wall time, not
+turns). Final message reported the inner cycle's outcome in full:
+verifier PASS, 2/2 tasks complete, branch
+`ralph/improve-20260721-094720` (tip `da40c69`) pushed to `origin`, inner
+cost $5.24 / 52 turns / ~13 min; honest "no PR created" (local bare
+remote, not a GitHub host) with backlog reconciliation correctly skipped
+and findings left open.
+
+**Auto-removal of the finished worktree confirmed:** after the run,
+`git worktree list` in the sandbox showed **only** the `main` worktree —
+the `--wait` branch's finished-worktree rule (remove only if the pid
+sidecar is gone and the tree is clean) fired correctly. No leftover
+`.pid`/`.log`/`.selected.json` for that tick's path. Sandbox `main`
+itself untouched: single init commit, clean tree. Bare remote's refs:
+exactly `refs/heads/ralph/improve-20260721-094720`.
+
+**Verdict: PASS.** The launcher polled to completion, reported the inner
+cycle's real outcome (not a fabricated summary), and auto-removed the
+finished clean worktree per spec.
+
+### Cleanup and captures
+
+All sandboxes, bare remotes, and the manufactured fake worktree removed;
+every spawned/manufactured process (`claude -p …` ticks, the `sleep 600`
+fake) killed or allowed to exit and confirmed dead before moving on.
+Final check: `pgrep -f "claude -p"` → empty, `pgrep -f "sleep 600"` →
+empty. Captures kept (volatile `/tmp` copies; this appendix is the
+durable record): `/tmp/p3-launch-fire.jsonl`,
+`/tmp/p3-launch-fire2.jsonl`, `/tmp/p3-launch-busy-running.jsonl`,
+`/tmp/p3-launch-busy-crashed.jsonl`, `/tmp/p3-launch-busy-crashed2.jsonl`,
+`/tmp/p3-launch-busy-finished.jsonl`, `/tmp/p3-status-tick.jsonl`,
+`/tmp/p3-launch-wait.jsonl`.
