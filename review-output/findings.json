@@ -102,7 +102,7 @@
       "suggestion": "Wrap the check_branch_change call (and any other top-level statements in that region) in the same RALPH_TESTING guard used elsewhere, or make test_helper.bash isolate LAST_BRANCH_FILE/ARCHIVE_DIR to a scratch dir before sourcing. Add bats tests for check_branch_change (no branch file, matching branch, changed branch) and for archive_branch_state that assert progress.txt is only reset when every cp actually succeeds. Also restore the current .ralph-last-branch file from the real branch name to undo the corruption already present.",
       "effort": "medium",
       "id": "F-007",
-      "addressed": null
+      "addressed": 4
     },
     {
       "category": "test-coverage",
