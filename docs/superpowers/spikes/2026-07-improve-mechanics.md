@@ -765,3 +765,138 @@ cd / && rm -rf /tmp/ralph-sb-caps "$REMOTE"
 
 Removed after the run (sandbox and the temporary bare remote directory).
 Capture kept: `/tmp/p3-build-caps.jsonl` (159 lines).
+
+## Task 6 smoke runs
+
+**Task:** Task 6 of Plan 3 — `plugin/commands/improve-cycle.md`, the inner
+improve unit of work (guard → review → select → fix-spec → mini-build →
+backlog reconciliation → cleanup), composed by Reading the shipped
+review/spec/build command files from `${CLAUDE_PLUGIN_ROOT}`. The command
+text matches the plan brief verbatim and `claude plugin validate ./plugin`
+passes.
+
+### C1 — guard refuses a real checkout: PASS
+
+Sandbox `/tmp/ralph-sb-cycle` (fresh from `tests/make_sandbox.sh`), on
+`main`, invoked `claude -p "/ralph:improve-cycle"` with a read-only
+allowlist (`Bash,Read,Glob,Grep`), `--max-turns 4 --max-budget-usd 2`.
+Capture: `/tmp/p3-cycle-guard.jsonl`. Result: `subtype: success`,
+`num_turns: 2`, cost $0.13. The final message:
+
+> **Guard check failed — aborting. Nothing changed.** … I'm on `main` (a
+> default branch) … **Branch:** `main` (expected `ralph/improve-*`) ❌ …
+> **Action taken:** none
+
+`git status --porcelain` in the sandbox stayed empty — zero writes, no
+findings/spec/goal files created. The guard works.
+
+### C2 — full cycle: attempt history (honest record)
+
+The brief specified `--max-turns 15`. That cap was **insufficient** and the
+controller sanctioned raising the improve tier default to 50 (binding
+mid-plan decision; consumers: Task 7's launcher default, Task 8's config
+example + README). The dollar cap stayed at 10. History:
+
+- **Attempt 1** (`p3-cycle-full-attempt1-interrupted.jsonl`): infra
+  failure while streaming (`error_during_execution`), not a cycle defect.
+- **Attempt 2** (`p3-cycle-full-attempt2-maxturns15.jsonl`):
+  `error_max_turns` at `num_turns: 16` — the brief's 15-turn cap kills a
+  correctly-executing cycle mid-flight.
+- **Attempt 3** (`p3-cycle-full-attempt3-killed.jsonl`): killed by
+  controller order under the same 15-turn regime
+  (`error_during_execution`, 12 turns).
+- **Attempt 4**: the prior session's live observation (recorded in the
+  ledger and handoff) was a `max_turns` stop at a 30-turn cap with the
+  cycle deep in correct execution — worktree log showed `chore: review
+  backlog` → spec commit → T-001 complete → T-002 mid-build, zero pushes.
+  **Capture-file discrepancy disclosed:** the two files labeled attempt 4
+  (`…attempt4-transporterror.jsonl`, `…attempt4-maxturns30.jsonl`) show
+  `success/15 turns (is_error: true)` and `error_during_execution/9
+  turns` respectively — neither carries the `error_max_turns/30` result
+  the narrative describes, so the file labels and the attempt numbering
+  cannot be fully reconciled after the fact. The load-bearing findings
+  (15 insufficient; deep-execution kill leaves no partial PR) rest on
+  attempt 2's capture and the ledger's live observation, not on these two
+  files.
+- **GUILLOTINE finding** (carried from the ledger's live observation): an
+  *outer* CLI `--max-turns` kill mid-build leaves NO partial draft PR —
+  zero refs on the bare remote — unlike the *inner* build TURN_CAP, which
+  routes gracefully to build.md Phase 5 and attempts a draft partial PR.
+  The outer cap is therefore a BACKSTOP and must sit comfortably above
+  the inner graceful caps (TURN_CAP = buildTurnsFactor × tasks, plus the
+  review/select/spec phases' turns).
+
+### C2 attempt 5 (2026-07-21, fresh session) — PASS
+
+Completely fresh environment per the brief: `tests/make_sandbox.sh
+/tmp/ralph-sb-cycle`, fresh bare remote `/tmp/ralph-sb-cycle-remote.git`
+added as `origin`, worktree `/tmp/ralph-sb-cycle-wt` on branch
+`ralph/improve-smoke`, Stop-hook settings copied to the worktree's
+`.claude/settings.json`, pid sidecar `/tmp/ralph-sb-cycle-wt.pid` written
+by the controller shell (simulating the launcher). Invocation exactly as
+briefed except the sanctioned caps: `claude -p "/ralph:improve-cycle"
+--plugin-dir …/plugin --setting-sources project --max-turns 50
+--permission-mode acceptEdits --allowedTools
+"Agent,Bash,Read,Write,Edit,Glob,Grep" --max-budget-usd 10`, run through
+the Bash tool's managed background facility (no nohup/disown/setsid).
+Capture: `/tmp/p3-cycle-full-attempt5.jsonl`.
+
+**Result: `subtype: success`, `num_turns: 47`, cost $4.61, 666s** — the
+cycle reached its own terminal state under the 50-turn cap (47 of 50 also
+shows how little headroom 30 left). Checklist, evidence-first:
+
+- **Guard passed.** Branch `ralph/improve-smoke`, clean tree; init event's
+  `slash_commands` included the full `ralph:*` set (plugin loaded in the
+  worktree).
+- **I-1 review executed by reference.** Five read-only category subagents
+  dispatched (stream shows five `Explore`-type Agent tool_use blocks
+  before any builder); 5 new findings (F-004…F-008) merged into the
+  fixture backlog after root-cause dedup — the agent reported the
+  `grep 'shout'` source-inspection gate was independently found by 4
+  categories and merged to ONE finding. Final backlog: 8 findings
+  (3 medium, 3 low, 2 info), `summary.total == findings|length`.
+- **I-2 selection correct.** N=3 respected: F-001, F-004, F-005 (all
+  medium) selected; F-003/F-008 (info) excluded by rule; PR-overlap
+  filter honestly SKIPPED with the reason stated (`gh` cannot reach a
+  local bare remote); all three candidates revalidated against the
+  working tree, none stale-marked.
+- **I-3 fix-spec.** `specs/improve-2026-07-21.json` created with 2 atomic
+  tasks whose descriptions cite the findings ("Fixes F-001", "Fixes F-004
+  and F-005"); evidence script exit 0 in the transcript. The review
+  backlog was committed BEFORE the first builder dispatch — stream order:
+  `git add review-output && git commit -m "chore: review backlog for
+  improve cycle"` precedes the first `ralph:ralph-builder` Agent
+  dispatch.
+- **I-4 build.** TURN_CAP 4 (2 × 2 tasks), two fresh `ralph:ralph-builder`
+  dispatches, `ralph:ralph-verifier` dispatched at completion with
+  verdict PASS (12/12 criteria). Worktree log after the run:
+  `chore: review backlog for improve cycle` → `chore: add spec for
+  Improve 2026-07-21` → T-001 start/feat/complete → T-002
+  start/test/complete → `chore: verifier PASS for Improve 2026-07-21`.
+- **Exactly one push.** Grepping every Bash tool_use for `git push`:
+  one match (`git push -u origin ralph/improve-smoke`). The bare remote's
+  refs after the run: exactly `refs/heads/ralph/improve-smoke` — no main,
+  nothing else.
+- **Honest `gh pr create` failure; Phase I-5 correctly skipped.**
+  `gh pr create` was attempted and failed (local bare remote is not a
+  GitHub host); the final message reports "**PR: not created**" with the
+  cause, and Phase I-5 is explicitly skipped with "Findings **F-001,
+  F-004, F-005 remain open** (`addressed: null`) for the next cycle" —
+  no fabricated PR, no bogus backlog reconciliation.
+- **Cleanup complete, pid last.** After the run:
+  `/tmp/ralph-sb-cycle-wt.selected.json` gone, `.ralph-goal` gone, the
+  pid sidecar `/tmp/ralph-sb-cycle-wt.pid` GONE; the final message names
+  the pid-last ordering ("pid last, signaling the launcher this cycle
+  ended") and tells the human the worktree is removable.
+- **Sandbox main untouched.** `git -C /tmp/ralph-sb-cycle log --oneline`
+  = the single init commit; `git status --porcelain` empty.
+
+**Verdict: PASS**, every checklist item, on the first attempt at the
+sanctioned 50-turn cap.
+
+### Cleanup and captures
+
+Worktree removed (`git worktree remove --force`), sandbox and bare remote
+deleted. Captures kept: `/tmp/p3-cycle-guard.jsonl`,
+`/tmp/p3-cycle-full-attempt{1,2,3,4*,5}.jsonl` (volatile `/tmp` copies;
+this appendix is the durable record).
