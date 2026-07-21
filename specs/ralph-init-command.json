@@ -8,10 +8,13 @@
       "Do NOT modify plugin/commands/spec.md, plugin/commands/build.md, or plugin/commands/dev.md (companion issue #16, out of scope).",
       "/ralph:init is an interactive command: its markdown must instruct asking the user for confirmation before every write, and must never overwrite an existing .claude/ralph.json without explicit confirmation (show a diff).",
       "Command markdown reads templates from ${CLAUDE_PLUGIN_ROOT}/templates/ (never a hardcoded absolute path).",
-      "make lint (shellcheck) only targets ralph.sh, plugin/scripts/ralph-evidence.sh, and tests/make_sandbox.sh — verify-starter.sh is a shipped template, not linted by the repo, but should still be clean, POSIX-friendly bash.",
+      "make lint (shellcheck) only targets ralph.sh, plugin/scripts/ralph-evidence.sh, and tests/make_sandbox.sh \u2014 verify-starter.sh is a shipped template, not linted by the repo, but should still be clean, POSIX-friendly bash.",
       "Config templates must carry defaultBudgets {buildTurnsFactor:2, buildHours:2, improveTurns:50, improveUsd:15, improveFindings:3} and all five reviewFocus categories."
     ],
-    "verificationCommands": ["make check", "claude plugin validate ./plugin"]
+    "verificationCommands": [
+      "make check",
+      "claude plugin validate ./plugin"
+    ]
   },
   "tasks": [
     {
@@ -30,7 +33,7 @@
         "claude plugin validate ./plugin passes"
       ],
       "dependsOn": [],
-      "status": "pending",
+      "status": "in_progress",
       "passes": false,
       "effort": "medium",
       "notes": "",
@@ -46,7 +49,9 @@
         "bats tests/templates.bats passes",
         "make check passes (full suite green, including the new test)"
       ],
-      "dependsOn": ["T-001"],
+      "dependsOn": [
+        "T-001"
+      ],
       "status": "pending",
       "passes": false,
       "effort": "small",
@@ -56,7 +61,7 @@
     {
       "id": "T-003",
       "title": "Create plugin/commands/init.md implementing /ralph:init",
-      "description": "Author plugin/commands/init.md, a new slash command following the style/frontmatter conventions of the sibling commands (plugin/commands/go.md, review.md, spec.md): YAML frontmatter with a 'description' and an 'argument-hint', then a '# /ralph:init' heading and a numbered procedure. The command must document exactly the six behaviors from issue #15: (1) detect the stack from package.json / pyproject.toml / Cargo.toml / Makefile / plain bash / empty dir, and harvest candidate test/lint commands from scripts, Makefile targets, CI configs, and repo docs; (2) ASK the user to confirm the verification suite before writing anything, offering the detected commands, a custom command they type, or (greenfield/empty) scaffolding a starter verify.sh from ${CLAUDE_PLUGIN_ROOT}/templates/verify-starter.sh and using 'bash verify.sh' — never guess silently; (3) write .claude/ralph.json from the matching template in ${CLAUDE_PLUGIN_ROOT}/templates/ with defaults buildTurnsFactor 2, buildHours 2, improveTurns 50, improveUsd 15, improveFindings 3, all five reviewFocus categories, and detected sourceDirs, and NEVER overwrite an existing .claude/ralph.json without explicit confirmation (show a diff of what would change); (4) safety plumbing — copy ${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json to .claude/settings.json if absent, explaining why (plugin hooks are inert under --setting-sources project), warn if specs/ or review-output/ are gitignored and offer the fix, and warn (not fail) if not a git repo / no gh auth / no origin remote; (5) finish with a next-steps card listing /ralph:go (quick task), /ralph:dev (feature), /ralph:review (backlog), /ralph:improve (autopilot), each one line; (6) state that /ralph:init changes nothing outside .claude/ and (optionally, greenfield) verify.sh, and never commits. Because Cargo.toml/Rust has no dedicated template, the command must handle a detected stack that has no matching template by taking the custom-commands path (confirm commands with the user) rather than guessing. Templates must be referenced via ${CLAUDE_PLUGIN_ROOT}/templates/, not absolute paths. Do NOT modify spec.md/build.md/dev.md.",
+      "description": "Author plugin/commands/init.md, a new slash command following the style/frontmatter conventions of the sibling commands (plugin/commands/go.md, review.md, spec.md): YAML frontmatter with a 'description' and an 'argument-hint', then a '# /ralph:init' heading and a numbered procedure. The command must document exactly the six behaviors from issue #15: (1) detect the stack from package.json / pyproject.toml / Cargo.toml / Makefile / plain bash / empty dir, and harvest candidate test/lint commands from scripts, Makefile targets, CI configs, and repo docs; (2) ASK the user to confirm the verification suite before writing anything, offering the detected commands, a custom command they type, or (greenfield/empty) scaffolding a starter verify.sh from ${CLAUDE_PLUGIN_ROOT}/templates/verify-starter.sh and using 'bash verify.sh' \u2014 never guess silently; (3) write .claude/ralph.json from the matching template in ${CLAUDE_PLUGIN_ROOT}/templates/ with defaults buildTurnsFactor 2, buildHours 2, improveTurns 50, improveUsd 15, improveFindings 3, all five reviewFocus categories, and detected sourceDirs, and NEVER overwrite an existing .claude/ralph.json without explicit confirmation (show a diff of what would change); (4) safety plumbing \u2014 copy ${CLAUDE_PLUGIN_ROOT}/hooks/hooks.json to .claude/settings.json if absent, explaining why (plugin hooks are inert under --setting-sources project), warn if specs/ or review-output/ are gitignored and offer the fix, and warn (not fail) if not a git repo / no gh auth / no origin remote; (5) finish with a next-steps card listing /ralph:go (quick task), /ralph:dev (feature), /ralph:review (backlog), /ralph:improve (autopilot), each one line; (6) state that /ralph:init changes nothing outside .claude/ and (optionally, greenfield) verify.sh, and never commits. Because Cargo.toml/Rust has no dedicated template, the command must handle a detected stack that has no matching template by taking the custom-commands path (confirm commands with the user) rather than guessing. Templates must be referenced via ${CLAUDE_PLUGIN_ROOT}/templates/, not absolute paths. Do NOT modify spec.md/build.md/dev.md.",
       "acceptanceCriteria": [
         "plugin/commands/init.md exists with YAML frontmatter containing 'description' and 'argument-hint' and a '# /ralph:init' heading",
         "The procedure documents all six numbered behaviors from issue #15 (stack detection + command harvesting; confirm-before-write with detected/custom/greenfield-verify.sh options; write .claude/ralph.json from a ${CLAUDE_PLUGIN_ROOT}/templates/ template with the exact listed defaults; settings.json hook copy + gitignore warnings + git/gh warnings; next-steps card; changes-nothing-outside-.claude/verify.sh and never commits)",
@@ -67,7 +72,9 @@
         "claude plugin validate ./plugin passes",
         "make check passes"
       ],
-      "dependsOn": ["T-001"],
+      "dependsOn": [
+        "T-001"
+      ],
       "status": "pending",
       "passes": false,
       "effort": "medium",
@@ -85,7 +92,9 @@
         "make check passes",
         "claude plugin validate ./plugin passes"
       ],
-      "dependsOn": ["T-003"],
+      "dependsOn": [
+        "T-003"
+      ],
       "status": "pending",
       "passes": false,
       "effort": "small",
