@@ -69,8 +69,9 @@ partial PR on terminal stops, never merge, no attribution lines.
 
 ## Phase I-5 — Backlog reconciliation (ONLY if build.md reported a created PR)
 1. In `review-output/findings.json`, set `addressed` to the PR number
-   for every finding the spec's tasks cite (task descriptions carry
-   "fixes F-xxx" per the fix-spec rules).
+   for every finding cited by tasks that were COMPLETED (status complete
+   / passes true) (task descriptions carry "fixes F-xxx" per the
+   fix-spec rules).
 2. Commit: `chore: mark findings addressed by PR #<number>`.
 3. Push that ONE commit to the same, already-open PR branch
    (`git push`). This is the improve cycle's single sanctioned post-PR

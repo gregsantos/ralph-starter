@@ -94,16 +94,25 @@ Kill switches: `kill <pid>` (the launcher prints it; the pid sidecar
 sits next to the worktree), `/ralph:status` (shows
 RUNNING/CRASHED/FINISHED ticks), PR review (nothing merges itself).
 
+Trust caveat: review-finding text flows into spec criteria executed by
+Bash-capable builders (tracked as backlog finding F-020), so until that
+boundary is hardened, run the improve flywheel only on repos whose
+contents you trust.
+
 The outer `--max-turns` cap on the improve spawn is a backstop, not a
 working limit: if it fires mid-build it kills the tick with no partial
 draft PR left behind, unlike the inner build `TURN_CAP`, which routes
 gracefully to a draft partial PR. Configure `improveTurns` comfortably
 above the inner graceful caps (review + selection + spec phases, plus
-`buildTurnsFactor` × task count).
+`buildTurnsFactor` × task count). On a real repo the five parallel
+review subagents alone consumed ~$7.8 of the default $10 `improveUsd`
+in the first live run, so real deployments should raise `improveUsd`
+and/or narrow `reviewFocus`/`sourceDirs` — a budget-exhausted cycle
+still lands the graceful partial draft PR.
 
 ## Config
 
-Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — `defaultBudgets`, `reviewFocus`, and `sourceDirs` are live; `models` and `artifactPaths` are deliberately reserved:
+Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — `verificationCommands`, `defaultBudgets`, `reviewFocus`, and `sourceDirs` are live; `models` and `artifactPaths` are deliberately reserved:
 
 - `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). `/ralph:spec` (and therefore `/ralph:dev`, which chains it) also reads this field as the priority source for a generated spec's `context.verificationCommands`, before falling back to the repo's documented test commands. **Not** read by `/ralph:build` — that command sources its verification commands from the spec's `context.verificationCommands` instead (already populated by `/ralph:spec` from this field, if present), see Spec format below.
 - `defaultBudgets` — **live now**: `buildTurnsFactor`/`buildHours` set `/ralph:build`'s TURN_CAP factor and wall-clock cap (defaults 2 / 2h); `improveTurns`/`improveUsd` cap the improve spawn (defaults 50 / $10); `improveFindings` sets findings-per-cycle (default 3). `improveHours` is documented-only: no wall-clock CLI flag exists, the turn cap approximates it.

@@ -6,7 +6,7 @@
 
 **Architecture:** `/ralph:review` fans one read-only subagent per focus category out in parallel and merges results into `review-output/findings.json` (schema + `addressed` field) with a regenerated report. `/ralph:improve` is a *launcher*: busy-checks, creates a fresh `/tmp` worktree on a `ralph/improve-<ts>` branch, carries the Stop-hook settings duplicate in, and spawns a capped headless `claude -p "/ralph:improve-cycle"` inside it. The inner cycle composes shipped machinery by reference — review.md → selection → spec.md `--from-findings` → build.md (already on the work branch, spec committed by step 3a) — then reconciles the backlog into the PR. Spec: `docs/superpowers/specs/2026-07-19-native-ralph-port-design.md` §5, §7, §9.
 
-**Tech Stack:** Claude Code plugin system (commands/skills as markdown), git worktrees, bash + jq, nohup-detached capped headless spawns, gh CLI, BATS/shellcheck (`make check`).
+**Tech Stack:** Claude Code plugin system (commands/skills as markdown), git worktrees, bash + jq, plain-`&` capped headless spawns, gh CLI, BATS/shellcheck (`make check`).
 
 ## Global Constraints
 
