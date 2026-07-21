@@ -1118,3 +1118,138 @@ durable record): `/tmp/p3-launch-fire.jsonl`,
 `/tmp/p3-launch-busy-crashed.jsonl`, `/tmp/p3-launch-busy-crashed2.jsonl`,
 `/tmp/p3-launch-busy-finished.jsonl`, `/tmp/p3-status-tick.jsonl`,
 `/tmp/p3-launch-wait.jsonl`.
+
+## Task 10 real-surface run (2026-07-21)
+
+**User go-ahead recorded at execution time** (AskUserQuestion, this
+session): full Task 10 including one real improve tick and a real PR on
+github.com/gregsantos/ralph-starter, left open, never merged. A second
+plan-mandated checkpoint (backlog skim) was also taken: the user approved
+the top-3 selection and an 80-turn spawn cap.
+
+### Step 2 — supervised interactive review (this repo, this session)
+
+The controller executed review.md's procedure directly (platform fact 1:
+commands can't be slash-invoked from assistant output). Config-driven
+scope: all five categories, targets `ralph.sh` + `plugin/` (sourceDirs).
+Five read-only category subagents dispatched in parallel; two returned
+prose instead of the raw-JSON contract and were re-dispatched once each
+(the contract's own retry rule) — both then returned clean arrays.
+Merge: 30 raw findings → 28 after root-cause dedup (the `grep -oP`
+BSD-incompatibility was found by both bug and code-quality; the
+`parse_claude_output` monolith was independently flagged by
+code-quality, test-coverage, and architecture and folded into one
+finding with a cross-category note). Backlog written and validated
+(`jq -e '.summary.total == (.findings|length)'` → `true`): 28 findings,
+0 critical / 5 high / 13 medium / 8 low / 2 info, all `addressed: null`;
+`git check-ignore review-output/findings.json` exits 1 (tracked-able —
+the Task 2 migration working on the real repo). Committed as
+`57b9bb3 chore: initial review backlog` on the plan branch after the
+user skim.
+
+### Step 3 — one real improve tick (`/ralph:improve --wait` semantics)
+
+The controller executed improve.md's launcher procedure directly. Busy
+checks: no improve worktrees, zero open `ralph/improve-*` PRs. Two
+controller-sanctioned deviations, recorded before launch:
+
+1. **Worktree base = `feature/ralph-plugin-plan-3`**, not the default
+   branch. Reason: main predates the Plan 3 artifact-tracking migration
+   (`specs/*` and `review-output/` still gitignored there — the cycle's
+   backlog/spec commits would abort) and predates the flywheel itself.
+   Consequence disclosed: the PR into main displays the plan-3 commits
+   until the plan merges, after which its diff collapses to the cycle's
+   own commits.
+2. **Spawn cap `--max-turns 80`** (config default 50), user-approved at
+   the skim checkpoint: the sandbox C2 cycle used 47/50 turns on two
+   trivial tasks; three substantial tasks on a 4341-line script needed
+   headroom. `--max-budget-usd 10` unchanged.
+
+Spawn (from inside the worktree, plain `&` child through the Bash tool's
+background facility, pid sidecar `<wt>.pid`, log sidecar `<wt>.log` —
+no nohup/disown/setsid): `claude -p "/ralph:improve-cycle" --plugin-dir
+…/plugin --setting-sources project --permission-mode acceptEdits
+--allowedTools "Agent,Bash,Read,Write,Edit,Glob,Grep" --max-turns 80
+--max-budget-usd 10 --output-format stream-json --verbose`. The tracked
+`.claude/settings.json` materialized in the worktree from the plan
+branch — the launcher's copy-if-absent step correctly had nothing to do.
+
+**Result: `error_max_budget_usd` at $10.0095, 22 turns, 680s — but the
+terminal state was ALREADY graceful when the cap fired.** The dollar
+cap, not turns, was the binding constraint on a real repo. From the
+kept capture (`/tmp/p10-improve-tick.jsonl`, 826 lines):
+
+- **Guard passed**; I-1 review ran by reference (5 `Explore` dispatches),
+  merged ONE new finding into the inherited 28-finding backlog:
+  **F-029 (security, medium)** — ralph.sh's autonomous loop pushes
+  `$CURRENT_BRANCH` with no default-branch guard (a genuinely valuable
+  real finding: the bash runner lacks the branch-first protection the
+  plugin layer enforces).
+- **I-2 selection exactly as predicted at the skim**: F-007, F-008,
+  F-020 (top-3 high, ties by id); PR-overlap filter ran against real
+  `gh` (no overlaps); all three revalidated present.
+- **I-3**: `specs/improve-2026-07-21.json`, 3 tasks citing the finding
+  ids; backlog committed before any builder dispatch. The inner agent
+  tracked its own spend, disclosed mid-cycle that the five review
+  subagents had consumed ~$7.8 of the $10 cap, and wrote the full
+  3-task spec anyway, ordered most-self-contained first.
+- **I-4**: `RALPH TURN 1/6 (build started …, now …)` — the Task 5 turn
+  format live on a real repo. T-001's builder delivered a real fix
+  (commit `b2c8d08`): `RALPH_TESTING` guard around `check_branch_change`,
+  `archive_branch_state` cp-hardening, new `tests/branch_change.bats`
+  (4 tests), and restoration of the already-corrupted
+  `.ralph-last-branch` — `make check` green at 98 bats tests. With
+  ~$0.45 remaining, the agent self-routed to a Phase 5 terminal stop
+  (budget exhaustion treated like a cap hit) instead of dispatching
+  T-002/T-003 builders or a verifier.
+- **Exactly two real pushes**, per the contract: the Phase 5 push of
+  `ralph/improve-20260721-135918` + draft PR creation, then the Phase
+  I-5 reconciliation commit pushed to the open PR branch — **the first
+  live execution of the sanctioned post-PR push**. (A raw grep for
+  `git push` shows 4 matches; two are quotes inside F-029's finding
+  text — structural jq parsing confirms two push commands.)
+- **PR #4 (real, draft): https://github.com/gregsantos/ralph-starter/pull/4
+  — "ralph: Improve 2026-07-21 (partial)"**, honest partial framing, no
+  attribution lines, never merged.
+- **I-5 on a partial PR behaved conservatively and correctly**: only
+  F-007 — the finding whose task was actually delivered — was marked
+  `addressed: 4`; F-008/F-020 stay open. (Noted for the final review:
+  improve-cycle.md's I-5 step 1 literally says "every finding the
+  spec's tasks cite", which on a partial PR would over-mark; the agent
+  applied the right judgment, but the wording should say "cited by
+  tasks that were completed".)
+- **Cleanup complete, pid last**: `.ralph-goal`, `.selected.json`, then
+  the pid sidecar; the outer budget error fired while the final report
+  was being emitted, after the terminal state was reached. Verifier
+  correctly never dispatched on the partial path.
+
+Post-tick, the launcher's `--wait` duties: the finished-worktree rule
+found no pid sidecar and a clean tree → worktree and log sidecar
+removed (log preserved first as the capture).
+
+**Budget finding (feed to config guidance):** on a real repo, five
+parallel review subagents cost ~$7.8 — `improveUsd: 10` leaves almost
+nothing for the build. Real deployments should raise `improveUsd`
+and/or narrow `reviewFocus`/`sourceDirs`; the graceful partial-PR path
+is the designed floor, and it held.
+
+### Step 4 — /ralph:status against the real PR (deferred Plan-1 item)
+
+Executed status.md's procedure in this session while the finished tick
+still existed: step 1 "None active"; step 3's PR table listed exactly
+`ralph/improve-20260721-135918 | ralph: Improve 2026-07-21 (partial) |
+draft | https://github.com/gregsantos/ralph-starter/pull/4`; step 4
+showed the worktree; step 5 reported the tick FINISHED (no pid sidecar,
+clean tree, removable). The real-PR status gap deferred since Plan 1 is
+closed.
+
+### Non-findings
+
+- A pre-existing remote branch
+  (`feature/create-a-tiny-docs-only-improvement-to-verify-launch-e2e-flow`)
+  is visible on origin; the tick's capture contains zero references to
+  it — not created by this run, out of scope.
+- Captures kept: `/tmp/p10-improve-tick.jsonl` (the tick),
+  plus this session's five category-agent transcripts embedded in the
+  controller session. The PR and the pushed branch are the durable
+  real-surface evidence.
