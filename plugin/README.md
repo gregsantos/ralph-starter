@@ -83,9 +83,12 @@ Triggers: locally, `/loop /ralph:improve` (each tick is
 fire-and-forget within the live session; the loop cadence should
 exceed a cycle's duration); in the cloud, schedule
 `plugin/routines/improve-nightly.md`'s Instructions block, which uses
-`--wait`. Ticks are never detached (no nohup) — a tick cannot outlive
-the session that launched it, by design: orphaned background runs
-that would not die are the incident class this replaces.
+`--wait`. Ticks are never detached (no nohup/disown/setsid), but a
+plain `&` child survives the session that launched it (spike-verified:
+CHILD-SURVIVES) — which is exactly why the pid sidecar kill switch and
+`/ralph:status` visibility are mandatory: a tick must always be
+findable and killable. Orphaned background runs that could not be
+found or killed are the incident class this design replaces.
 
 Kill switches: `kill <pid>` (the launcher prints it; the pid sidecar
 sits next to the worktree), `/ralph:status` (shows
@@ -100,7 +103,7 @@ above the inner graceful caps (review + selection + spec phases, plus
 
 ## Config
 
-Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — most are reserved for the review/improve commands landing in Plan 3 and aren't read by anything yet:
+Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — `defaultBudgets`, `reviewFocus`, and `sourceDirs` are live; `models` and `artifactPaths` are deliberately reserved:
 
 - `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). `/ralph:spec` (and therefore `/ralph:dev`, which chains it) also reads this field as the priority source for a generated spec's `context.verificationCommands`, before falling back to the repo's documented test commands. **Not** read by `/ralph:build` — that command sources its verification commands from the spec's `context.verificationCommands` instead (already populated by `/ralph:spec` from this field, if present), see Spec format below.
 - `defaultBudgets` — **live now**: `buildTurnsFactor`/`buildHours` set `/ralph:build`'s TURN_CAP factor and wall-clock cap (defaults 2 / 2h); `improveTurns`/`improveUsd` cap the improve spawn (defaults 50 / $10); `improveFindings` sets findings-per-cycle (default 3). `improveHours` is documented-only: no wall-clock CLI flag exists, the turn cap approximates it.
