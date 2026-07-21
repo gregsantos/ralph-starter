@@ -1024,11 +1024,25 @@ Same sandbox. Manufactured each state with a fake worktree
    `num_turns: 4`. Reported **CRASHED**, dead PID 84895, inspect/remove
    instructions, stopped; no new worktree.
 3. **FINISHED:** `rm /tmp/ralph-improve-fake.pid` (tree clean).
-   Invocation (capture `/tmp/p3-launch-busy-finished.jsonl`): `subtype:
-   success`, `num_turns: 1`. Removed the fake worktree, then created and
-   spawned a real tick (`/tmp/ralph-improve-20260721-094352` on
-   `ralph/improve-20260721-094352`, PID 85716 confirmed alive) — the
-   full launch path exactly as L1.
+   Invocation (capture `/tmp/p3-launch-busy-finished.jsonl`) — **disclosed
+   in full, not just the resumed attempt:** the capture holds TWO `result`
+   entries under the same `session_id`
+   (`3d1ec650-7b38-4c14-9e07-d7e8cd36a058`). The first is `subtype:
+   error_max_turns`, `num_turns: 9`, `errors: ["Reached maximum number of
+   turns (8)"]`, with a `permission_denials` entry on the *same*
+   settings-carry compound command
+   (`if [ ! -f "$WT/.claude/settings.json" ]; then mkdir -p … && cp … ;
+   else …; fi; ls -la …`) that caused L1 invocation 2's disclosed
+   deviation — the outer smoke's own tight 8-turn cap ran out mid busy-
+   check/worktree-creation flow. The harness then auto-resumed the same
+   session (`origin.kind: "task-notification"` on the second entry), and
+   that resumed attempt is `subtype: success`, `num_turns: 1`: it removed
+   the fake worktree, then created and spawned a real tick
+   (`/tmp/ralph-improve-20260721-094352` on
+   `ralph/improve-20260721-094352`, PID 85716 confirmed alive) — the full
+   launch path exactly as L1. Only the resumed success was cited when
+   this section was first written; the initial `error_max_turns` result
+   is disclosed here after a reviewer flagged its absence.
 
 **Status tick reporting.** While PID 85716's tick was RUNNING, ran
 `/ralph:status` once (read-only allowlist, capture
@@ -1046,6 +1060,18 @@ L3; no need to let a second full cycle run to completion here).
 **Verdict: PASS.** All three busy-check states detected correctly (no
 stacking in RUNNING/CRASHED; correct auto-clean-then-launch in FINISHED),
 and `/ralph:status` step 5 renders the tick line while a tick exists.
+
+**Generalized observation (two independent reproductions):** the
+permission-prompt-costs-a-turn pattern on the settings-carry compound
+command has now shown up in two separate smoke captures — L1 invocation
+2 and this FINISHED-state invocation — each time the outer smoke's own
+`--max-turns` cap was tight enough that the extra approval round tipped
+it into `error_max_turns`. This is a smoke-harness cap-sizing artifact,
+not an `improve.md` defect: in both cases the launcher's own logic
+completed correctly (either before the cutoff or on an auto-resumed
+continuation). Reviewers running these smokes near tight outer caps
+should expect this and check worktree/pid state directly rather than
+gating solely on the outer result's `subtype`.
 
 ### L3 — `--wait`: PASS
 
