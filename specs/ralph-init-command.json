@@ -52,10 +52,10 @@
       "dependsOn": [
         "T-001"
       ],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "effort": "small",
-      "notes": "",
+      "notes": "Added tests/templates.bats (4 @test blocks: existence, jq-valid JSON, defaultBudgets keys, non-empty reviewFocus) following plugin_evidence.bats conventions (commit ff04975). make check green (lint + 102 tests).",
       "attempts": 0
     },
     {
