@@ -23,8 +23,9 @@ parity gate in the design doc passes — the two are not yet interchangeable.
 | `/ralph:status` | Read-only dashboard: active goal, spec progress, open `ralph/*` PRs, worktrees |
 | `/ralph:spec "<prompt>" \| -f <file> \| --from-findings [path]` | Generate a validated spec JSON in `specs/` (no commit — review, then build) |
 | `/ralph:dev "<prompt>" [--review]` | Full pipeline: generate spec → build it; `--review` pauses for spec approval |
-| `/ralph:review` | Coming in Plan 3 |
-| `/ralph:improve` | Coming in Plan 3 |
+| `/ralph:review [--diff-base <ref>] [--focus <cats>] [--target <path>]` | Read-only codebase review — parallel category subagents merged into the tracked findings backlog |
+| `/ralph:improve [--wait]` | One bounded improve tick: headless review → fix-spec → build → PR in a fresh worktree; `--wait` blocks until done |
+| `/ralph:improve-cycle` | Internal — the unit of work `/ralph:improve` spawns; refuses to run outside a `ralph/improve-*` worktree |
 
 ## Spec generation & the dev pipeline
 
@@ -58,16 +59,55 @@ ends after spec generation (safe, but probably not what you wanted).
 The spec-writing guidance ships as a plugin skill
 (`plugin/skills/writing-ralph-specs/`), which both commands follow.
 
+## Review & the improve flywheel
+
+`/ralph:review` writes `review-output/findings.json` (the tracked
+backlog; schema in `plugin/skills/reviewing-codebase/`) and a
+regenerated `REVIEW_REPORT.md`, never committing. Each finding carries
+`addressed`: `null` while open, the fix PR's number once an improve
+cycle delivers one, or `stale-<date>` when revalidation finds it
+already fixed.
+
+`/ralph:improve` runs one bounded cycle — review → select top-N open
+findings (default 3, `defaultBudgets.improveFindings`) → fix-spec →
+mini-build → PR — always headless in a fresh `/tmp/ralph-improve-<ts>`
+worktree on a `ralph/improve-<ts>` branch, never in your checkout. Caps
+come from `defaultBudgets.improveTurns`/`improveUsd` (50 / $10
+defaults). A tick skips itself if a previous tick is running or its PR
+is still open; a crashed tick is surfaced for human inspection, never
+auto-deleted. The backlog update marking findings `addressed` is
+committed and pushed into the same open PR as a single documented
+follow-up commit — the one exception to single-push.
+
+Triggers: locally, `/loop /ralph:improve` (each tick is
+fire-and-forget within the live session; the loop cadence should
+exceed a cycle's duration); in the cloud, schedule
+`plugin/routines/improve-nightly.md`'s Instructions block, which uses
+`--wait`. Ticks are never detached (no nohup) — a tick cannot outlive
+the session that launched it, by design: orphaned background runs
+that would not die are the incident class this replaces.
+
+Kill switches: `kill <pid>` (the launcher prints it; the pid sidecar
+sits next to the worktree), `/ralph:status` (shows
+RUNNING/CRASHED/FINISHED ticks), PR review (nothing merges itself).
+
+The outer `--max-turns` cap on the improve spawn is a backstop, not a
+working limit: if it fires mid-build it kills the tick with no partial
+draft PR left behind, unlike the inner build `TURN_CAP`, which routes
+gracefully to a draft partial PR. Configure `improveTurns` comfortably
+above the inner graceful caps (review + selection + spec phases, plus
+`buildTurnsFactor` × task count).
+
 ## Config
 
 Optional `.claude/ralph.json` in the host repo (see [`.claude/ralph.json`](../.claude/ralph.json) here for an example). Field status below — most are reserved for the review/improve commands landing in Plan 3 and aren't read by anything yet:
 
 - `verificationCommands` — **live now**: `/ralph:go` reads this to verify a one-off task, if the file exists and defines it (falls back to the repo's documented test/lint commands otherwise). `/ralph:spec` (and therefore `/ralph:dev`, which chains it) also reads this field as the priority source for a generated spec's `context.verificationCommands`, before falling back to the repo's documented test commands. **Not** read by `/ralph:build` — that command sources its verification commands from the spec's `context.verificationCommands` instead (already populated by `/ralph:spec` from this field, if present), see Spec format below.
-- `sourceDirs` — **reserved**: intended as directories treated as source for review/improve scoping; no command reads this yet.
-- `defaultBudgets` — **reserved**: intended turn/hour/USD caps for build and improve cycles; `/ralph:build` currently hardcodes its own caps instead (`TURN_CAP = 2 × task count`, 2-hour wall clock — build.md Phase 1 step 6).
-- `reviewFocus` — **reserved**: intended categories for `/ralph:review` to fan subagents out across; `/ralph:review` doesn't exist yet.
-- `models` — **reserved**: intended model routing overrides for `go`/`builder`/`verifier` (`"inherit"` would use the invoking session's model); `/ralph:go` currently hardcodes `model: sonnet` in its own frontmatter instead (go.md).
-- `artifactPaths` — **reserved**: intended override for where specs and review output live, for submodule or non-standard layouts; no command reads this yet.
+- `defaultBudgets` — **live now**: `buildTurnsFactor`/`buildHours` set `/ralph:build`'s TURN_CAP factor and wall-clock cap (defaults 2 / 2h); `improveTurns`/`improveUsd` cap the improve spawn (defaults 50 / $10); `improveFindings` sets findings-per-cycle (default 3). `improveHours` is documented-only: no wall-clock CLI flag exists, the turn cap approximates it.
+- `reviewFocus` — **live now**: the categories `/ralph:review` fans out across when `--focus` isn't given.
+- `sourceDirs` — **live now**: the default review targets when `--target` isn't given.
+- `models` — **reserved (deliberately — no consumer in v1; revisit after the parity gate)**: intended model routing overrides for `go`/`builder`/`verifier` (`"inherit"` would use the invoking session's model); `/ralph:go` currently hardcodes `model: sonnet` in its own frontmatter instead (go.md).
+- `artifactPaths` — **reserved (deliberately — no consumer in v1; revisit after the parity gate)**: intended override for where specs and review output live, for submodule or non-standard layouts; no command reads this yet.
 
 ## Spec format
 
@@ -104,6 +144,9 @@ headless builds run. Host repos migrating off bash Ralph (which
 gitignored both) should drop the `specs/*` / `review-output/` ignore
 rules and commit the existing files once.
 
+This repo made that migration in Plan 3: `specs/`, `review-output/`, and
+`.claude/settings.json` are tracked here.
+
 ## Guardrails
 
 - **PR-gated, branch-first, never merges** — every writing command
@@ -134,24 +177,12 @@ claude -p "/ralph:build specs/feature.json" \
 - `--allowedTools` is required alongside `acceptEdits` (which only auto-approves `Edit`/`Write`) — otherwise `Bash` calls get rejected until the session dies (Task 7; full list including `Agent` validated end-to-end in Task 11, Scenario A, ~line 707).
 - `--setting-sources project` excludes the invoking user's personal settings — a real incident had a user-level `git push` approval gate silently deny a build's push.
 - `--max-budget-usd` is what backs the "headless spawns add a dollar cap" guardrail above — the recorded end-to-end runs (Task 7, Task 11) predate this flag being added to the invocation and ran without it; include it for any new headless spawn.
-- **Caveat:** under `--setting-sources project` the plugin's own Stop hook does not fire at all (Task 11's "MAJOR FINDING") — duplicate it into the host's `.claude/settings.json`:
+- **Caveat:** under `--setting-sources project` the plugin's own Stop hook does not fire at all (re-confirmed 2026-07-20) — the host repo needs the hook duplicated into its own `.claude/settings.json`. Copy it verbatim from [`plugin/hooks/hooks.json`](hooks/hooks.json) (this repo tracks such a copy at `.claude/settings.json`, so fresh clones and worktrees of ralph-starter already have it):
 
-  ```json
-  {
-    "hooks": {
-      "Stop": [
-        {
-          "hooks": [
-            {
-              "type": "prompt",
-              "prompt": "Read the file .ralph-goal if it exists. If it exists and contains a condition, check if the transcript demonstrates that condition is met. Respond with {\"ok\": true} if the condition is met or the file doesn't exist. If the condition is not met, respond with {\"ok\": false, \"reason\": \"Condition not met: [specific detail of what remains]\"}.",
-              "model": "claude-haiku-4-5-20251001"
-            }
-          ]
-        }
-      ]
-    }
-  }
+  ```bash
+  cp plugin/hooks/hooks.json .claude/settings.json
   ```
+
+Because the settings copy is tracked here, interactive sessions also evaluate the hook on every Stop; with no `.ralph-goal` present it should allow immediately, but it has been observed to spuriously block with "insufficient evidence" when the recent transcript carries no `.ralph-goal` evidence — running `ls .ralph-goal` to surface the file's absence satisfies it.
 
 Interactive sessions need none of this — the plugin's hook fires normally there.
