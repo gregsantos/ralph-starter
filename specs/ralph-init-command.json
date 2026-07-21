@@ -33,10 +33,10 @@
         "claude plugin validate ./plugin passes"
       ],
       "dependsOn": [],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "effort": "medium",
-      "notes": "",
+      "notes": "Created plugin/templates/{ralph-node,ralph-python,ralph-bash,ralph-greenfield}.json + verify-starter.sh (commit fc19757). defaultBudgets uses improveUsd:15 per #15; improveHours omitted to match AC3's enumerated object. All jq/make check/plugin validate green.",
       "attempts": 0
     },
     {
