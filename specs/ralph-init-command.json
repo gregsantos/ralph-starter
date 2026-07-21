@@ -75,10 +75,10 @@
       "dependsOn": [
         "T-001"
       ],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "effort": "medium",
-      "notes": "",
+      "notes": "Added plugin/commands/init.md implementing /ralph:init: 6-step procedure (detect+harvest, confirm-before-write, write .claude/ralph.json from template, safety plumbing, next-steps card, scope statement). All paths via ${CLAUDE_PLUGIN_ROOT}. Cargo.toml/Rust routes to custom-commands path. commit 0551da6. plugin validate + make check green.",
       "attempts": 0
     },
     {
