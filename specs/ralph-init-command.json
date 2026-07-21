@@ -95,10 +95,10 @@
       "dependsOn": [
         "T-003"
       ],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "effort": "small",
-      "notes": "",
+      "notes": "Added '## New repo quickstart' section (install -> /ralph:init -> /ralph:dev) after Install and a /ralph:init row to the Commands table in plugin/README.md. commit 08e0a9c. make check + plugin validate green.",
       "attempts": 0
     }
   ]
