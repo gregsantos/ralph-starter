@@ -1180,7 +1180,13 @@ cap, not turns, was the binding constraint on a real repo. From the
 kept capture (`/tmp/p10-improve-tick.jsonl`, 826 lines):
 
 - **Guard passed**; I-1 review ran by reference (5 `Explore` dispatches),
-  merged ONE new finding into the inherited 28-finding backlog:
+  merged **19 new findings (F-029–F-047)** into the inherited 28-finding
+  backlog after root-cause dedup (backlog total 47). *Correction
+  2026-07-21: this line originally claimed "ONE new finding" — written
+  from a partial log excerpt; the true count surfaced in PR #4's merge
+  diff and was corrected the same day.* Among the newcomers, notably
+  **F-030 (security, medium)** — bash ralph.sh runs ALL modes, including
+  read-only review, under `--dangerously-skip-permissions` — and
   **F-029 (security, medium)** — ralph.sh's autonomous loop pushes
   `$CURRENT_BRANCH` with no default-branch guard (a genuinely valuable
   real finding: the bash runner lacks the branch-first protection the
