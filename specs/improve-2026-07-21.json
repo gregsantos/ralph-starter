@@ -26,10 +26,10 @@
         "make check passes."
       ],
       "dependsOn": [],
-      "status": "in_progress",
-      "passes": false,
+      "status": "complete",
+      "passes": true,
       "effort": "medium",
-      "notes": "",
+      "notes": "Guard E added around check_branch_change call; archive_branch_state cp-guarded; tests/branch_change.bats (4 tests); make check green. commit b2c8d08.",
       "attempts": 0
     },
     {
