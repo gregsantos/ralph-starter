@@ -9,7 +9,9 @@
       "Do not alter existing findings' addressed values.",
       "Keep changes scoped to the cited files and their tests."
     ],
-    "verificationCommands": ["make check"]
+    "verificationCommands": [
+      "make check"
+    ]
   },
   "tasks": [
     {
@@ -24,7 +26,7 @@
         "make check passes."
       ],
       "dependsOn": [],
-      "status": "pending",
+      "status": "in_progress",
       "passes": false,
       "effort": "medium",
       "notes": "",
