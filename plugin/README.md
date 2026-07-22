@@ -14,10 +14,23 @@ parity gate in the design doc passes — the two are not yet interchangeable.
 /plugin install ralph@ralph-starter
 ```
 
+## New repo quickstart
+
+New to the plugin in a fresh repo? Three steps:
+
+1. Install (above).
+2. `/ralph:init` — interactive onboarding: detects your stack, confirms
+   the verification suite, and writes `.claude/ralph.json` plus safety
+   plumbing (every write confirmed first; nothing outside `.claude/`
+   except an optional, confirmed `verify.sh` on the greenfield path;
+   never commits).
+3. `/ralph:dev "first feature"` — generate a spec, then build it.
+
 ## Commands
 
 | Command | Description |
 |---|---|
+| `/ralph:init` | Interactive onboarding for a new repo: detect the stack, confirm the verification suite, write `.claude/ralph.json` and safety plumbing (never commits) |
 | `/ralph:go "<task>" [--pr]` | One-off task: branch-first, implement, verify, commit; `--pr` opens a PR |
 | `/ralph:build <spec.json>` | Goal-driven build from a spec: fresh builder per task, verifier-gated PR |
 | `/ralph:status` | Read-only dashboard: active goal, spec progress, open `ralph/*` PRs, worktrees |

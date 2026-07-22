@@ -1,0 +1,14 @@
+{
+  "verificationCommands": ["bats tests/", "shellcheck *.sh"],
+  "sourceDirs": ["."],
+  "defaultBudgets": {
+    "buildTurnsFactor": 2,
+    "buildHours": 2,
+    "improveTurns": 50,
+    "improveUsd": 15,
+    "improveFindings": 3
+  },
+  "reviewFocus": ["code-quality", "test-coverage", "architecture", "security", "bug"],
+  "models": { "go": "sonnet", "builder": "inherit", "verifier": "inherit" },
+  "artifactPaths": { "specs": "specs", "reviewOutput": "review-output" }
+}
